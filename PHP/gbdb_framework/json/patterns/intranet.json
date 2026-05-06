@@ -1,0 +1,105 @@
+{
+  "name": "intranet",
+  "active": true,
+  "description": "Standard Intranet pattern with typed users, groups, roles, documents, workflows and audit logs.",
+  "structure": [
+    {
+      "base": "main",
+      "tables": [
+        {
+          "name": "users",
+          "useDataTypes": true,
+          "rows": [
+            {
+              "rowName": "uid",
+              "defaultValue": "",
+              "dataType": "string"
+            },
+            {
+              "rowName": "name",
+              "defaultValue": "Max M.",
+              "dataType": "string"
+            },
+            {
+              "rowName": "username",
+              "defaultValue": "max.m",
+              "dataType": "string"
+            },
+            {
+              "rowName": "email",
+              "defaultValue": "",
+              "dataType": "string"
+            },
+            {
+              "rowName": "role",
+              "defaultValue": "reader",
+              "dataType": "string"
+            },
+            {
+              "rowName": "active",
+              "defaultValue": true,
+              "dataType": "bool"
+            },
+            {
+              "rowName": "created_at",
+              "defaultValue": 0,
+              "dataType": "int"
+            }
+          ]
+        },
+        {
+          "name": "roles",
+          "useDataTypes": true,
+          "rows": [
+            {
+              "rowName": "rid",
+              "defaultValue": "",
+              "dataType": "string"
+            },
+            {
+              "rowName": "name",
+              "defaultValue": "Reader",
+              "dataType": "string"
+            },
+            {
+              "rowName": "permissions",
+              "defaultValue": "read",
+              "dataType": "string"
+            }
+          ]
+        },
+        {
+          "name": "audit_logs",
+          "useDataTypes": true,
+          "rows": [
+            {
+              "rowName": "log_id",
+              "defaultValue": "",
+              "dataType": "string"
+            },
+            {
+              "rowName": "actor_uid",
+              "defaultValue": "system",
+              "dataType": "string"
+            },
+            {
+              "rowName": "action",
+              "defaultValue": "",
+              "dataType": "string"
+            },
+            {
+              "rowName": "payload_json",
+              "defaultValue": "{}",
+              "dataType": "json"
+            },
+            {
+              "rowName": "created_at",
+              "defaultValue": 0,
+              "dataType": "int"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

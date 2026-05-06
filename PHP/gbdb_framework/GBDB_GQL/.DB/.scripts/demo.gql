@@ -1,0 +1,1683 @@
+# ============================================================
+# demo.gql
+# greenQL ULTRA FULL SHOWCASE
+# ============================================================
+#
+# Ziel:
+# - So viel GreenQL wie möglich in EINER Datei zeigen.
+# - Ausführbarer Kern: eigene Demo-Instanz/Base/Tabellen.
+# - Riskante / externe / destructive / parser-abhängige Features:
+#   auskommentiert, aber vollständig als Syntax-Beispiel enthalten.
+#
+# Enthält u.a.:
+# - META
+# - OUTPUT
+# - PARAM / param()
+# - ENV()
+# - fetch_api() / api_fetch() / call_api()
+# - untyped table creation
+# - typed table creation als Syntax-Showcase
+# - variables / constants / aliases DECLARE, DECALRE, DELACE
+# - instances / bases / tables
+# - seed / pick / reshape / delete / erase
+# - constraints / foreign keys / relations
+# - indexes / fulltext
+# - transactions / savepoints
+# - prepared queries
+# - joins
+# - aggregates / distinct
+# - page / cursor
+# - monitor / stats / analyze / repair / recover / snapshot
+# - partitions / shards / cluster
+# - backup / migration syntax
+# - runtime DB helpers
+# - copy/move/rename helpers
+# - readonly helpers
+# - if / else
+# - for loops
+# - MAP_OBJECT
+# - functions
+# - classes
+# - logging
+# - file include / file run / file back syntax
+# - error / end_proc / restart syntax
+#
+# ============================================================
+
+
+# ============================================================
+# 00) META
+# ============================================================
+
+META = {
+    "name": "greenQL Ultra Full Showcase",
+    "file": "demo.gql",
+    "version": "2.1.0",
+    "description": "Full GreenQL showcase with executable safe core and commented edge-case syntax.",
+    "safe_core": true
+};
+
+
+# ============================================================
+# 01) OUTPUT / BASIC VALUES
+# ============================================================
+
+OUTPUT "============================================================";
+OUTPUT "greenQL ULTRA FULL SHOWCASE START";
+OUTPUT "============================================================";
+
+OUTPUT ENV("api_auth");
+
+DECLARE $SHOWCASE_VERSION = "2.1.0";
+DECLARE _demo_instance = "demo_full_gql";
+DECLARE _main_base = "main";
+DECLARE _tmp_base = "tmp";
+DECLARE _now = NOW;
+
+OUTPUT {
+    "showcase": $SHOWCASE_VERSION,
+    "instance": _demo_instance,
+    "now": _now
+};
+
+
+# ============================================================
+# 02) PARAM / ENV
+# ============================================================
+
+# PARAM liest Runtime-Parameter, die z.B. von UI/API übergeben werden.
+DECLARE _param_mode = PARAM("mode");
+DECLARE _param_user = param("user");
+
+# ENV liest Werte aus .config/.greenql.env.php
+# Beispiel:
+#   ENV("api_auth")
+#
+# Erwartete PHP-Datei-Idee:
+#   <?php
+#   return [
+#       "api_auth" => "secret",
+#       "api_base" => "https://example.local/api"
+#   ];
+#
+DECLARE _env_api_auth = ENV("api_auth");
+DECLARE _env_api_base = ENV("api_base");
+
+OUTPUT {
+    "param_mode": _param_mode,
+    "param_user": _param_user,
+    "env_api_auth": _env_api_auth,
+    "env_api_base": _env_api_base
+};
+
+
+# ============================================================
+# 03) RUNTIME IDs / HASH / LEN / BOOL / MATH
+# ============================================================
+
+DECLARE _uuid = uuid();
+DECLARE _random_a = uni_random();
+DECLARE _random_b = spark_id();
+DECLARE _random_c = fresh_id();
+
+DECLARE _hash_default = hash("demo-password");
+DECLARE _hash_sha256 = hash_sha256("demo-password");
+DECLARE _hash_sha512 = hash_sha512("demo-password");
+DECLARE _hash_md5 = hash_md5("demo-password");
+DECLARE _hash_adler32 = hash_adler32("demo-password");
+DECLARE _hash_crc32 = hash_crc32("demo-password");
+DECLARE _hash_custom = hash("sha256", "demo-password");
+
+DECLARE _text = "greenQL";
+DECLARE _text_len = len(_text);
+
+DECLARE _math_add = 10 + 5;
+DECLARE _math_sub = 10 - 5;
+DECLARE _math_mul = 10 * 5;
+DECLARE _math_div = 10 / 2;
+DECLARE _math_mod = 10 % 3;
+
+DECLARE _bool_eq = 10 == 10;
+DECLARE _bool_neq = 10 != 11;
+DECLARE _bool_gt = 10 > 5;
+DECLARE _bool_lt = 5 < 10;
+DECLARE _bool_gte = 10 >= 10;
+DECLARE _bool_lte = 10 <= 10;
+DECLARE _bool_and = true AND true;
+DECLARE _bool_or = false OR true;
+DECLARE _bool_and_symbol = true && true;
+DECLARE _bool_or_symbol = false || true;
+DECLARE _bool_not = !false;
+
+OUTPUT {
+    "ids": {
+        "uuid": _uuid,
+        "uni_random": _random_a,
+        "spark_id": _random_b,
+        "fresh_id": _random_c
+    },
+    "hash": {
+        "default": _hash_default,
+        "sha256": _hash_sha256,
+        "sha512": _hash_sha512,
+        "md5": _hash_md5,
+        "adler32": _hash_adler32,
+        "crc32": _hash_crc32,
+        "custom": _hash_custom
+    },
+    "len": _text_len,
+    "math": {
+        "add": _math_add,
+        "sub": _math_sub,
+        "mul": _math_mul,
+        "div": _math_div,
+        "mod": _math_mod
+    },
+    "bool": {
+        "eq": _bool_eq,
+        "neq": _bool_neq,
+        "gt": _bool_gt,
+        "lt": _bool_lt,
+        "gte": _bool_gte,
+        "lte": _bool_lte,
+        "and": _bool_and,
+        "or": _bool_or,
+        "and_symbol": _bool_and_symbol,
+        "or_symbol": _bool_or_symbol,
+        "not": _bool_not
+    }
+};
+
+
+# ============================================================
+# 04) DECLARE / DECALRE / DELACE / PUB / PRIV
+# ============================================================
+
+DECLARE _declared_normal = "DECLARE works";
+DECALRE _declared_typo_alias = "DECALRE alias works";
+DELACE _declared_legacy_alias = "DELACE legacy alias works";
+
+PUB DECLARE _public_declared = "PUB DECLARE works";
+PRIV DECLARE _private_declared = "PRIV DECLARE works";
+
+DECLARE $CONST_DEMO = "constant-like variable with dollar prefix";
+
+OUTPUT {
+    "declare": _declared_normal,
+    "decalre": _declared_typo_alias,
+    "delace": _declared_legacy_alias,
+    "pub": _public_declared,
+    "priv": _private_declared,
+    "const": $CONST_DEMO
+};
+
+
+# ============================================================
+# 05) fetch_api / api_fetch / call_api
+# ============================================================
+
+# Diese Funktionen existieren als Runtime-Funktionen.
+# Sie machen Http::get/Post mit 15s Timeout.
+#
+# Aktiv ausführen kann je nach Server/Internet/API hängen oder fehlschlagen.
+# Deshalb hier als sichere Demo vorbereitet, aber auskommentiert.
+#
+# DECLARE _api_get_result = fetch_api("https://example.com", {}, {});
+#
+# DECLARE _api_post_result = fetch_api(
+#     "https://example.com/api",
+#     {
+#         "auth": ENV("api_auth"),
+#         "do": "ping",
+#         "source": "greenql_demo"
+#     },
+#     {
+#         "X-Demo": "greenQL"
+#     }
+# );
+#
+# DECLARE _api_fetch_alias_result = api_fetch(
+#     "https://example.com/api",
+#     {
+#         "do": "ping"
+#     },
+#     {}
+# );
+#
+# DECLARE _call_api_alias_result = call_api(
+#     "https://example.com/api",
+#     {
+#         "do": "ping"
+#     },
+#     {}
+# );
+
+
+# ============================================================
+# 06) INSTANCE SETUP
+# ============================================================
+
+GROW INSTANCE demo_full_gql;
+USE INSTANCE demo_full_gql;
+ROOT INSTANCE demo_full_gql;
+
+SHOW INSTANCES;
+
+DECLARE _instance_exists_command = EXISTS INSTANCE "demo_full_gql";
+DECLARE _instance_exists_fn = instance_exists("demo_full_gql");
+
+OUTPUT {
+    "exists_instance_command": _instance_exists_command,
+    "exists_instance_fn": _instance_exists_fn
+};
+
+
+# ============================================================
+# 07) BASE SETUP
+# ============================================================
+
+GROW BASE main;
+GROW BASE tmp;
+
+SHOW BASES;
+
+ROOT main;
+
+DECLARE _base_exists_command = EXISTS BASE "main";
+DECLARE _base_exists_fn = base_exists("main");
+
+OUTPUT {
+    "exists_base_command": _base_exists_command,
+    "exists_base_fn": _base_exists_fn
+};
+
+
+# ============================================================
+# 08) TABLE CREATION WITHOUT DATATYPES
+# ============================================================
+
+# Variante 1: klassische Klammer-Syntax
+GROW TABLE users (
+    uid,
+    username,
+    email,
+    password,
+    role,
+    status,
+    age,
+    score,
+    created_at,
+    updated_at,
+    bio,
+    tenant_id,
+    group_id
+) IN main;
+
+# Variante 2: WITH-Syntax
+GROW TABLE posts WITH
+    post_uid,
+    user_uid,
+    title,
+    body,
+    status,
+    views,
+    likes,
+    created_at,
+    updated_at,
+    tenant_id
+IN main;
+
+GROW TABLE tags (
+    tag_uid,
+    post_uid,
+    name,
+    created_at
+) IN main;
+
+GROW TABLE audit_log (
+    event_uid,
+    entity,
+    entity_uid,
+    action,
+    message,
+    created_at
+) IN main;
+
+GROW TABLE tmp_items WITH
+    item_uid,
+    name,
+    value,
+    created_at
+IN tmp;
+
+SHOW TABLES IN main;
+SHOW TABLES IN tmp;
+
+BRANCH users;
+
+DECLARE _table_exists_command = EXISTS TABLE "users";
+DECLARE _table_exists_fn = table_exists("main", "users");
+
+OUTPUT {
+    "exists_table_command": _table_exists_command,
+    "exists_table_fn": _table_exists_fn
+};
+
+
+# ============================================================
+# 09) TABLE CREATION WITH DATATYPES
+# ============================================================
+#
+# WICHTIG:
+# Im aktuell sichtbaren Parser-ZIP ist typed GROW TABLE nicht sicher
+# ausführbar, weil GROW TABLE nur eine Spaltenliste parst.
+#
+# Trotzdem gehört es in die Showcase-/Extension-Welt, wenn GreenQL typed
+# tables bekommen soll oder bereits in deiner lokalen Version hat.
+#
+# Mögliche Syntax-Beispiele für Extension/Docs/Snippets:
+#
+GROW TABLE typed_users (
+    typed_uid:string REQUIRED UNIQUE,
+    username:string REQUIRED UNIQUE,
+    email:email REQUIRED,
+    age:int DEFAULT 0,
+    score:float DEFAULT 0.0,
+    active:bool DEFAULT true,
+    created_at:datetime DEFAULT NOW,
+    meta:json DEFAULT {}
+) IN main;
+
+GROW TABLE typed_products WITH
+    product_uid:string REQUIRED UNIQUE,
+    name:string REQUIRED,
+    price:float DEFAULT 0.0,
+    stock:int DEFAULT 0,
+    active:bool DEFAULT true,
+    created_at:datetime DEFAULT NOW
+IN main;
+
+GROW TABLE typed_logs (
+    event_uid STRING REQUIRED UNIQUE,
+    level STRING DEFAULT "info",
+    message TEXT DEFAULT "",
+    payload JSON DEFAULT {},
+    created_at DATETIME DEFAULT NOW
+) IN main;
+
+# Explizit ohne aktive Type-Prüfung trotz Typnotation:
+GROW TABLE typed_but_loose (
+    uid:string,
+    payload:json
+) WITHOUT TYPES IN main;
+
+ALTER TABLE users ADD COLUMN typed_score:int DEFAULT 0 IN main;
+ALTER TABLE users ADD COLUMN typed_meta:json DEFAULT {} IN main;
+
+SEED typed_users WITH
+    typed_uid=uuid(),
+    username="typed_admin",
+    email="typed-admin@example.local",
+    age=33,
+    score=88.5,
+    active=true,
+    created_at=NOW,
+    meta={"source":"demo.gql","typed":true}
+IN main;
+
+PICK typed_uid, username, email, age, score, active FROM typed_users IN main LIMIT 10;
+DESCRIBE typed_users IN main;
+
+
+# ============================================================
+# 10) ALTER TABLE / EDIT TABLE / DEFAULT
+# ============================================================
+
+ALTER TABLE users ADD COLUMN last_login DEFAULT "" IN main;
+ALTER TABLE users ADD login_count DEFAULT 0 IN main;
+
+EDIT TABLE users ADD COLUMN notes DEFAULT "created by EDIT TABLE" IN main;
+
+DESCRIBE users IN main;
+
+
+# ============================================================
+# 11) CONSTRAINTS
+# ============================================================
+
+ALTER TABLE users ADD CONSTRAINT UNIQUE uid IN main;
+ALTER TABLE users ADD CONSTRAINT UNIQUE username IN main;
+ALTER TABLE users ADD CONSTRAINT REQUIRED email IN main;
+
+SHOW CONSTRAINTS FROM users IN main;
+
+ALTER TABLE users DROP CONSTRAINT REQUIRED email IN main;
+ALTER TABLE users ADD CONSTRAINT REQUIRED email IN main;
+
+
+# ============================================================
+# 12) SEED / INSERT DATA
+# ============================================================
+
+SEED users WITH
+    uid="user_admin",
+    username="admin",
+    email="admin@example.local",
+    password=hash_sha256("admin-password"),
+    role="admin",
+    status="active",
+    age=42,
+    score=99,
+    created_at=NOW,
+    updated_at=NOW,
+    bio="Admin user. Demonstrates constraints, indexes, joins and fulltext.",
+    tenant_id="tenant_a",
+    group_id="core",
+    last_login="",
+    login_count=0,
+    notes="first user"
+IN main;
+
+SEED users WITH
+    uid="user_editor",
+    username="editor",
+    email="editor@example.local",
+    password=hash_sha256("editor-password"),
+    role="editor",
+    status="active",
+    age=31,
+    score=75,
+    created_at=NOW,
+    updated_at=NOW,
+    bio="Editor user. Demonstrates runtime functions and query features.",
+    tenant_id="tenant_a",
+    group_id="content",
+    last_login="",
+    login_count=0,
+    notes="second user"
+IN main;
+
+SEED users WITH
+    uid="user_guest",
+    username="guest",
+    email="guest@example.local",
+    password=hash_sha256("guest-password"),
+    role="guest",
+    status="inactive",
+    age=22,
+    score=15,
+    created_at=NOW,
+    updated_at=NOW,
+    bio="Guest user. Demonstrates filters and reshaping.",
+    tenant_id="tenant_b",
+    group_id="public",
+    last_login="",
+    login_count=0,
+    notes="third user"
+IN main;
+
+SEED posts WITH
+    post_uid="post_001",
+    user_uid="user_admin",
+    title="Welcome to GreenQL",
+    body="GreenQL supports instances, bases, tables, indexes, fulltext, joins, transactions, functions and classes.",
+    status="published",
+    views=150,
+    likes=12,
+    created_at=NOW,
+    updated_at=NOW,
+    tenant_id="tenant_a"
+IN main;
+
+SEED posts WITH
+    post_uid="post_002",
+    user_uid="user_editor",
+    title="GreenQL Runtime Functions",
+    body="This post mentions ENV, fetch_api, hash, uuid, page, cursor and fulltext_search.",
+    status="published",
+    views=90,
+    likes=7,
+    created_at=NOW,
+    updated_at=NOW,
+    tenant_id="tenant_a"
+IN main;
+
+SEED posts WITH
+    post_uid="post_003",
+    user_uid="user_guest",
+    title="Draft Post",
+    body="This draft is used for filtering examples.",
+    status="draft",
+    views=5,
+    likes=0,
+    created_at=NOW,
+    updated_at=NOW,
+    tenant_id="tenant_b"
+IN main;
+
+SEED tags WITH tag_uid="tag_001", post_uid="post_001", name="greenql", created_at=NOW IN main;
+SEED tags WITH tag_uid="tag_002", post_uid="post_001", name="gbdb", created_at=NOW IN main;
+SEED tags WITH tag_uid="tag_003", post_uid="post_002", name="runtime", created_at=NOW IN main;
+
+SEED audit_log WITH event_uid="event_001", entity="users", entity_uid="user_admin", action="create", message="Admin created", created_at=NOW IN main;
+SEED audit_log WITH event_uid="event_002", entity="posts", entity_uid="post_001", action="publish", message="First post published", created_at=NOW IN main;
+
+SEED tmp_items WITH item_uid="tmp_001", name="Temporary Item A", value=10, created_at=NOW IN tmp;
+SEED tmp_items WITH item_uid="tmp_002", name="Temporary Item B", value=20, created_at=NOW IN tmp;
+
+
+# ============================================================
+# 13) PEEK / PICK / WHERE / SORT / LIMIT / OFFSET / MAX
+# ============================================================
+
+PEEK users IN main LIMIT 10;
+PEEK posts IN main LIMIT 10;
+
+PICK * FROM users IN main LIMIT 50;
+
+PICK uid, username, role, status, score
+FROM users
+IN main
+WHERE status = "active"
+SORT score DESC
+LIMIT 10
+OFFSET 0;
+
+PICK uid, username, age FROM users IN main WHERE age >= 30 SORT age ASC LIMIT 10;
+PICK uid, username, score FROM users IN main WHERE score < 90 SORT score DESC LIMIT 10;
+PICK uid, username, status FROM users IN main WHERE status != "deleted" LIMIT 10;
+PICK uid, username, bio FROM users IN main WHERE bio ~= "user" LIMIT 10;
+
+PICK uid, username FROM users IN main MAX(2);
+
+EXPLAIN PICK uid, username, score FROM users IN main WHERE status = "active" SORT score DESC LIMIT 5 OFFSET 0;
+
+
+# ============================================================
+# 14) EXISTS DATA
+# ============================================================
+
+DECLARE _data_exists_command_a = EXISTS DATA {"uid":"user_admin"} IN users;
+DECLARE _data_exists_command_b = EXISTS DATA {"username":"admin"};
+DECLARE _data_exists_fn = data_exists("main", "users", {"uid":"user_admin"});
+
+OUTPUT {
+    "exists_data_command_in_table": _data_exists_command_a,
+    "exists_data_command_current_table": _data_exists_command_b,
+    "exists_data_fn": _data_exists_fn
+};
+
+
+# ============================================================
+# 15) DISTINCT / AGGREGATES / GROUP BY / HAVING
+# ============================================================
+
+DISTINCT role FROM users IN main;
+DISTINCT status FROM posts IN main;
+
+COUNT(*) FROM users IN main;
+COUNT(uid) FROM users IN main;
+COUNT(uid) FROM users IN main GROUP BY role;
+COUNT(uid) FROM users IN main GROUP BY status HAVING > 0;
+
+SUM(score) FROM users IN main;
+AVG(score) FROM users IN main;
+MIN(age) FROM users IN main;
+MAX(score) FROM users IN main;
+
+SUM(score) FROM users IN main GROUP BY role HAVING > 0;
+
+
+# ============================================================
+# 16) RESHAPE / UPDATE
+# ============================================================
+
+RESHAPE users
+WITH
+    status="active",
+    login_count=1,
+    last_login=NOW,
+    updated_at=NOW,
+    notes="updated by RESHAPE"
+WHERE uid = "user_guest"
+IN main;
+
+PICK uid, username, status, login_count, last_login, notes
+FROM users
+IN main
+WHERE uid = "user_guest"
+LIMIT 1;
+
+
+# ============================================================
+# 17) DELETE / ERASE
+# ============================================================
+
+SEED audit_log WITH event_uid="event_delete_demo", entity="demo", entity_uid="delete_me", action="temp", message="Will be deleted by DELETE", created_at=NOW IN main;
+DELETE FROM audit_log WHERE event_uid = "event_delete_demo" IN main;
+
+SEED audit_log WITH event_uid="event_erase_demo", entity="demo", entity_uid="erase_me", action="temp", message="Will be deleted by ERASE", created_at=NOW IN main;
+ERASE FROM audit_log WHERE event_uid = "event_erase_demo" IN main;
+
+
+# ============================================================
+# 18) INDEXES
+# ============================================================
+
+INDEX users uid IN main;
+CREATE INDEX ON users username IN main;
+
+PRIMARY INDEX users uid IN main;
+UNIQUE INDEX users username IN main;
+COMPOSITE INDEX users tenant_id, status IN main;
+SORTED INDEX users score IN main;
+RANGE INDEX users age IN main;
+PREFIX INDEX users username IN main;
+FULLTEXT INDEX posts title, body IN main;
+
+SHOW INDEXES FROM users IN main;
+SHOW INDEXES FROM posts IN main;
+
+REINDEX users IN main;
+REPAIR INDEXES users IN main;
+
+UNINDEX users username IN main;
+CREATE INDEX ON users username IN main;
+
+DROP INDEX ON users score IN main;
+SORTED INDEX users score IN main;
+
+
+# ============================================================
+# 19) FULLTEXT
+# ============================================================
+
+FULLTEXT posts SEARCH "GreenQL" COLUMNS title, body LIMIT 10;
+FULLTEXT "runtime" FROM posts IN main COLUMNS title, body LIMIT 10;
+
+DECLARE _fulltext_result_a = fulltext_search("main", "posts", "GreenQL", ["title", "body"], 10);
+DECLARE _fulltext_result_b = fulltext_search("demo_full_gql", "main", "posts", "runtime", ["title", "body"], 10);
+
+OUTPUT {
+    "fulltext_result_a": _fulltext_result_a,
+    "fulltext_result_b": _fulltext_result_b
+};
+
+
+# ============================================================
+# 20) FOREIGN KEYS / RELATIONS
+# ============================================================
+
+ALTER TABLE posts
+ADD FOREIGN KEY user_uid
+REFERENCES users(uid)
+IN main
+ON DELETE CASCADE
+ON UPDATE CASCADE;
+
+ALTER TABLE tags
+ADD FOREIGN KEY post_uid
+REFERENCES posts(post_uid)
+IN main
+ON DELETE CASCADE
+ON UPDATE RESTRICT;
+
+SHOW RELATIONS IN main;
+SHOW RELATIONS FROM posts IN main;
+CHECK RELATIONS IN main;
+
+REPAIR RELATIONS posts IN main MODE REPORT;
+
+# Destruktive Repair-Modi:
+# REPAIR RELATIONS posts IN main MODE SET_NULL;
+# REPAIR RELATIONS posts IN main MODE DELETE;
+
+
+# ============================================================
+# 21) JOINS
+# ============================================================
+
+INNER JOIN users AND posts IN main ON uid = user_uid LIMIT 20;
+LEFT JOIN users AND posts IN main ON uid = user_uid LIMIT 20;
+
+
+# ============================================================
+# 22) TRANSACTIONS / SAVEPOINTS
+# ============================================================
+
+TX TIMEOUT 60;
+
+BEGIN TRANSACTION;
+
+SEED audit_log WITH
+    event_uid="event_tx_before_savepoint",
+    entity="transaction",
+    entity_uid="tx",
+    action="insert",
+    message="Before savepoint",
+    created_at=NOW
+IN main;
+
+SAVEPOINT sp_before_second_insert;
+
+SEED audit_log WITH
+    event_uid="event_tx_rollback_target",
+    entity="transaction",
+    entity_uid="tx",
+    action="insert",
+    message="This should be rolled back to savepoint",
+    created_at=NOW
+IN main;
+
+SHOW TRANSACTION;
+
+ROLLBACK TO sp_before_second_insert;
+
+SEED audit_log WITH
+    event_uid="event_tx_after_rollback_to",
+    entity="transaction",
+    entity_uid="tx",
+    action="insert",
+    message="After rollback to savepoint",
+    created_at=NOW
+IN main;
+
+COMMIT TRANSACTION;
+
+PICK event_uid, action, message FROM audit_log IN main WHERE entity = "transaction" LIMIT 20;
+
+BEGIN;
+SEED audit_log WITH event_uid="event_full_rollback", entity="rollback", entity_uid="rb", action="insert", message="This should be fully rolled back", created_at=NOW IN main;
+ROLLBACK;
+
+PICK event_uid, entity, action FROM audit_log IN main WHERE event_uid = "event_full_rollback" LIMIT 5;
+
+
+# ============================================================
+# 23) QUERY OPTIONS / PREPARE / EXECUTE
+# ============================================================
+
+QUERY OPTIONS {
+    "limit": 100,
+    "explain": true,
+    "cache": false
+};
+
+PREPARE active_users AS PICK uid, username, role, status FROM users IN main WHERE status = "active" SORT username ASC LIMIT 20;
+
+EXECUTE active_users;
+
+EXECUTE active_users WITH {
+    "status": "active"
+};
+
+
+# ============================================================
+# 24) PAGE / CURSOR
+# ============================================================
+
+PAGE users IN main PAGE 1 LIMIT 2;
+PAGE users IN main PAGE 2 SIZE 2;
+
+CURSOR users IN main LIMIT 2;
+CURSOR users IN main SIZE 2 AFTER 1;
+
+DECLARE _page_a = page("main", "users", 1, 2);
+DECLARE _page_b = page("demo_full_gql", "main", "users", 1, 2);
+
+DECLARE _cursor_a = cursor("main", "users", 2, "");
+DECLARE _cursor_b = cursor("demo_full_gql", "main", "users", 2, "");
+
+OUTPUT {
+    "page_a": _page_a,
+    "page_b": _page_b,
+    "cursor_a": _cursor_a,
+    "cursor_b": _cursor_b
+};
+
+
+# ============================================================
+# 25) HEALTH / CHECK / REPAIR / SNAPSHOT / META / PACK
+# ============================================================
+
+CHECK users IN main;
+HEALTH users IN main;
+
+SHOW META FROM users IN main;
+
+SNAPSHOT users IN main;
+
+REPAIR users IN main;
+RECOVER users IN main;
+
+PACK users IN main;
+
+
+# ============================================================
+# 26) STATS / ANALYZE / MONITOR / INDEX SUGGESTIONS
+# ============================================================
+
+STATS users IN main;
+ANALYZE users IN main;
+ANALYZE main.users;
+
+SUGGEST INDEXES users IN main;
+INDEX SUGGESTIONS users IN main;
+INDEX SUGGESTIONS main.users;
+
+AUTO INDEX users IN main COLUMNS uid, username, status, score;
+
+MONITOR;
+MONITOR users IN main;
+MONITOR main.users;
+
+DECLARE _monitor_a = monitor();
+DECLARE _monitor_b = monitor("main", "users");
+DECLARE _monitor_c = monitor("demo_full_gql", "main", "users");
+
+DECLARE _recover_a = recover("main", "users");
+DECLARE _recover_b = recover("demo_full_gql", "main", "users");
+
+OUTPUT {
+    "monitor_a": _monitor_a,
+    "monitor_b": _monitor_b,
+    "monitor_c": _monitor_c,
+    "recover_a": _recover_a,
+    "recover_b": _recover_b
+};
+
+
+# ============================================================
+# 27) PARTITIONING
+# ============================================================
+
+PARTITION TABLE users BY TENANT tenant_id IN main;
+SHOW PARTITIONS FROM users IN main;
+
+PARTITION TABLE posts BY DATE created_at IN main;
+SHOW PARTITIONS FROM posts IN main;
+
+PARTITION TABLE users BY USER uid IN main;
+SHOW PARTITIONS FROM users IN main;
+
+PARTITION TABLE users BY HASH uid IN main BUCKETS 8;
+SHOW PARTITIONS FROM users IN main;
+
+REPAIR PARTITIONS FROM users IN main;
+
+# Kann echte Backups für Partitionen erzeugen:
+# BACKUP PARTITION tenant_a FROM users IN main;
+
+# Partition Readonly/Writable:
+# SET PARTITION tenant_a FROM users IN main READONLY;
+# SET PARTITION tenant_a FROM users IN main WRITABLE;
+# SET PARTITION tenant_a FROM users IN main READ_ONLY;
+
+
+# ============================================================
+# 28) SHARDING / CLUSTER
+# ============================================================
+
+REGISTER SHARD shard_main ROLE PRIMARY;
+REGISTER SHARD shard_replica ROLE REPLICA;
+REGISTER SHARD shard_worker ROLE WORKER;
+
+SHOW SHARDS;
+
+SHARD TABLE users BY HASH uid IN main;
+SHARD TABLE posts BY TENANT tenant_id IN main;
+SHARD TABLE users BY USER uid IN main;
+
+SHARD HEALTH;
+CLUSTER HEALTH;
+HEARTBEAT NODE node_demo_001;
+HEARTBEAT NODE;
+
+
+# ============================================================
+# 29) ACL / GRANT / REVOKE
+# ============================================================
+
+GRANT admin * ON users IN main;
+GRANT editor read ON users IN main;
+GRANT editor write ON posts IN main;
+GRANT guest read ON posts IN main;
+
+REVOKE guest write ON posts IN main;
+
+
+# ============================================================
+# 30) RUNTIME DB FUNCTIONS
+# ============================================================
+
+DECLARE _instances_a = get_instances();
+DECLARE _instances_b = instances();
+
+DECLARE _bases_a = get_bases("demo_full_gql");
+DECLARE _bases_b = bases("demo_full_gql");
+
+DECLARE _tables_a = get_tables("demo_full_gql", "main");
+DECLARE _tables_b = tables("demo_full_gql", "main");
+DECLARE _tables_c = tables("main");
+
+DECLARE _all_users = get_data("main", "users");
+DECLARE _admin_user = get_data("main", "users", {"uid":"user_admin"});
+DECLARE _admin_user_full_target = get_data("demo_full_gql", "main", "users", {"uid":"user_admin"});
+
+DECLARE _fetch_users = fetch_data("main", "users");
+DECLARE _fetch_user = fetch("main", "users", {"uid":"user_editor"});
+
+DECLARE _count_users = count_data("main", "users");
+DECLARE _count_users_filtered = count_data("main", "users", {"status":"active"});
+DECLARE _tally_users = tally_data("main", "users");
+
+DECLARE _last_user_a = last_added("main", "users");
+DECLARE _last_user_b = last_data("main", "users");
+
+OUTPUT {
+    "instances_a": _instances_a,
+    "instances_b": _instances_b,
+    "bases_a": _bases_a,
+    "bases_b": _bases_b,
+    "tables_a": _tables_a,
+    "tables_b": _tables_b,
+    "tables_c": _tables_c,
+    "admin_user": _admin_user,
+    "admin_user_full_target": _admin_user_full_target,
+    "count_users": _count_users,
+    "count_users_filtered": _count_users_filtered,
+    "tally_users": _tally_users,
+    "last_user_a": _last_user_a,
+    "last_user_b": _last_user_b
+};
+
+
+# ============================================================
+# 31) RUNTIME INSERT / EDIT / DELETE HELPERS
+# ============================================================
+
+DECLARE _runtime_add = add_data("main", "audit_log", {
+    "event_uid": "event_runtime_add",
+    "entity": "runtime",
+    "entity_uid": "add_data",
+    "action": "add",
+    "message": "Inserted via add_data",
+    "created_at": NOW
+});
+
+DECLARE _runtime_seed = seed_data("main", "audit_log", {
+    "event_uid": "event_runtime_seed",
+    "entity": "runtime",
+    "entity_uid": "seed_data",
+    "action": "seed",
+    "message": "Inserted via seed_data",
+    "created_at": NOW
+});
+
+DECLARE _runtime_plant = plant_data("main", "audit_log", {
+    "event_uid": "event_runtime_plant",
+    "entity": "runtime",
+    "entity_uid": "plant_data",
+    "action": "plant",
+    "message": "Inserted via plant_data",
+    "created_at": NOW
+});
+
+DECLARE _runtime_edit = edit_data("main", "audit_log", {"event_uid":"event_runtime_add"}, {
+    "message": "Updated via edit_data"
+});
+
+DECLARE _runtime_edit_alias = editdata("main", "audit_log", {"event_uid":"event_runtime_seed"}, {
+    "message": "Updated via editdata alias"
+});
+
+DECLARE _runtime_reshape = reshape_data("main", "audit_log", {"event_uid":"event_runtime_seed"}, {
+    "action": "reshape",
+    "message": "Updated via reshape_data"
+});
+
+DECLARE _runtime_delete = delete_data("main", "audit_log", {"event_uid":"event_runtime_plant"});
+
+DECLARE _runtime_erase = erase_data("main", "audit_log", {"event_uid":"not_existing_but_valid_call"});
+
+# Vorsicht: recursive delete kann später erweitert sein.
+# DECLARE _runtime_recursive_delete = delete_data_recursive("main", "audit_log", {"entity":"runtime"});
+
+OUTPUT {
+    "runtime_add": _runtime_add,
+    "runtime_seed": _runtime_seed,
+    "runtime_plant": _runtime_plant,
+    "runtime_edit": _runtime_edit,
+    "runtime_edit_alias": _runtime_edit_alias,
+    "runtime_reshape": _runtime_reshape,
+    "runtime_delete": _runtime_delete,
+    "runtime_erase": _runtime_erase
+};
+
+
+# ============================================================
+# 32) RUNTIME COLUMN HELPERS
+# ============================================================
+
+DECLARE _new_column = new_column("main", "audit_log", "runtime_col", "runtime default");
+DECLARE _sprout_column = sprout_column("main", "audit_log", "runtime_col_2", "runtime default 2");
+DECLARE _delete_column = delete_column("main", "audit_log", "runtime_col_2");
+DECLARE _prune_column = prune_column("main", "audit_log", "runtime_col_not_existing");
+
+OUTPUT {
+    "new_column": _new_column,
+    "sprout_column": _sprout_column,
+    "delete_column": _delete_column,
+    "prune_column": _prune_column
+};
+
+
+# ============================================================
+# 33) RUNTIME COPY / TRANSFER / MOVE / RENAME
+# ============================================================
+
+GROW TABLE copy_source (
+    item_uid,
+    name,
+    value,
+    created_at
+) IN tmp;
+
+SEED copy_source WITH item_uid="copy_001", name="Copy A", value=100, created_at=NOW IN tmp;
+SEED copy_source WITH item_uid="copy_002", name="Copy B", value=200, created_at=NOW IN tmp;
+
+DECLARE _copy_table = copy_data(
+    {"instance":"demo_full_gql", "base":"tmp", "table":"copy_source"},
+    {"base":"tmp", "table":"copy_target"}
+);
+
+DECLARE _transfer_table = transfer_data(
+    {"instance":"demo_full_gql", "base":"tmp", "table":"copy_source"},
+    {"base":"tmp", "table":"transfer_target"}
+);
+
+DECLARE _move_table = move_data(
+    {"instance":"demo_full_gql", "base":"tmp", "table":"transfer_target"},
+    {"base":"tmp", "table":"moved_target"}
+);
+
+DECLARE _transfer_delete_table = transfer_data_delete(
+    {"instance":"demo_full_gql", "base":"tmp", "table":"copy_target"},
+    {"base":"tmp", "table":"copy_target_moved_by_transfer_delete"}
+);
+
+DECLARE _rename_table = rename_table("tmp", "moved_target", "renamed_target");
+
+SHOW TABLES IN tmp;
+
+OUTPUT {
+    "copy_table": _copy_table,
+    "transfer_table": _transfer_table,
+    "move_table": _move_table,
+    "transfer_delete_table": _transfer_delete_table,
+    "rename_table": _rename_table
+};
+
+# Mächtige Rename-Funktionen:
+# DECLARE _rename_base = rename_base("tmp", "tmp_renamed");
+# DECLARE _rename_instance = rename_instance("demo_full_gql", "demo_full_gql_renamed");
+
+
+# ============================================================
+# 34) RUNTIME DELETE / DROP HELPERS
+# ============================================================
+
+# Destruktiv, deshalb als Syntax-Beispiele:
+#
+# DECLARE _delete_table_fn = delete_table("tmp", "renamed_target");
+# DECLARE _drop_table_fn = drop_table("tmp", "renamed_target");
+#
+# DECLARE _delete_base_fn = delete_base("tmp");
+# DECLARE _drop_base_fn = drop_base("tmp");
+#
+# DECLARE _delete_instance_fn = delete_instance("demo_full_gql");
+# DECLARE _drop_instance_fn = drop_instance("demo_full_gql");
+
+
+# ============================================================
+# 35) READONLY / LOCK DATA
+# ============================================================
+
+DECLARE _lock_user = set_data_readonly("main", "users", {"uid":"user_admin"}, true);
+DECLARE _unlock_user = lock_data("main", "users", {"uid":"user_admin"}, false);
+
+OUTPUT {
+    "lock_user": _lock_user,
+    "unlock_user": _unlock_user
+};
+
+
+# ============================================================
+# 36) IF / ELSE
+# ============================================================
+
+IF (_count_users > 0) {
+    OUTPUT "IF: users exist";
+
+    SEED audit_log WITH
+        event_uid="event_if_true",
+        entity="control_flow",
+        entity_uid="if",
+        action="true",
+        message="IF true branch executed",
+        created_at=NOW
+    IN main;
+} ELSE {
+    OUTPUT "ELSE: no users found";
+
+    SEED audit_log WITH
+        event_uid="event_if_false",
+        entity="control_flow",
+        entity_uid="if",
+        action="false",
+        message="ELSE branch executed",
+        created_at=NOW
+    IN main;
+};
+
+IF (_count_users == 0) {
+    OUTPUT "No users";
+} ELSE IF (_count_users > 0) {
+    OUTPUT "ELSE IF: users found";
+} ELSE {
+    OUTPUT "Fallback";
+};
+
+
+# ============================================================
+# 37) FOR NUMERIC LOOP
+# ============================================================
+
+FOR (_i = 1; _i <= 3; _i++) {
+    SEED audit_log WITH
+        event_uid="event_for_inc_" + _i,
+        entity="loop",
+        entity_uid="for_inc",
+        action="iteration",
+        message="FOR increment iteration " + _i,
+        created_at=NOW
+    IN main;
+};
+
+FOR (_j = 3; _j > 0; _j--) {
+    OUTPUT "Countdown: " + _j;
+};
+
+
+# ============================================================
+# 38) FOR ARRAY LOOP
+# ============================================================
+
+DECLARE _roles = ["admin", "editor", "guest"];
+
+FOR (_role; _index FROM _roles) {
+    OUTPUT {
+        "loop": "FOR array",
+        "index": _index,
+        "role": _role
+    };
+};
+
+
+# ============================================================
+# 39) MAP_OBJECT
+# ============================================================
+
+DECLARE _role_map = {
+    "admin": "Full access",
+    "editor": "Content access",
+    "guest": "Read access"
+};
+
+MAP_OBJECT(_role_map AS _role_key, _role_value) {
+    OUTPUT {
+        "loop": "MAP_OBJECT explicit",
+        "key": _role_key,
+        "value": _role_value
+    };
+};
+
+MAP_OBJECT(_role_map) {
+    OUTPUT {
+        "loop": "MAP_OBJECT compact",
+        "key": _key,
+        "value": _role_map
+    };
+};
+
+
+# ============================================================
+# 40) FUNCTIONS / CALL / BACK
+# ============================================================
+
+F make_label(_prefix, _value) {
+    DECLARE _label = _prefix + ": " + _value;
+    BACK _label;
+};
+
+DECLARE _label_direct = CALL make_label("User", "admin");
+DECLARE _label_runtime = make_label("Role", "editor");
+
+OUTPUT {
+    "label_direct": _label_direct,
+    "label_runtime": _label_runtime
+};
+
+F add_numbers(_a, _b) {
+    DECLARE _sum = _a + _b;
+    BACK _sum;
+};
+
+DECLARE _sum_result = CALL add_numbers(7, 5);
+
+OUTPUT {
+    "sum_result": _sum_result
+};
+
+
+# ============================================================
+# 41) CLASSES / C / CLASS / PUB F / PRIV F / this
+# ============================================================
+
+CLASS DemoService {
+    PUB DECLARE _service_name = "DemoService";
+    PRIV DECLARE _counter = 0;
+
+    PUB F hello(_name) {
+        BACK "Hello " + _name + " from " + _service_name;
+    };
+
+    PUB F increment() {
+        this._counter = _counter + 1;
+        BACK _counter;
+    };
+
+    PRIV F internal_note() {
+        BACK "internal";
+    };
+};
+
+DECLARE _class_hello = CLASS DemoService/hello("Markus");
+DECLARE _class_inc_1 = CLASS DemoService/increment();
+DECLARE _class_inc_2 = CALL DemoService/increment();
+
+OUTPUT {
+    "class_hello": _class_hello,
+    "class_inc_1": _class_inc_1,
+    "class_inc_2": _class_inc_2
+};
+
+C MiniService {
+    PUB DECLARE _name = "MiniService";
+
+    PUB F get_name() {
+        BACK _name;
+    };
+};
+
+DECLARE _mini_name = CLASS MiniService/get_name();
+
+OUTPUT {
+    "mini_name": _mini_name
+};
+
+
+# ============================================================
+# 42) LOGGING
+# ============================================================
+
+SET_LOGFILE("logs/demo_greenql_full.log");
+CLEAR_LOG();
+
+LOG("greenQL demo log started");
+LOG({
+    "version": $SHOWCASE_VERSION,
+    "instance": "demo_full_gql",
+    "base": "main",
+    "time": NOW
+});
+LOG("greenQL demo log finished");
+
+# Löscht die Logdatei:
+# DELETE_LOG_FILE();
+
+
+# ============================================================
+# 43) FILE INCLUDE / FILE RUN / FILE BACK
+# ============================================================
+
+# Braucht reale Dateien im erlaubten Script-Root.
+#
+# FILE.INCLUDE "partials/setup.gql";
+#
+# FILE.RUN "partials/child.gql";
+#
+# FILE.RUN "partials/child.gql" {
+#     "mode": "demo",
+#     "user": "admin"
+# };
+#
+# DECLARE _child_result = FILE.RUN "partials/child.gql" {
+#     "mode": "demo",
+#     "user": "admin"
+# };
+#
+# Inhalt einer child.gql könnte sein:
+#
+# FILE.BACK {
+#     "ok": true,
+#     "source": "child.gql"
+# };
+
+
+# ============================================================
+# 44) BACKUP
+# ============================================================
+
+# Erzeugt echte Backup-Dateien, daher auskommentiert.
+#
+# BACKUP FULL;
+# BACKUP SNAPSHOT;
+# BACKUP COLD;
+# BACKUP ENCRYPTED;
+# BACKUP TABLE users IN main;
+# BACKUP INSTANCE demo_full_gql;
+# BACKUP TENANT demo_full_gql;
+
+
+# ============================================================
+# 45) MIGRATION
+# ============================================================
+
+# Globaler produktiver Befehl, daher auskommentiert.
+#
+# MIGRATE TO V2;
+# MIGRATE_TO_V2;
+
+
+# ============================================================
+# 46) DROP / DESTRUCTIVE COMMANDS
+# ============================================================
+
+# Destruktiv, daher auskommentiert.
+#
+# DROP TABLE tmp_items IN tmp;
+# DROP BASE tmp;
+# DROP INSTANCE demo_full_gql FORCE;
+
+
+# ============================================================
+# 47) ERROR / END_PROC / this_f.restart
+# ============================================================
+
+# Stoppt Script mit Fehler:
+#
+# ERROR MSG "Intentional showcase error";
+# ERROR "Intentional short error";
+#
+# Stoppt Script erfolgreich:
+#
+# END_PROC;
+#
+# Funktions-Restart, vorsichtig verwenden:
+#
+# F restart_demo(_counter) {
+#     IF (_counter < 1) {
+#         _counter = _counter + 1;
+#         this_f.restart();
+#     } ELSE {
+#         BACK _counter;
+#     };
+# };
+
+
+# ============================================================
+# 48) FINAL VIEWS
+# ============================================================
+
+SHOW INSTANCES;
+SHOW BASES;
+SHOW TABLES IN main;
+SHOW TABLES IN tmp;
+
+DESCRIBE users IN main;
+DESCRIBE posts IN main;
+
+SHOW CONSTRAINTS FROM users IN main;
+SHOW INDEXES FROM users IN main;
+SHOW INDEXES FROM posts IN main;
+SHOW RELATIONS IN main;
+SHOW PARTITIONS FROM users IN main;
+SHOW SHARDS;
+
+PICK * FROM users IN main SORT username ASC LIMIT 50;
+PICK * FROM posts IN main SORT post_uid ASC LIMIT 50;
+PICK * FROM tags IN main SORT tag_uid ASC LIMIT 50;
+PICK * FROM audit_log IN main SORT event_uid ASC LIMIT 100;
+
+
+# ============================================================
+# 49) FINAL BACK
+# ============================================================
+
+BACK {
+    "ok": true,
+    "message": "greenQL ultra full showcase finished",
+    "version": $SHOWCASE_VERSION,
+    "instance": "demo_full_gql",
+    "active_base": "main",
+    "safe_core_executed": true,
+    "notes": [
+        "ENV is included via ENV(\"api_auth\") and ENV(\"api_base\").",
+        "fetch_api/api_fetch/call_api examples are included but commented because they call external URLs.",
+        "Untyped GROW TABLE is active and executable.",
+        "Typed GROW TABLE is active: column:type, COLUMN TYPE, REQUIRED, UNIQUE, DEFAULT and WITHOUT TYPES are demonstrated.",
+        "Destructive/global commands are included as comments."
+    ],
+    "active_features": [
+        "META",
+        "OUTPUT",
+        "DECLARE",
+        "DECALRE",
+        "DELACE",
+        "PUB DECLARE",
+        "PRIV DECLARE",
+        "PARAM",
+        "param",
+        "ENV",
+        "NOW",
+        "uuid",
+        "uni_random",
+        "spark_id",
+        "fresh_id",
+        "hash",
+        "hash_sha256",
+        "hash_sha512",
+        "hash_md5",
+        "hash_adler32",
+        "hash_crc32",
+        "len",
+        "math expressions",
+        "boolean expressions",
+        "GROW INSTANCE",
+        "USE INSTANCE",
+        "ROOT INSTANCE",
+        "SHOW INSTANCES",
+        "GROW BASE",
+        "ROOT",
+        "SHOW BASES",
+        "GROW TABLE untyped",
+        "GROW TABLE WITH untyped",
+        "SHOW TABLES",
+        "BRANCH",
+        "ALTER TABLE ADD COLUMN",
+        "EDIT TABLE ADD COLUMN",
+        "DESCRIBE",
+        "CONSTRAINT UNIQUE",
+        "CONSTRAINT REQUIRED",
+        "FOREIGN KEY",
+        "RELATIONS",
+        "SEED",
+        "PEEK",
+        "PICK",
+        "WHERE",
+        "SORT",
+        "LIMIT",
+        "OFFSET",
+        "MAX limit alias",
+        "EXPLAIN PICK",
+        "EXISTS",
+        "DISTINCT",
+        "COUNT",
+        "SUM",
+        "AVG",
+        "MIN",
+        "MAX aggregate",
+        "GROUP BY",
+        "HAVING",
+        "RESHAPE",
+        "DELETE",
+        "ERASE",
+        "INDEX",
+        "CREATE INDEX ON",
+        "PRIMARY INDEX",
+        "UNIQUE INDEX",
+        "COMPOSITE INDEX",
+        "SORTED INDEX",
+        "RANGE INDEX",
+        "PREFIX INDEX",
+        "FULLTEXT INDEX",
+        "SHOW INDEXES",
+        "REINDEX",
+        "REPAIR INDEXES",
+        "UNINDEX",
+        "DROP INDEX ON",
+        "FULLTEXT command",
+        "fulltext_search runtime",
+        "INNER JOIN",
+        "LEFT JOIN",
+        "BEGIN TRANSACTION",
+        "SAVEPOINT",
+        "ROLLBACK TO",
+        "COMMIT TRANSACTION",
+        "ROLLBACK",
+        "SHOW TRANSACTION",
+        "QUERY OPTIONS",
+        "PREPARE",
+        "EXECUTE",
+        "PAGE",
+        "CURSOR",
+        "CHECK",
+        "HEALTH",
+        "SHOW META",
+        "SNAPSHOT",
+        "REPAIR",
+        "RECOVER",
+        "PACK",
+        "STATS",
+        "ANALYZE",
+        "SUGGEST INDEXES",
+        "INDEX SUGGESTIONS",
+        "AUTO INDEX",
+        "MONITOR",
+        "PARTITION TABLE",
+        "SHOW PARTITIONS",
+        "REPAIR PARTITIONS",
+        "REGISTER SHARD",
+        "SHOW SHARDS",
+        "SHARD TABLE",
+        "SHARD HEALTH",
+        "CLUSTER HEALTH",
+        "HEARTBEAT NODE",
+        "GRANT",
+        "REVOKE",
+        "runtime get_instances",
+        "runtime instances",
+        "runtime get_bases",
+        "runtime bases",
+        "runtime get_tables",
+        "runtime tables",
+        "runtime get_data",
+        "runtime fetch_data",
+        "runtime fetch",
+        "runtime count_data",
+        "runtime tally_data",
+        "runtime last_added",
+        "runtime last_data",
+        "runtime add_data",
+        "runtime seed_data",
+        "runtime plant_data",
+        "runtime edit_data",
+        "runtime editdata",
+        "runtime reshape_data",
+        "runtime delete_data",
+        "runtime erase_data",
+        "runtime new_column",
+        "runtime sprout_column",
+        "runtime delete_column",
+        "runtime prune_column",
+        "runtime copy_data",
+        "runtime transfer_data",
+        "runtime transfer_data_delete",
+        "runtime move_data",
+        "runtime rename_table",
+        "runtime set_data_readonly",
+        "runtime lock_data",
+        "runtime instance_exists",
+        "runtime base_exists",
+        "runtime table_exists",
+        "runtime data_exists",
+        "runtime monitor",
+        "runtime recover",
+        "runtime page",
+        "runtime cursor",
+        "IF ELSE",
+        "ELSE IF",
+        "FOR numeric",
+        "FOR array",
+        "MAP_OBJECT explicit",
+        "MAP_OBJECT compact",
+        "F function",
+        "CALL function",
+        "BACK",
+        "CLASS",
+        "C",
+        "PUB F",
+        "PRIV F",
+        "CLASS method call",
+        "CALL class/method",
+        "SET_LOGFILE",
+        "CLEAR_LOG",
+        "LOG"
+    ],
+    "commented_features": [
+        "fetch_api external call",
+        "api_fetch external call",
+        "call_api external call",
+        "typed table creation examples",
+        "typed column examples",
+        "FILE.INCLUDE",
+        "FILE.RUN",
+        "FILE.BACK",
+        "BACKUP FULL",
+        "BACKUP SNAPSHOT",
+        "BACKUP COLD",
+        "BACKUP ENCRYPTED",
+        "BACKUP TABLE",
+        "BACKUP INSTANCE",
+        "BACKUP TENANT",
+        "MIGRATE TO V2",
+        "MIGRATE_TO_V2",
+        "DROP TABLE",
+        "DROP BASE",
+        "DROP INSTANCE FORCE",
+        "ERROR MSG",
+        "END_PROC",
+        "this_f.restart"
+    ]
+};

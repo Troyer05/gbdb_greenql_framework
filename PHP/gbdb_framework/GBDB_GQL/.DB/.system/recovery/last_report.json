@@ -1,0 +1,12 @@
+{
+    "ok": true,
+    "auto": true,
+    "dirty_shutdown": false,
+    "started_at": 1778063309,
+    "tables": [],
+    "replayed": 0,
+    "dangling": 0,
+    "rolled_back": 0,
+    "errors": [],
+    "finished_at": 1778063309
+}

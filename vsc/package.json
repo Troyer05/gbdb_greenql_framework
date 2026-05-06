@@ -1,0 +1,74 @@
+{
+  "name": "greenql-language",
+  "displayName": "greenQL Language Support",
+  "description": "greenQL / GreenQLv2 Language Support massiv erweitert: Parser-nahe Commands, Runtime-Funktionen, typed Tables, Snippets, Hovers, Semantic Highlighting, Symbols, Folding und Diagnostics.",
+  "version": "1.8.0",
+  "publisher": "greenbucket",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:greenql"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "greenql",
+        "aliases": [
+          "greenQL",
+          "GreenQL"
+        ],
+        "extensions": [
+          ".gql",
+          ".greenql",
+          ".gq",
+          ".gbdb",
+          ".gdb"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "greenql",
+        "scopeName": "source.greenql",
+        "path": "./syntaxes/greenql.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "greenql",
+        "path": "./snippets/greenql.code-snippets"
+      }
+    ],
+    "themes": [
+      {
+        "label": "greenQL Bunt",
+        "uiTheme": "vs-dark",
+        "path": "./themes/greenql-bunt-color-theme.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[greenql]": {
+        "editor.wordBasedSuggestions": "off",
+        "editor.suggest.showWords": false,
+        "editor.semanticHighlighting.enabled": true,
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": true,
+        "editor.quickSuggestions": {
+          "other": true,
+          "comments": false,
+          "strings": false
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "latest",
+    "vscode": "^1.1.36"
+  }
+}

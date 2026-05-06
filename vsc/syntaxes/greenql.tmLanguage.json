@@ -1,0 +1,311 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "greenQL",
+  "scopeName": "source.greenql",
+  "fileTypes": [
+    "gql",
+    "greenql",
+    "gq",
+    "gbdb",
+    "gdb"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#metaBlock"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#fileCommands"
+    },
+    {
+      "include": "#definitions"
+    },
+    {
+      "include": "#qualifiedCalls"
+    },
+    {
+      "include": "#runtimeFunctions"
+    },
+    {
+      "include": "#danger"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#clauses"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#numbersOperatorsPunctuation"
+    },
+    {
+      "include": "#identifiers"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.greenql",
+          "match": "#.*$"
+        },
+        {
+          "name": "comment.line.double-slash.greenql",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.double-dash.greenql",
+          "match": "--.*$"
+        },
+        {
+          "name": "comment.block.greenql",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.greenql",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.greenql",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.greenql",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.greenql",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.backtick.greenql",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.greenql",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "metaBlock": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(META)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.meta.greenql"
+            }
+          }
+        },
+        {
+          "name": "meta.object.key.quoted.greenql",
+          "match": "(?<=\")([A-Za-z_][A-Za-z0-9_\\-]*)(?=\"\\s*:)"
+        },
+        {
+          "name": "meta.object.key.bare.greenql",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*(?=\\s*:)"
+        }
+      ]
+    },
+    "fileCommands": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(FILE)\\s*(\\.)\\s*(INCLUDE|RUN|BACK)\\b",
+          "captures": {
+            "1": {
+              "name": "support.type.file.greenql"
+            },
+            "2": {
+              "name": "punctuation.accessor.greenql"
+            },
+            "3": {
+              "name": "support.function.file.greenql"
+            }
+          }
+        }
+      ]
+    },
+    "definitions": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(C|CLASS)\\s+([A-Za-z][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.greenql"
+            },
+            "2": {
+              "name": "entity.name.type.class.greenql"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(F|FUNCTION)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.greenql"
+            },
+            "2": {
+              "name": "entity.name.function.definition.greenql"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED|STATIC)\\b",
+          "name": "storage.modifier.greenql"
+        }
+      ]
+    },
+    "qualifiedCalls": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(CALL|CLASS)\\s+([A-Za-z_][A-Za-z0-9_]*)(/)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "keyword.control.call.greenql"
+            },
+            "2": {
+              "name": "entity.name.type.class.greenql"
+            },
+            "3": {
+              "name": "punctuation.separator.greenql"
+            },
+            "4": {
+              "name": "entity.name.function.greenql"
+            }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z0-9_\\-]+)(\\.)([A-Za-z0-9_\\-]+)\\b",
+          "captures": {
+            "1": {
+              "name": "entity.name.namespace.base.greenql"
+            },
+            "2": {
+              "name": "punctuation.accessor.greenql"
+            },
+            "3": {
+              "name": "entity.name.namespace.table.greenql"
+            }
+          }
+        }
+      ]
+    },
+    "runtimeFunctions": {
+      "patterns": [
+        {
+          "name": "support.function.runtime.greenql",
+          "match": "(?i)\\\\b(?:install_social_patterns|social_schema_patterns|delete_data_recursive|transfer_data_delete|encryption_config|set_data_readonly|retry_failed_jobs|user_data_export|user_data_delete|user_data_redact|define_procedure|delete_instance|evaluate_policy|instance_exists|fulltext_search|rename_instance|define_trigger|call_procedure|mark_pii_field|define_db_user|define_db_role|sprout_column|get_instances|transfer_data|drop_instance|define_policy|delete_column|hash_adler32|audit_search|delete_media|reshape_data|audit_export|delete_table|refresh_view|table_exists|rename_table|prune_column|delete_data|delete_base|delayed_job|define_view|soft_delete|hash_sha256|rename_base|queue_stats|data_exists|enqueue_job|base_exists|hash_sha512|erase_data|last_added|plant_data|new_column|fetch_data|uni_random|get_tables|hash_crc32|tally_data|drop_table|signed_url|rotate_key|count_data|get_bases|drop_base|last_data|instances|seed_data|api_fetch|move_data|fetch_api|lock_data|edit_data|copy_data|put_blob|add_data|get_view|get_data|fresh_id|call_api|hash_md5|spark_id|editData|monitor|recover|cursor|tables|bases|param|fetch|page|uuid|hash|len|ENV)\\\\s*(?=\\\\()"
+        }
+      ]
+    },
+    "danger": {
+      "patterns": [
+        {
+          "name": "keyword.control.danger.greenql",
+          "match": "(?i)\\\\b(?:ROLLBACK|RECOVER|UNINDEX|REPAIR|REVOKE|DELETE|ERASE|DROP)\\\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.greenql",
+          "match": "(?i)\\\\b(?:DELETE_LOG_FILE|MIGRATE_TO_V2|SET_LOGFILE|MAP_OBJECT|CLEAR_LOG|PROTECTED|SAVEPOINT|PARTITION|HEARTBEAT|SNAPSHOT|DESCRIBE|END_PROC|ROLLBACK|DISTINCT|REGISTER|FUNCTION|FULLTEXT|PREPARE|OPTIONS|RECOVER|MONITOR|REINDEX|EXPLAIN|UNINDEX|EXECUTE|INCLUDE|DECLARE|MIGRATE|DECALRE|CLUSTER|ANALYZE|RESHAPE|SUGGEST|PRIVATE|TIMEOUT|STATIC|REVOKE|BACKUP|REPAIR|EXISTS|CREATE|DELACE|BRANCH|OUTPUT|CURSOR|PUBLIC|COMMIT|HEALTH|DELETE|INNER|BEGIN|INDEX|GRANT|SHARD|CLASS|STATS|ERROR|ERASE|CHECK|QUERY|COUNT|ALTER|ELSE|GROW|PICK|FILE|CALL|PACK|SHOW|META|PRIV|ROOT|PAGE|DROP|BACK|LEFT|JOIN|AUTO|SEED|PEEK|EDIT|MAX|AVG|LOG|FOR|RUN|SUM|MSG|PUB|MIN|USE|IF|TX|F|C)\\\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.greenql",
+          "match": "(?i)\\\\b(?:BLOB_REFERENCE|AUTO_INCREMENT|CONSTRAINTS|TRANSACTION|PARTITIONS|CONSTRAINT|PARTITION|INSTANCES|RELATIONS|RELATION|INSTANCE|DATETIME|TIMESTAMP|BOOLEAN|DECIMAL|INDEXES|TABLES|TENANT|STRING|DOUBLE|SHARDS|COLUMN|TABLE|BASES|FLOAT|MIXED|INDEX|ARRAY|EMAIL|TEXT|UUID|ULID|JSON|BOOL|USER|BASE|NODE|DATA|INT)\\\\b"
+        }
+      ]
+    },
+    "clauses": {
+      "patterns": [
+        {
+          "name": "keyword.other.clause.greenql",
+          "match": "(?i)\\\\b(?:REFERENCES|READ_ONLY|AUTO_INCREMENT|ENCRYPTED|SET_NULL|WRITABLE|RESTRICT|SNAPSHOT|READONLY|REQUIRED|COLUMNS|BUCKETS|FOREIGN|DEFAULT|CASCADE|REPLICA|PRIMARY|WITHOUT|OFFSET|REPORT|UNIQUE|UPDATE|HAVING|SEARCH|WORKER|FORCE|FALSE|AFTER|GROUP|LIMIT|WHERE|TYPES|TRUE|HASH|MODE|NULL|DATE|FROM|SIZE|COLD|FULL|ROLE|SORT|WITH|DESC|AND|ADD|SET|NOT|ASC|NOW|KEY|AS|ON|TO|BY|IN|OR)\\\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.other.constant.greenql",
+          "match": "\\$[A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "name": "variable.other.greenql",
+          "match": "_[A-Za-z][A-Za-z0-9_]*"
+        },
+        {
+          "name": "variable.language.this.greenql",
+          "match": "(?i)\\bthis(?:_f)?\\b"
+        }
+      ]
+    },
+    "numbersOperatorsPunctuation": {
+      "patterns": [
+        {
+          "name": "constant.numeric.greenql",
+          "match": "\\b-?(?:0x[0-9A-Fa-f]+|\\d+(?:\\.\\d+)?)\\b"
+        },
+        {
+          "name": "keyword.operator.comparison.greenql",
+          "match": "==|!=|>=|<=|~=|=|>|<"
+        },
+        {
+          "name": "keyword.operator.logical.greenql",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.greenql",
+          "match": "[+\\-*/%]"
+        },
+        {
+          "name": "punctuation.terminator.statement.greenql",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.definition.group.greenql",
+          "match": "[(){}\\[\\],.:/]"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "entity.name.identifier.greenql",
+          "match": "\\b[A-Za-z][A-Za-z0-9_\\-]*\\b"
+        }
+      ]
+    }
+  }
+}

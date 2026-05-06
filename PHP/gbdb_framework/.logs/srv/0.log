@@ -1,0 +1,6 @@
+{"time":"2025-12-08 12:30:52","level":"info","msg":"Run job #0: service=mail action=send"}
+{"time":"2025-12-08 12:30:52","level":"debug","msg":"Starte Action 'send'","extra":{"to":"test@example.com","subject":"Hello","body":"How are you?"}}
+{"time":"2025-12-08 12:30:52","level":"info","msg":"Mail Module started"}
+{"time":"2025-12-08 12:30:52","level":"debug","msg":"Sending mail to test@example.com","extra":{"to":"test@example.com","subject":"Hello","body":"How are you?"}}
+{"time":"2025-12-08 12:30:52","level":"success","msg":"Mail sent successfully"}
+{"time":"2025-12-08 12:30:52","level":"success","msg":"Job #0 erfolgreich beendet","extra":{"sent_to":"test@example.com"}}

@@ -1,0 +1,731 @@
+{
+  "Meta block": {
+    "prefix": [
+      "meta",
+      "script meta"
+    ],
+    "body": [
+      "META = {",
+      "    \"GreenQL_version\": 2,",
+      "    \"description\": \"${1:Description}\",",
+      "    \"params\": [",
+      "        {\"parameter\": \"${2:name}\", \"required\": false}",
+      "    ]",
+      "};"
+    ],
+    "description": "Script-Metadaten setzen"
+  },
+  "Declare variable": {
+    "prefix": [
+      "declare",
+      "var"
+    ],
+    "body": [
+      "DECLARE _${1:name} = ${2:value};"
+    ],
+    "description": "Variable deklarieren"
+  },
+  "Declare constant": {
+    "prefix": [
+      "const",
+      "declare const",
+      "$"
+    ],
+    "body": [
+      "DECLARE \\$${1:NAME} = ${2:value};"
+    ],
+    "description": "Konstante deklarieren"
+  },
+  "Declare param": {
+    "prefix": [
+      "param",
+      "declare param"
+    ],
+    "body": [
+      "DECLARE _${1:name} = param(\"${2:name}\");"
+    ],
+    "description": "Runtime-Parameter lesen"
+  },
+  "ENV read": {
+    "prefix": [
+      "env",
+      "ENV"
+    ],
+    "body": [
+      "DECLARE _${1:key} = ENV(\"${1:key}\");"
+    ],
+    "description": "ENV aus .config/.greenql.env.php lesen"
+  },
+  "Output": {
+    "prefix": [
+      "output",
+      "out"
+    ],
+    "body": [
+      "OUTPUT(${1:_value});"
+    ],
+    "description": "Output schreiben"
+  },
+  "Set logfile": {
+    "prefix": [
+      "setlog",
+      "set logfile"
+    ],
+    "body": [
+      "SET_LOGFILE(\"${1:logs/greenql.log}\");"
+    ],
+    "description": "Logdatei setzen"
+  },
+  "Log": {
+    "prefix": [
+      "log"
+    ],
+    "body": [
+      "LOG(${1:_value});"
+    ],
+    "description": "Log schreiben"
+  },
+  "If else": {
+    "prefix": [
+      "if",
+      "ifelse"
+    ],
+    "body": [
+      "IF (${1:_value} == ${2:true}) {",
+      "    ${3:OUTPUT(\"ok\");}",
+      "} ELSE {",
+      "    ${4:ERROR MSG \"not ok\";}",
+      "}"
+    ],
+    "description": "IF / ELSE Block"
+  },
+  "For each": {
+    "prefix": [
+      "for",
+      "foreach"
+    ],
+    "body": [
+      "FOR (_${1:item}; _${2:i} FROM _${3:items}) {",
+      "    ${4:OUTPUT(_${1:item});}",
+      "}"
+    ],
+    "description": "FOR über Array"
+  },
+  "For counter": {
+    "prefix": [
+      "fori",
+      "counter loop"
+    ],
+    "body": [
+      "FOR (_${1:i} = 0; _${1:i} < ${2:10}; _${1:i}++) {",
+      "    ${3:OUTPUT(_${1:i});}",
+      "}"
+    ],
+    "description": "FOR Zählschleife"
+  },
+  "Map object": {
+    "prefix": [
+      "map",
+      "map_object"
+    ],
+    "body": [
+      "MAP_OBJECT(_${1:object} AS _${2:key}, _${3:value}) {",
+      "    ${4:LOG(_${2:key}, _${3:value});}",
+      "}"
+    ],
+    "description": "Objekt/Array iterieren"
+  },
+  "Function": {
+    "prefix": [
+      "f",
+      "function"
+    ],
+    "body": [
+      "F ${1:myFunction}(_${2:value}) {",
+      "    ${3:BACK _${2:value};}",
+      "}"
+    ],
+    "description": "Funktion definieren"
+  },
+  "Class": {
+    "prefix": [
+      "class",
+      "c"
+    ],
+    "body": [
+      "CLASS ${1:DemoService} {",
+      "    PRIV DECLARE _name = \"${1:DemoService}\";",
+      "",
+      "    PUB F ${2:boot}() {",
+      "        BACK this._name;",
+      "    }",
+      "}"
+    ],
+    "description": "greenQL Klasse"
+  },
+  "Call function": {
+    "prefix": [
+      "call",
+      "call function"
+    ],
+    "body": [
+      "CALL ${1:myFunction}(${2:_value});"
+    ],
+    "description": "Funktion aufrufen"
+  },
+  "Call method": {
+    "prefix": [
+      "callm",
+      "call method"
+    ],
+    "body": [
+      "CALL ${1:DemoService}/${2:boot}(${3});"
+    ],
+    "description": "Klassenmethode aufrufen"
+  },
+  "File include": {
+    "prefix": [
+      "file include",
+      "include"
+    ],
+    "body": [
+      "FILE.INCLUDE \"${1:scripts/include.gql}\";"
+    ],
+    "description": "Script inkludieren"
+  },
+  "File run": {
+    "prefix": [
+      "file run",
+      "run"
+    ],
+    "body": [
+      "FILE.RUN \"${1:scripts/job.gql}\" {\"${2:name}\": ${3:_value}};"
+    ],
+    "description": "Script separat ausführen"
+  },
+  "File back": {
+    "prefix": [
+      "file back",
+      "file.back"
+    ],
+    "body": [
+      "FILE.BACK ${1:_value};"
+    ],
+    "description": "Rückgabe aus FILE.RUN"
+  },
+  "Use instance": {
+    "prefix": [
+      "use instance",
+      "usei"
+    ],
+    "body": [
+      "USE INSTANCE ${1:main};"
+    ],
+    "description": "Instanz aktivieren"
+  },
+  "Grow instance": {
+    "prefix": [
+      "grow instance"
+    ],
+    "body": [
+      "GROW INSTANCE ${1:main};"
+    ],
+    "description": "Instanz erstellen"
+  },
+  "Drop instance force": {
+    "prefix": [
+      "drop instance"
+    ],
+    "body": [
+      "DROP INSTANCE ${1:main} FORCE;"
+    ],
+    "description": "Instanz löschen"
+  },
+  "Show instances": {
+    "prefix": [
+      "show instances"
+    ],
+    "body": [
+      "SHOW INSTANCES;"
+    ],
+    "description": "Instanzen anzeigen"
+  },
+  "Root base": {
+    "prefix": [
+      "root",
+      "root base"
+    ],
+    "body": [
+      "ROOT ${1:main};"
+    ],
+    "description": "Base fokussieren"
+  },
+  "Branch table": {
+    "prefix": [
+      "branch"
+    ],
+    "body": [
+      "BRANCH ${1:users};"
+    ],
+    "description": "Tabelle fokussieren"
+  },
+  "Grow base": {
+    "prefix": [
+      "grow base"
+    ],
+    "body": [
+      "GROW BASE ${1:main};"
+    ],
+    "description": "Base erstellen"
+  },
+  "Grow table": {
+    "prefix": [
+      "grow table",
+      "table"
+    ],
+    "body": [
+      "GROW TABLE ${1:users} (${2:uid, name, email}) IN ${3:main};"
+    ],
+    "description": "Tabelle ohne aktive Datentypen erstellen"
+  },
+  "Grow typed table": {
+    "prefix": [
+      "grow typed table",
+      "typed table",
+      "table types"
+    ],
+    "body": [
+      "GROW TABLE ${1:users} (",
+      "    uid:string REQUIRED UNIQUE,",
+      "    username:string REQUIRED UNIQUE,",
+      "    email:email REQUIRED,",
+      "    age:int DEFAULT 0,",
+      "    active:bool DEFAULT true,",
+      "    created_at:datetime DEFAULT NOW,",
+      "    meta:json DEFAULT {}",
+      ") IN ${2:main};"
+    ],
+    "description": "Tabelle mit GBDB Schema-Types erstellen"
+  },
+  "Grow loose typed-looking table": {
+    "prefix": [
+      "without types",
+      "table without types"
+    ],
+    "body": [
+      "GROW TABLE ${1:events} (",
+      "    uid:string,",
+      "    payload:json",
+      ") WITHOUT TYPES IN ${2:main};"
+    ],
+    "description": "Typnotation dokumentieren, aber Type-Prüfung deaktiviert lassen"
+  },
+  "Alter add column": {
+    "prefix": [
+      "alter add",
+      "add column"
+    ],
+    "body": [
+      "ALTER TABLE ${1:users} ADD COLUMN ${2:created_at} DEFAULT ${3:NOW} IN ${4:main};"
+    ],
+    "description": "Spalte hinzufügen"
+  },
+  "Describe table": {
+    "prefix": [
+      "describe"
+    ],
+    "body": [
+      "DESCRIBE ${1:users} IN ${2:main};"
+    ],
+    "description": "Tabelle beschreiben"
+  },
+  "Seed row": {
+    "prefix": [
+      "seed",
+      "insert"
+    ],
+    "body": [
+      "SEED ${1:users} WITH uid=uni_random(), name=\"${2:Max M.}\", active=true IN ${3:main};"
+    ],
+    "description": "Datensatz einfügen"
+  },
+  "Pick rows": {
+    "prefix": [
+      "pick",
+      "select"
+    ],
+    "body": [
+      "PICK ${1:*} FROM ${2:users} IN ${3:main} WHERE ${4:active} = ${5:true} SORT ${6:name} ASC LIMIT ${7:50};"
+    ],
+    "description": "Daten lesen"
+  },
+  "Explain pick": {
+    "prefix": [
+      "explain pick"
+    ],
+    "body": [
+      "EXPLAIN PICK ${1:*} FROM ${2:users} IN ${3:main} WHERE ${4:id} = ${5:_id} LIMIT ${6:1};"
+    ],
+    "description": "PICK erklären"
+  },
+  "Reshape row": {
+    "prefix": [
+      "reshape",
+      "update"
+    ],
+    "body": [
+      "RESHAPE ${1:users} WITH ${2:name}=\"${3:Max}\" WHERE ${4:uid} = ${5:_uid} IN ${6:main};"
+    ],
+    "description": "Datensatz ändern"
+  },
+  "Delete row": {
+    "prefix": [
+      "delete row",
+      "erase"
+    ],
+    "body": [
+      "DELETE FROM ${1:users} WHERE ${2:uid} = ${3:_uid} IN ${4:main};"
+    ],
+    "description": "Datensatz löschen"
+  },
+  "Transaction": {
+    "prefix": [
+      "transaction",
+      "tx"
+    ],
+    "body": [
+      "BEGIN TRANSACTION;",
+      "${1:SEED users WITH uid=uni_random(), name=\"Max\" IN main;}",
+      "COMMIT TRANSACTION;"
+    ],
+    "description": "Transaktionsblock"
+  },
+  "Savepoint": {
+    "prefix": [
+      "savepoint"
+    ],
+    "body": [
+      "SAVEPOINT ${1:before_step};",
+      "${2:# commands}",
+      "ROLLBACK TO ${1:before_step};"
+    ],
+    "description": "Savepoint verwenden"
+  },
+  "Prepare execute": {
+    "prefix": [
+      "prepare",
+      "prepared query"
+    ],
+    "body": [
+      "PREPARE ${1:find_users} AS PICK * FROM ${2:users} WHERE ${3:uid} = ${4:_uid};",
+      "EXECUTE ${1:find_users} WITH {\"${3:uid}\": ${4:_uid}};"
+    ],
+    "description": "Prepared Query"
+  },
+  "Join": {
+    "prefix": [
+      "join",
+      "inner join"
+    ],
+    "body": [
+      "INNER JOIN ${1:users} AND ${2:profiles} IN ${3:main} ON ${4:uid} = ${5:uid} LIMIT ${6:100};"
+    ],
+    "description": "Join ausführen"
+  },
+  "Exists table": {
+    "prefix": [
+      "exists table"
+    ],
+    "body": [
+      "EXISTS TABLE ${1:users};"
+    ],
+    "description": "Tabelle prüfen"
+  },
+  "Exists data": {
+    "prefix": [
+      "exists data"
+    ],
+    "body": [
+      "EXISTS DATA {\"${1:uid}\": ${2:_uid}} IN ${3:users};"
+    ],
+    "description": "Datensatz prüfen"
+  },
+  "Aggregate count": {
+    "prefix": [
+      "count",
+      "aggregate count"
+    ],
+    "body": [
+      "COUNT(*) FROM ${1:users} IN ${2:main};"
+    ],
+    "description": "Datensätze zählen"
+  },
+  "Aggregate group": {
+    "prefix": [
+      "group by",
+      "aggregate group"
+    ],
+    "body": [
+      "COUNT(*) FROM ${1:users} IN ${2:main} GROUP BY ${3:role} HAVING ${4:role} = ${5:\"admin\"};"
+    ],
+    "description": "Aggregation mit GROUP BY"
+  },
+  "Distinct": {
+    "prefix": [
+      "distinct"
+    ],
+    "body": [
+      "DISTINCT ${1:role} FROM ${2:users} IN ${3:main};"
+    ],
+    "description": "Distinct Werte"
+  },
+  "Index": {
+    "prefix": [
+      "index",
+      "create index"
+    ],
+    "body": [
+      "INDEX ${1:users} ${2:email} IN ${3:main};"
+    ],
+    "description": "Index anlegen"
+  },
+  "Fulltext index": {
+    "prefix": [
+      "fulltext index"
+    ],
+    "body": [
+      "FULLTEXT INDEX ${1:users} ${2:title,content} IN ${3:main};"
+    ],
+    "description": "Fulltext-Index anlegen"
+  },
+  "Show indexes": {
+    "prefix": [
+      "show indexes"
+    ],
+    "body": [
+      "SHOW INDEXES FROM ${1:users} IN ${2:main};"
+    ],
+    "description": "Indexe anzeigen"
+  },
+  "Auto index": {
+    "prefix": [
+      "auto index"
+    ],
+    "body": [
+      "AUTO INDEX ${1:main}.${2:users} COLUMNS ${3:email,username};"
+    ],
+    "description": "Auto Index"
+  },
+  "Analyze": {
+    "prefix": [
+      "analyze",
+      "stats"
+    ],
+    "body": [
+      "ANALYZE ${1:main}.${2:users};"
+    ],
+    "description": "Tabelle analysieren"
+  },
+  "Suggest indexes": {
+    "prefix": [
+      "suggest indexes"
+    ],
+    "body": [
+      "SUGGEST INDEXES ${1:main}.${2:users};"
+    ],
+    "description": "Index-Vorschläge"
+  },
+  "Constraint unique": {
+    "prefix": [
+      "constraint unique",
+      "unique"
+    ],
+    "body": [
+      "ALTER TABLE ${1:users} ADD CONSTRAINT UNIQUE ${2:email} IN ${3:main};"
+    ],
+    "description": "Unique Constraint"
+  },
+  "Foreign key": {
+    "prefix": [
+      "foreign key",
+      "relation"
+    ],
+    "body": [
+      "ALTER TABLE ${1:orders} ADD FOREIGN KEY ${2:user_id} REFERENCES ${3:users}(${4:uid}) IN ${5:main} ON DELETE CASCADE ON UPDATE CASCADE;"
+    ],
+    "description": "Foreign Key"
+  },
+  "Show relations": {
+    "prefix": [
+      "show relations"
+    ],
+    "body": [
+      "SHOW RELATIONS FROM ${1:orders} IN ${2:main};"
+    ],
+    "description": "Relationen anzeigen"
+  },
+  "Monitor": {
+    "prefix": [
+      "monitor"
+    ],
+    "body": [
+      "MONITOR ${1:main}.${2:users};"
+    ],
+    "description": "Monitoring"
+  },
+  "Page": {
+    "prefix": [
+      "page"
+    ],
+    "body": [
+      "PAGE ${1:main}.${2:users} PAGE ${3:1} SIZE ${4:50};"
+    ],
+    "description": "Paged Resultset"
+  },
+  "Cursor": {
+    "prefix": [
+      "cursor"
+    ],
+    "body": [
+      "CURSOR ${1:main}.${2:users} SIZE ${3:100} AFTER ${4:_cursor};"
+    ],
+    "description": "Cursor Resultset"
+  },
+  "Fulltext": {
+    "prefix": [
+      "fulltext",
+      "search"
+    ],
+    "body": [
+      "FULLTEXT ${1:main}.${2:users} SEARCH \"${3:Suchtext}\" COLUMNS ${4:name,note} LIMIT ${5:25};"
+    ],
+    "description": "Volltextsuche"
+  },
+  "Recover": {
+    "prefix": [
+      "recover"
+    ],
+    "body": [
+      "RECOVER ${1:main}.${2:users};"
+    ],
+    "description": "Recovery"
+  },
+  "Health": {
+    "prefix": [
+      "health",
+      "check"
+    ],
+    "body": [
+      "HEALTH ${1:users} IN ${2:main};"
+    ],
+    "description": "Health Check"
+  },
+  "Repair": {
+    "prefix": [
+      "repair"
+    ],
+    "body": [
+      "REPAIR ${1:users} IN ${2:main};"
+    ],
+    "description": "Reparatur"
+  },
+  "Snapshot": {
+    "prefix": [
+      "snapshot"
+    ],
+    "body": [
+      "SNAPSHOT ${1:users} IN ${2:main};"
+    ],
+    "description": "Snapshot"
+  },
+  "Partition table": {
+    "prefix": [
+      "partition table"
+    ],
+    "body": [
+      "PARTITION TABLE ${1:events} BY ${2|DATE,USER,TENANT,HASH|} ${3:created_at} IN ${4:main} BUCKETS ${5:12};"
+    ],
+    "description": "Tabelle partitionieren"
+  },
+  "Show partitions": {
+    "prefix": [
+      "show partitions"
+    ],
+    "body": [
+      "SHOW PARTITIONS FROM ${1:events} IN ${2:main};"
+    ],
+    "description": "Partitionen anzeigen"
+  },
+  "Shard table": {
+    "prefix": [
+      "shard table"
+    ],
+    "body": [
+      "SHARD TABLE ${1:users} BY ${2|HASH,USER,TENANT|} ${3:uid} IN ${4:main};"
+    ],
+    "description": "Tabelle sharden"
+  },
+  "Register shard": {
+    "prefix": [
+      "register shard"
+    ],
+    "body": [
+      "REGISTER SHARD ${1:node_1} ROLE ${2|PRIMARY,REPLICA,WORKER|};"
+    ],
+    "description": "Shard registrieren"
+  },
+  "Show shards": {
+    "prefix": [
+      "show shards"
+    ],
+    "body": [
+      "SHOW SHARDS;"
+    ],
+    "description": "Shards anzeigen"
+  },
+  "Shard health": {
+    "prefix": [
+      "shard health"
+    ],
+    "body": [
+      "SHARD HEALTH;"
+    ],
+    "description": "Shard Health"
+  },
+  "Backup full": {
+    "prefix": [
+      "backup full"
+    ],
+    "body": [
+      "BACKUP FULL;"
+    ],
+    "description": "Full Backup"
+  },
+  "Backup table": {
+    "prefix": [
+      "backup table"
+    ],
+    "body": [
+      "BACKUP TABLE ${1:users} IN ${2:main};"
+    ],
+    "description": "Tabellenbackup"
+  },
+  "Grant": {
+    "prefix": [
+      "grant"
+    ],
+    "body": [
+      "GRANT ${1:READ} ${2:*} ON ${3:users} IN ${4:main};"
+    ],
+    "description": "Recht vergeben"
+  },
+  "Revoke": {
+    "prefix": [
+      "revoke"
+    ],
+    "body": [
+      "REVOKE ${1:READ} ${2:*} ON ${3:users} IN ${4:main};"
+    ],
+    "description": "Recht entziehen"
+  }
+}
