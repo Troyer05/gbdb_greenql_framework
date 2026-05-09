@@ -1,19 +1,23 @@
 <?php
 
 trait GBDB_TransactionTrait {
-    /** Prüft ob eine Transaktion aktiv ist. */
     private static function inTransaction(): bool {
         return self::$txActive && !self::$txCommitting;
     }
 
-    /** Setzt den globalen Transaktions-Timeout. */
+    /**
+     * handles transaction timeout.
+     *
+     * @param int $seconds value.
+     *
+     * @return int result.
+     */
     public static function transactionTimeout(int $seconds): int {
         self::$txTimeout = max(1, $seconds);
 
         return self::$txTimeout;
     }
 
-    /** Prüft den Transaktions-Timeout und rollt bei Ablauf automatisch zurück. */
     private static function checkTransactionTimeout(): bool {
         if (!self::$txActive) {
             return true;
@@ -33,7 +37,6 @@ trait GBDB_TransactionTrait {
         return false;
     }
 
-    /** Reserviert eine ID innerhalb einer laufenden Transaktion. */
     private static function reserveTransactionId(string $database, string $table, array $data): int {
         if (isset($data['id']) && (int)$data['id'] > 0) {
             return (int)$data['id'];
@@ -60,7 +63,6 @@ trait GBDB_TransactionTrait {
         return max(1, $next);
     }
 
-    /** Baut einen Transaktions-Journal-Pfad. */
     private static function transactionJournalDir(): string {
         $dir = Vars::DB_PATH() . '.journal/transactions';
 
@@ -71,7 +73,6 @@ trait GBDB_TransactionTrait {
         return $dir;
     }
 
-    /** Schreibt einen Transaction-Journal-Eintrag. */
     private static function journalTransaction(string $state, array $payload = []): void {
         if (self::$txId === '') {
             return;
@@ -85,7 +86,6 @@ trait GBDB_TransactionTrait {
         ]);
     }
 
-    /** Erzeugt Snapshots für alle betroffenen Tabellen. */
     private static function createTransactionSnapshots(): array {
         $snapshots = [];
 
@@ -117,7 +117,6 @@ trait GBDB_TransactionTrait {
         return $snapshots;
     }
 
-    /** Stellt Transaktions-Snapshots wieder her. */
     private static function restoreTransactionSnapshots(array $snapshots): void {
         foreach ($snapshots as $item) {
             $instance = (string)($item['instance'] ?? self::getInstance());
@@ -130,10 +129,16 @@ trait GBDB_TransactionTrait {
                     self::restoreSnapshot($db, $table, $snapshot);
                 });
             }
+
         }
+
     }
 
-    /** Startet eine echte GBDB-Transaktion. */
+    /**
+     * handles begin.
+     *
+     * @return bool result.
+     */
     public static function begin(): bool {
         if (self::$txActive) {
             return false;
@@ -155,7 +160,13 @@ trait GBDB_TransactionTrait {
         return true;
     }
 
-    /** Legt einen Savepoint an. */
+    /**
+     * handles savepoint.
+     *
+     * @param string $name value.
+     *
+     * @return bool result.
+     */
     public static function savepoint(string $name): bool {
         if (!self::$txActive || !self::checkTransactionTimeout()) {
             return false;
@@ -177,7 +188,13 @@ trait GBDB_TransactionTrait {
         return true;
     }
 
-    /** Rollt zurueck bis zu einem Savepoint. */
+    /**
+     * handles rollback to.
+     *
+     * @param string $name value.
+     *
+     * @return bool result.
+     */
     public static function rollbackTo(string $name): bool {
         if (!self::$txActive) {
             return false;
@@ -195,6 +212,7 @@ trait GBDB_TransactionTrait {
             if ((int)self::$txSavepoints[$sp] > count(self::$txOps)) {
                 unset(self::$txSavepoints[$sp]);
             }
+
         }
 
         self::journalTransaction('rollback_to', [
@@ -205,7 +223,11 @@ trait GBDB_TransactionTrait {
         return true;
     }
 
-    /** Schreibt alle Transaktions-Operationen gesammelt fest. */
+    /**
+     * handles commit.
+     *
+     * @return bool result.
+     */
     public static function commit(): bool {
         if (!self::$txActive || !self::checkTransactionTimeout()) {
             return false;
@@ -248,7 +270,9 @@ trait GBDB_TransactionTrait {
                 if (!$ok) {
                     break;
                 }
+
             }
+
         } catch (Throwable $e) {
             $ok = false;
 
@@ -270,6 +294,7 @@ trait GBDB_TransactionTrait {
                     'ops' => count($ops)
                 ]);
             }
+
         } else {
             self::journalTransaction('commit_marker', [
                 'committed_at' => time(),
@@ -282,6 +307,7 @@ trait GBDB_TransactionTrait {
                     'ops' => count($ops)
                 ]);
             }
+
         }
 
         self::$txActive = false;
@@ -295,7 +321,11 @@ trait GBDB_TransactionTrait {
         return $ok;
     }
 
-    /** Verwirft eine laufende Transaktion. */
+    /**
+     * handles rollback.
+     *
+     * @return bool result.
+     */
     public static function rollback(): bool {
         if (!self::$txActive) {
             return false;
@@ -324,7 +354,11 @@ trait GBDB_TransactionTrait {
         return true;
     }
 
-    /** Gibt Transaktions-Statusdaten zurück. */
+    /**
+     * handles transaction status.
+     *
+     * @return array result.
+     */
     public static function transactionStatus(): array {
         return [
             'active' => self::$txActive,
@@ -336,4 +370,5 @@ trait GBDB_TransactionTrait {
             'savepoints' => array_keys(self::$txSavepoints)
         ];
     }
+
 }

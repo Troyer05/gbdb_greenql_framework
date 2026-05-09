@@ -1,4 +1,5 @@
 <?php
+
 if (empty($_GET['t']) || empty($_GET['db'])) {
     Ref::to('?null');
     exit();
@@ -41,11 +42,13 @@ if (isset($_GET["edit"]) && isset($_GET["id"])) {
         if (isset($_POST[$key])) {
             $newData[$key] = $_POST[$key];
         }
+
     }
 
     GBDB::editData($db, $table, "id", $id, $newData);
     Ref::to("?show=table&db=" . urlencode($db) . "&t=" . urlencode($table));
 }
+
 ?>
 
 <div class="main">
@@ -131,6 +134,7 @@ searchInput.addEventListener('input', () => {
 function startEdit(id) {
     const row = [...document.querySelectorAll('#db-entries tr')]
         .find(r => r.children[0].textContent == id);
+
     if (!row) return;
 
     const cells = row.querySelectorAll('td');
@@ -142,7 +146,6 @@ function startEdit(id) {
     echo "const columns = " . json_encode($keys) . ";\n";
     ?>
 
-    // Felder in Input verwandeln
     for (let i = 0; i < columns.length; i++) {
         const col = columns[i];
 
@@ -195,4 +198,5 @@ function saveEdit(id) {
     document.body.appendChild(form);
     form.submit();
 }
+
 </script>

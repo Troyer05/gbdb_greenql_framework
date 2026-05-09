@@ -28,6 +28,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 50-51: Job Queue / Scheduled / SrvP-Bridge
      * ============================================================ */
 
+    /**
+     * handles enqueue job.
+     *
+     * @param string $type value.
+     * @param array $payload value.
+     * @param array $options value.
+     *
+     * @return string result.
+     */
     public static function enqueueJob(string $type, array $payload = [], array $options = []): string {
         $job = [
             'id' => self::nowId('job'),
@@ -57,18 +66,49 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         return $job['id'];
     }
 
+    /**
+     * handles delayed job.
+     *
+     * @param string $type value.
+     * @param array $payload value.
+     * @param int $delaySeconds value.
+     * @param array $options value.
+     *
+     * @return string result.
+     */
     public static function delayedJob(string $type, array $payload, int $delaySeconds, array $options = []): string {
         $options['run_at'] = time() + max(0, $delaySeconds);
 
         return self::enqueueJob($type, $payload, $options);
     }
 
+    /**
+     * handles priority job.
+     *
+     * @param string $type value.
+     * @param array $payload value.
+     * @param int $priority value.
+     * @param array $options value.
+     *
+     * @return string result.
+     */
     public static function priorityJob(string $type, array $payload, int $priority = 10, array $options = []): string {
         $options['priority'] = $priority;
 
         return self::enqueueJob($type, $payload, $options);
     }
 
+    /**
+     * handles schedule job.
+     *
+     * @param string $name value.
+     * @param string $type value.
+     * @param array $payload value.
+     * @param string $cronOrInterval value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function scheduleJob(string $name, string $type, array $payload, string $cronOrInterval, array $options = []): array {
         $cfg = self::opsJson('queue/scheduled.json', ['jobs' => []]);
         $cfg['jobs'][$name] = [
@@ -89,10 +129,29 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles recurring job.
+     *
+     * @param string $name value.
+     * @param string $type value.
+     * @param array $payload value.
+     * @param int $everySeconds value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function recurringJob(string $name, string $type, array $payload, int $everySeconds, array $options = []): array {
         return self::scheduleJob($name, $type, $payload, 'every ' . max(1, $everySeconds) . ' seconds', $options);
     }
 
+    /**
+     * handles claim job.
+     *
+     * @param string $workerId value.
+     * @param string $queue value.
+     *
+     * @return array result.
+     */
     public static function claimJob(string $workerId, string $queue = 'default'): array {
         $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
         $best = null;
@@ -105,6 +164,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             if ($best === null || (int)$job['priority'] < (int)$jobs['jobs'][$best]['priority']) {
                 $best = $id;
             }
+
         }
 
         if ($best === null) {
@@ -128,6 +188,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles worker heartbeat.
+     *
+     * @param string $jobId value.
+     * @param string $workerId value.
+     *
+     * @return bool result.
+     */
     public static function workerHeartbeat(string $jobId, string $workerId): bool {
         $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
 
@@ -141,7 +209,6 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         return self::saveOpsJson('queue/jobs.json', $jobs);
     }
 
-    /** Führt einen einzelnen Job lokal aus. Unbekannte Jobtypen werden als vorbereitete No-Op-Jobs abgeschlossen. */
     private static function executeJobPayload(array $job): array {
         $type = (string)($job['type'] ?? '');
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
@@ -171,9 +238,17 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                 'type' => $type
             ];
         }
+
     }
 
-    /** Führt fällige Queue-Jobs synchron aus, damit UI/CLI-Jobs nicht dauerhaft queued bleiben. */
+    /**
+     * handles process due jobs.
+     *
+     * @param int $limit value.
+     * @param string $queue value.
+     *
+     * @return array result.
+     */
     public static function processDueJobs(int $limit = 25, string $queue = ''): array {
         $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
         $limit = max(1, $limit);
@@ -240,6 +315,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             if (($job['status'] ?? '') === 'failed') {
                 $dead['jobs'][$id] = $job;
             }
+
         }
 
         self::saveOpsJson('queue/jobs.json', $jobs);
@@ -259,11 +335,27 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
-    /** Alias für Worker-/CLI-Skripte. */
+    /**
+     * handles work queue.
+     *
+     * @param int $limit value.
+     * @param string $queue value.
+     *
+     * @return array result.
+     */
     public static function workQueue(int $limit = 25, string $queue = ''): array {
         return self::processDueJobs($limit, $queue);
     }
 
+    /**
+     * handles finish job.
+     *
+     * @param string $jobId value.
+     * @param bool $ok value.
+     * @param array $result value.
+     *
+     * @return array result.
+     */
     public static function finishJob(string $jobId, bool $ok = true, array $result = []): array {
         $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
 
@@ -293,6 +385,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles retry failed jobs.
+     *
+     * @param int $limit value.
+     *
+     * @return array result.
+     */
     public static function retryFailedJobs(int $limit = 50): array {
         $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
         $n = 0;
@@ -308,6 +407,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                 $job['updated_at'] = time();
                 $n++;
             }
+
         }
 
         self::saveOpsJson('queue/jobs.json', $jobs);
@@ -318,6 +418,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles queue stats.
+     *
+     * @return array result.
+     */
     public static function queueStats(): array {
         $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
         $stats = [
@@ -338,6 +443,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles job dashboard.
+     *
+     * @param int $limit value.
+     *
+     * @return array result.
+     */
     public static function jobDashboard(int $limit = 50): array {
         static $auto = false;
 
@@ -364,6 +476,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles queue ui prepared.
+     *
+     * @return array result.
+     */
     public static function queueUiPrepared(): array {
         return [
             'ok' => true,
@@ -371,6 +488,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles queue cli prepared.
+     *
+     * @return array result.
+     */
     public static function queueCliPrepared(): array {
         return [
             'ok' => true,
@@ -382,6 +504,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles srv queue bridge.
+     *
+     * @param string $action value.
+     * @param array $payload value.
+     *
+     * @return array result.
+     */
     public static function srvQueueBridge(string $action, array $payload = []): array {
         return [
             'ok' => true,
@@ -393,6 +523,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles background index update.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     *
+     * @return string result.
+     */
     public static function backgroundIndexUpdate(string $db, string $table): string {
         return self::enqueueJob('gbdb.index.rebuild', compact('db', 'table'), [
             'queue' => 'maintenance',
@@ -400,6 +538,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles background feed fanout.
+     *
+     * @param array $payload value.
+     *
+     * @return string result.
+     */
     public static function backgroundFeedFanout(array $payload): string {
         return self::enqueueJob('social.feed.fanout', $payload, [
             'queue' => 'social',
@@ -407,6 +552,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles background mail sending.
+     *
+     * @param array $payload value.
+     *
+     * @return string result.
+     */
     public static function backgroundMailSending(array $payload): string {
         return self::enqueueJob('srv.mail.send', $payload, [
             'queue' => 'mail',
@@ -414,6 +566,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles background media processing.
+     *
+     * @param array $payload value.
+     *
+     * @return string result.
+     */
     public static function backgroundMediaProcessing(array $payload): string {
         return self::enqueueJob('media.process', $payload, [
             'queue' => 'media',
@@ -421,6 +580,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles background backups.
+     *
+     * @param array $payload value.
+     *
+     * @return string result.
+     */
     public static function backgroundBackups(array $payload = []): string {
         return self::enqueueJob('gbdb.backup', $payload, [
             'queue' => 'maintenance',
@@ -432,6 +598,17 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 52-53: Trigger / Events
      * ============================================================ */
 
+    /**
+     * handles define trigger.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param string $event value.
+     * @param string $name value.
+     * @param array $definition value.
+     *
+     * @return array result.
+     */
     public static function defineTrigger(string $db, string $table, string $event, string $name, array $definition): array {
         $cfg = self::opsJson('triggers/definitions.json', ['triggers' => []]);
         $key = self::tableIdent($db, $table);
@@ -454,6 +631,16 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles run data triggers.
+     *
+     * @param string $event value.
+     * @param string $db value.
+     * @param string $table value.
+     * @param array $context value.
+     *
+     * @return array result.
+     */
     public static function runDataTriggers(string $event, string $db, string $table, array $context = []): array {
         if (self::internalDb($db) && !in_array($event, ['onCommit', 'onRollback'], true)) {
             return [
@@ -493,6 +680,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             if (!empty($def['log'])) {
                 self::eventLog($event, $db, $table, $context);
             }
+
         }
 
         unset(self::$triggerStack[$stackKey]);
@@ -504,6 +692,16 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles enqueue event.
+     *
+     * @param string $event value.
+     * @param string $db value.
+     * @param string $table value.
+     * @param array $payload value.
+     *
+     * @return string result.
+     */
     public static function enqueueEvent(string $event, string $db, string $table, array $payload = []): string {
         return self::enqueueJob('event.' . $event, [
             'db' => $db,
@@ -515,10 +713,28 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles event log.
+     *
+     * @param string $event value.
+     * @param string $db value.
+     * @param string $table value.
+     * @param array $payload value.
+     *
+     * @return bool result.
+     */
     public static function eventLog(string $event, string $db, string $table, array $payload = []): bool {
         return self::adminLog('event', compact('event', 'db', 'table', 'payload'));
     }
 
+    /**
+     * handles trigger debug.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function triggerDebug(string $db, string $table): array {
         $cfg = self::opsJson('triggers/definitions.json', ['triggers' => []]);
 
@@ -528,12 +744,28 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles schema defined triggers.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function schemaDefinedTriggers(string $db, string $table): array {
         $schema = self::schemaTable($db, $table);
 
         return is_array($schema['triggers'] ?? null) ? $schema['triggers'] : [];
     }
 
+    /**
+     * handles greenql trigger function.
+     *
+     * @param string $name value.
+     * @param string $script value.
+     *
+     * @return array result.
+     */
     public static function greenqlTriggerFunction(string $name, string $script): array {
         $cfg = self::opsJson('triggers/greenql_functions.json', ['functions' => []]);
         $cfg['functions'][$name] = [
@@ -554,6 +786,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 54-55: Views / Procedures
      * ============================================================ */
 
+    /**
+     * handles define view.
+     *
+     * @param string $name value.
+     * @param string $query value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function defineView(string $name, string $query, array $options = []): array {
         $cfg = self::opsJson('views/definitions.json', ['views' => []]);
         $cfg['views'][$name] = [
@@ -574,6 +815,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles refresh view.
+     *
+     * @param string $name value.
+     *
+     * @return array result.
+     */
     public static function refreshView(string $name): array {
         $cfg = self::opsJson('views/definitions.json', ['views' => []]);
 
@@ -602,6 +850,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles get view.
+     *
+     * @param string $name value.
+     * @param bool $refresh value.
+     *
+     * @return mixed result.
+     */
     public static function getView(string $name, bool $refresh = false): mixed {
         if ($refresh) {
             self::refreshView($name);
@@ -612,6 +868,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         return $cache['views'][$name]['data'] ?? [];
     }
 
+    /**
+     * handles view query planner.
+     *
+     * @param string $name value.
+     *
+     * @return array result.
+     */
     public static function viewQueryPlanner(string $name): array {
         $cfg = self::opsJson('views/definitions.json', ['views' => []]);
 
@@ -622,6 +885,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles materialized view index.
+     *
+     * @param string $name value.
+     * @param array $columns value.
+     *
+     * @return array result.
+     */
     public static function materializedViewIndex(string $name, array $columns): array {
         $cfg = self::opsJson('views/indexes.json', ['indexes' => []]);
         $cfg['indexes'][$name] = $columns;
@@ -635,6 +906,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles define procedure.
+     *
+     * @param string $name value.
+     * @param string $script value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function defineProcedure(string $name, string $script, array $options = []): array {
         $cfg = self::opsJson('procedures/definitions.json', ['procedures' => []]);
         $cfg['procedures'][$name] = [
@@ -657,6 +937,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles call procedure.
+     *
+     * @param string $name value.
+     * @param array $params value.
+     *
+     * @return mixed result.
+     */
     public static function callProcedure(string $name, array $params = []): mixed {
         $cfg = self::opsJson('procedures/definitions.json', ['procedures' => []]);
 
@@ -681,6 +969,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             ];
     }
 
+    /**
+     * handles procedure logs.
+     *
+     * @param string $name value.
+     *
+     * @return array result.
+     */
     public static function procedureLogs(string $name = ''): array {
         return [
             'ok' => true,
@@ -689,6 +984,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles procedure debug.
+     *
+     * @param string $name value.
+     *
+     * @return array result.
+     */
     public static function procedureDebug(string $name): array {
         $cfg = self::opsJson('procedures/definitions.json', ['procedures' => []]);
 
@@ -702,6 +1004,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 56-59: DB-User, Rollen, Permissions, Policies
      * ============================================================ */
 
+    /**
+     * handles define db role.
+     *
+     * @param string $role value.
+     * @param array $permissions value.
+     *
+     * @return array result.
+     */
     public static function defineDbRole(string $role, array $permissions = []): array {
         $cfg = self::opsJson('security/roles.json', ['roles' => []]);
         $cfg['roles'][$role] = [
@@ -718,6 +1028,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles define db user.
+     *
+     * @param string $user value.
+     * @param array $roles value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function defineDbUser(string $user, array $roles = ['readonly'], array $options = []): array {
         $cfg = self::opsJson('security/users.json', ['users' => []]);
         $cfg['users'][$user] = [
@@ -736,6 +1055,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles define api key scope.
+     *
+     * @param string $keyId value.
+     * @param array $scopes value.
+     *
+     * @return array result.
+     */
     public static function defineApiKeyScope(string $keyId, array $scopes): array {
         $cfg = self::opsJson('security/api_scopes.json', ['keys' => []]);
         $cfg['keys'][$keyId] = [
@@ -752,6 +1079,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles default db roles.
+     *
+     * @return array result.
+     */
     public static function defaultDbRoles(): array {
         foreach ([
             'readonly' => ['read'],
@@ -775,6 +1107,17 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles check permission.
+     *
+     * @param string $user value.
+     * @param string $action value.
+     * @param string $db value.
+     * @param string $table value.
+     * @param array $row value.
+     *
+     * @return bool result.
+     */
     public static function checkPermission(string $user, string $action, string $db = '', string $table = '', array $row = []): bool {
         $cacheKey = hash('sha256', json_encode(func_get_args()) ?: '');
         $cached = self::permissionCache($cacheKey);
@@ -794,6 +1137,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                 $ok = true;
                 break;
             }
+
         }
 
         self::permissionCache($cacheKey, $ok);
@@ -802,10 +1146,26 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         return $ok;
     }
 
+    /**
+     * handles permission audit.
+     *
+     * @param string $user value.
+     * @param string $action value.
+     * @param array $context value.
+     *
+     * @return bool result.
+     */
     public static function permissionAudit(string $user, string $action, array $context = []): bool {
         return self::adminLog('permission_audit', compact('user', 'action', 'context'));
     }
 
+    /**
+     * handles permission debug.
+     *
+     * @param string $user value.
+     *
+     * @return array result.
+     */
     public static function permissionDebug(string $user): array {
         return [
             'ok' => true,
@@ -814,6 +1174,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles define policy.
+     *
+     * @param string $name value.
+     * @param array $rules value.
+     *
+     * @return array result.
+     */
     public static function definePolicy(string $name, array $rules): array {
         $cfg = self::opsJson('security/policies.json', ['policies' => []]);
         $cfg['policies'][$name] = [
@@ -831,6 +1199,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles evaluate policy.
+     *
+     * @param string $action value.
+     * @param array $row value.
+     * @param array $context value.
+     *
+     * @return array result.
+     */
     public static function evaluatePolicy(string $action, array $row, array $context = []): array {
         $cfg = self::opsJson('security/policies.json', ['policies' => []]);
         $allow = true;
@@ -854,8 +1231,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                     if (($rule['effect'] ?? 'allow') === 'deny') {
                         $allow = false;
                     }
+
                 }
+
             }
+
         }
 
         self::adminLog('policy_eval', compact('action', 'allow', 'hits'));
@@ -867,6 +1247,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles owner uid policy.
+     *
+     * @param string $name value.
+     *
+     * @return array result.
+     */
     public static function ownerUidPolicy(string $name = 'owner_uid'): array {
         return self::definePolicy($name, [[
             'field' => 'owner_uid',
@@ -876,6 +1263,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]]);
     }
 
+    /**
+     * handles visibility policy.
+     *
+     * @return array result.
+     */
     public static function visibilityPolicy(): array {
         return self::definePolicy('visibility', [[
             'field' => 'visibility',
@@ -885,6 +1277,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]]);
     }
 
+    /**
+     * handles tenant isolation policy.
+     *
+     * @param string $tenantField value.
+     *
+     * @return array result.
+     */
     public static function tenantIsolationPolicy(string $tenantField = 'tenant_id'): array {
         return self::definePolicy('tenant_isolation', [[
             'field' => $tenantField,
@@ -894,6 +1293,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]]);
     }
 
+    /**
+     * handles policy debug output.
+     *
+     * @return array result.
+     */
     public static function policyDebugOutput(): array {
         return [
             'ok' => true,
@@ -905,6 +1309,18 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 60-65: Audit, DSGVO, Encryption, Secrets
      * ============================================================ */
 
+    /**
+     * handles audit data change.
+     *
+     * @param string $action value.
+     * @param string $db value.
+     * @param string $table value.
+     * @param array $old value.
+     * @param array $new value.
+     * @param array $context value.
+     *
+     * @return bool result.
+     */
     public static function auditDataChange(string $action, string $db, string $table, array $old = [], array $new = [], array $context = []): bool {
         $entry = [
             'action' => $action,
@@ -924,6 +1340,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         return self::adminLog('audit_data', $entry);
     }
 
+    /**
+     * handles audit export.
+     *
+     * @param array $filter value.
+     *
+     * @return array result.
+     */
     public static function auditExport(array $filter = []): array {
         $logs = self::maintenanceLogs(1000);
 
@@ -934,6 +1357,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles audit search.
+     *
+     * @param string $needle value.
+     *
+     * @return array result.
+     */
     public static function auditSearch(string $needle): array {
         $found = [];
 
@@ -941,6 +1371,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             if (str_contains(json_encode($line, JSON_UNESCAPED_UNICODE) ?: '', $needle)) {
                 $found[] = $line;
             }
+
         }
 
         return [
@@ -949,10 +1380,22 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles audit retention.
+     *
+     * @param int $days value.
+     *
+     * @return array result.
+     */
     public static function auditRetention(int $days = 365): array {
         return self::cleanupFilesByAge(['*.log'], $days);
     }
 
+    /**
+     * handles audit integrity.
+     *
+     * @return array result.
+     */
     public static function auditIntegrity(): array {
         $logs = self::maintenanceLogs(1000);
 
@@ -963,6 +1406,16 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles mark pii field.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param string $field value.
+     * @param string $classification value.
+     *
+     * @return array result.
+     */
     public static function markPiiField(string $db, string $table, string $field, string $classification = 'pii'): array {
         $cfg = self::opsJson('gdpr/classification.json', ['fields' => []]);
         $cfg['fields'][self::tableIdent($db, $table)][$field] = $classification;
@@ -976,6 +1429,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles user data export.
+     *
+     * @param string $userField value.
+     * @param mixed $userId value.
+     * @param array $tables value.
+     *
+     * @return array result.
+     */
     public static function userDataExport(string $userField, mixed $userId, array $tables = []): array {
         $out = [];
 
@@ -988,6 +1450,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                     fn($r) => is_array($r) && ($r[$userField] ?? null) == $userId
                 ));
             }
+
         }
 
         self::auditDataChange('gdpr_export', '*', '*', [], ['user' => $userId]);
@@ -998,6 +1461,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles user data delete.
+     *
+     * @param string $userField value.
+     * @param mixed $userId value.
+     * @param array $tables value.
+     *
+     * @return array result.
+     */
     public static function userDataDelete(string $userField, mixed $userId, array $tables = []): array {
         $n = 0;
 
@@ -1007,6 +1479,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             if ($db && $table && self::deleteData($db, $table, $userField, $userId)) {
                 $n++;
             }
+
         }
 
         self::auditDataChange('gdpr_delete', '*', '*', [], [
@@ -1020,6 +1493,18 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles user data redact.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param string $where value.
+     * @param mixed $is value.
+     * @param array $fields value.
+     * @param string $replacement value.
+     *
+     * @return array result.
+     */
     public static function userDataRedact(string $db, string $table, string $where, mixed $is, array $fields, string $replacement = '[redacted]'): array {
         $set = [];
 
@@ -1040,6 +1525,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles retention policy.
+     *
+     * @param string $name value.
+     * @param array $rule value.
+     *
+     * @return array result.
+     */
     public static function retentionPolicy(string $name, array $rule): array {
         $cfg = self::opsJson('gdpr/retention.json', ['policies' => []]);
         $cfg['policies'][$name] = $rule + ['updated_at' => time()];
@@ -1052,6 +1545,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles consent history.
+     *
+     * @param string $subject value.
+     * @param array $entry value.
+     *
+     * @return array result.
+     */
     public static function consentHistory(string $subject, array $entry): array {
         $cfg = self::opsJson('gdpr/consent.json', ['subjects' => []]);
         $cfg['subjects'][$subject][] = $entry + ['ts' => time()];
@@ -1064,6 +1565,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles encryption config.
+     *
+     * @param array $cfg value.
+     *
+     * @return array result.
+     */
     public static function encryptionConfig(array $cfg = []): array {
         $cur = self::opsJson('security/encryption.json', [
             'at_rest' => false,
@@ -1081,6 +1589,15 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles derive key.
+     *
+     * @param string $secret value.
+     * @param string $salt value.
+     * @param int $version value.
+     *
+     * @return string result.
+     */
     public static function deriveKey(string $secret, string $salt = '', int $version = 1): string {
         return hash_hmac(
             'sha256',
@@ -1090,6 +1607,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ) . ':v' . $version;
     }
 
+    /**
+     * handles rotate key.
+     *
+     * @param string $name value.
+     *
+     * @return array result.
+     */
     public static function rotateKey(string $name = 'default'): array {
         $cfg = self::opsJson('security/keys.json', ['keys' => []]);
         $v = (int)($cfg['keys'][$name]['version'] ?? 0) + 1;
@@ -1108,6 +1632,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles scrub secrets.
+     *
+     * @param mixed $value value.
+     *
+     * @return mixed result.
+     */
     public static function scrubSecrets(mixed $value): mixed {
         if (is_array($value)) {
             foreach ($value as $k => $v) {
@@ -1122,6 +1653,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         return $value;
     }
 
+    /**
+     * handles security tests.
+     *
+     * @return array result.
+     */
     public static function securityTests(): array {
         $s = self::scrubSecrets([
             'api_key' => 'abc',
@@ -1142,12 +1678,29 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 66-67: Blob / Media Store
      * ============================================================ */
 
+    /**
+     * handles blob path.
+     *
+     * @param string $hash value.
+     * @param bool $ensure value.
+     *
+     * @return string result.
+     */
     public static function blobPath(string $hash = '', bool $ensure = true): string {
         $base = self::dbRootPath('.media', $ensure);
 
         return rtrim($base, '/') . ($hash !== '' ? '/' . substr($hash, 0, 2) . '/' . $hash : '');
     }
 
+    /**
+     * handles put blob.
+     *
+     * @param string $sourcePath value.
+     * @param string $visibility value.
+     * @param array $meta value.
+     *
+     * @return array result.
+     */
     public static function putBlob(string $sourcePath, string $visibility = 'private', array $meta = []): array {
         if (!is_file($sourcePath)) {
             return [
@@ -1194,6 +1747,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles signed url.
+     *
+     * @param string $hash value.
+     * @param int $ttl value.
+     *
+     * @return string result.
+     */
     public static function signedUrl(string $hash, int $ttl = 300): string {
         return 'gbdb-media://' . $hash . '?exp=' . (time() + max(1, $ttl)) . '&sig=' . hash_hmac(
             'sha256',
@@ -1202,14 +1763,37 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         );
     }
 
+    /**
+     * handles temporary url.
+     *
+     * @param string $hash value.
+     * @param int $ttl value.
+     *
+     * @return string result.
+     */
     public static function temporaryUrl(string $hash, int $ttl = 300): string {
         return self::signedUrl($hash, $ttl);
     }
 
+    /**
+     * handles validate mime.
+     *
+     * @param string $mime value.
+     * @param array $allowed value.
+     *
+     * @return bool result.
+     */
     public static function validateMime(string $mime, array $allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']): bool {
         return in_array($mime, $allowed, true);
     }
 
+    /**
+     * handles delete media.
+     *
+     * @param string $hash value.
+     *
+     * @return array result.
+     */
     public static function deleteMedia(string $hash): array {
         $idx = self::opsJson('media/index.json', ['media' => []]);
         $path = $idx['media'][$hash]['path'] ?? self::blobPath($hash, false);
@@ -1229,6 +1813,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles orphan media cleanup.
+     *
+     * @return array result.
+     */
     public static function orphanMediaCleanup(): array {
         $idx = self::opsJson('media/index.json', ['media' => []]);
         $removed = 0;
@@ -1238,6 +1827,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                 unset($idx['media'][$h]);
                 $removed++;
             }
+
         }
 
         self::saveOpsJson('media/index.json', $idx);
@@ -1248,6 +1838,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles media permissions.
+     *
+     * @param string $hash value.
+     * @param array $permissions value.
+     *
+     * @return array result.
+     */
     public static function mediaPermissions(string $hash, array $permissions): array {
         $idx = self::opsJson('media/index.json', ['media' => []]);
 
@@ -1268,10 +1866,26 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles media audit.
+     *
+     * @param string $hash value.
+     * @param string $action value.
+     * @param array $context value.
+     *
+     * @return bool result.
+     */
     public static function mediaAudit(string $hash, string $action, array $context = []): bool {
         return self::adminLog('media_audit', compact('hash', 'action', 'context'));
     }
 
+    /**
+     * handles media processing prepared.
+     *
+     * @param string $hash value.
+     *
+     * @return string result.
+     */
     public static function mediaProcessingPrepared(string $hash): string {
         return self::backgroundMediaProcessing([
             'hash' => $hash,
@@ -1287,6 +1901,11 @@ trait GBDB_JobsSecurityMediaSocialTrait {
      * Woche 68-69: Social Patterns
      * ============================================================ */
 
+    /**
+     * handles social schema patterns.
+     *
+     * @return array result.
+     */
     public static function socialSchemaPatterns(): array {
         return [
             'users' => ['uid', 'username', 'email', 'password', 'role', 'created_at', 'updated_at', 'deleted_at'],
@@ -1306,6 +1925,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles install social patterns.
+     *
+     * @param string $db value.
+     *
+     * @return array result.
+     */
     public static function installSocialPatterns(string $db = 'social'): array {
         self::createDatabase($db);
 
@@ -1316,6 +1942,7 @@ trait GBDB_JobsSecurityMediaSocialTrait {
                 self::createTable($db, $table, $cols);
                 $created[] = $table;
             }
+
         }
 
         return [
@@ -1325,6 +1952,16 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles soft delete.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param string $where value.
+     * @param mixed $is value.
+     *
+     * @return bool result.
+     */
     public static function softDelete(string $db, string $table, string $where, mixed $is): bool {
         return self::editData($db, $table, $where, $is, [
             'deleted_at' => time(),
@@ -1332,6 +1969,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles content visibility rules.
+     *
+     * @param array $rules value.
+     *
+     * @return array result.
+     */
     public static function contentVisibilityRules(array $rules = []): array {
         return self::definePolicy('content_visibility', $rules ?: [
             [
@@ -1349,6 +1993,14 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles feed fanout job.
+     *
+     * @param string $postId value.
+     * @param array $targets value.
+     *
+     * @return string result.
+     */
     public static function feedFanoutJob(string $postId, array $targets): string {
         return self::backgroundFeedFanout([
             'post_id' => $postId,
@@ -1357,6 +2009,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ]);
     }
 
+    /**
+     * handles fanout on read.
+     *
+     * @param array $context value.
+     *
+     * @return array result.
+     */
     public static function fanoutOnRead(array $context): array {
         return [
             'ok' => true,
@@ -1366,6 +2025,13 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles hybrid feed.
+     *
+     * @param array $context value.
+     *
+     * @return array result.
+     */
     public static function hybridFeed(array $context): array {
         return [
             'ok' => true,
@@ -1375,10 +2041,21 @@ trait GBDB_JobsSecurityMediaSocialTrait {
         ];
     }
 
+    /**
+     * handles moderation queue.
+     *
+     * @param string $objectType value.
+     * @param string $objectId value.
+     * @param string $reason value.
+     * @param array $context value.
+     *
+     * @return string result.
+     */
     public static function moderationQueue(string $objectType, string $objectId, string $reason, array $context = []): string {
         return self::enqueueJob('moderation.review', compact('objectType', 'objectId', 'reason', 'context'), [
             'queue' => 'moderation',
             'priority' => 5
         ]);
     }
+
 }

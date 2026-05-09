@@ -3,26 +3,19 @@
 /**
  * @author Markus Müller
  *
- * MuseumQR API Anbindung
+ * MuseumQR API connector
  * API Dokumentation: https://museumqr.de/api_doc.html
+ *
+ * gets bigger with new MuseumQR updates
  */
 
 class MqrApi {
-    /**
-     * Verarbeitet die Funktion base.
-     * @return array Rückgabewert.
-     */
     private static function base(): array {
         return [
             "auth_key" => Vars::mqr_api_key()
         ];
     }
 
-    /**
-     * Verarbeitet die Funktion fetch.
-     * @param array $data Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function fetch(array $data): array {
         $url = Vars::mqr_api_url();
 
@@ -76,9 +69,9 @@ class MqrApi {
     }
 
     /**
-     * Verarbeitet die Funktion get feedback.
-     * @param string $item_id Übergabewert.
-     * @return array Rückgabewert.
+     * gets feedback
+     * @param string $item_id
+     * @return array
      */
     public static function getFeedback(string $item_id = ""): array {
         $data = [
@@ -93,8 +86,8 @@ class MqrApi {
     }
 
     /**
-     * Verarbeitet die Funktion get objects.
-     * @return array Rückgabewert.
+     * gets objects
+     * @return array
      */
     public static function getObjects(): array {
         return self::fetch([
@@ -103,9 +96,9 @@ class MqrApi {
     }
 
     /**
-     * Verarbeitet die Funktion get object.
-     * @param string $oid Übergabewert.
-     * @return array Rückgabewert.
+     * get specific object
+     * @param string $oid
+     * @return array
      */
     public static function getObject(string $oid): array {
         return self::fetch([
@@ -115,8 +108,8 @@ class MqrApi {
     }
 
     /**
-     * Verarbeitet die Funktion get settings.
-     * @return array Rückgabewert.
+     * get settings
+     * @return array
      */
     public static function getSettings(): array {
         return self::fetch([
@@ -125,8 +118,8 @@ class MqrApi {
     }
 
     /**
-     * Verarbeitet die Funktion get langs.
-     * @return array Rückgabewert.
+     * get languages
+     * @return array
      */
     public static function getLangs(): array {
         return self::fetch([
@@ -135,8 +128,8 @@ class MqrApi {
     }
 
     /**
-     * Verarbeitet die Funktion get tours.
-     * @return array Rückgabewert.
+     * get tours
+     * @return array
      */
     public static function getTours(): array {
         return self::fetch([
@@ -144,57 +137,4 @@ class MqrApi {
         ]);
     }
 
-    /**
-     * Verarbeitet die Funktion new api key.
-     * @param string $permission Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function newApiKey(string $permission = "readwrite"): array {
-        return self::fetch([
-            "write" => "api",
-            "permission" => $permission
-        ]);
-    }
-
-    /**
-     * Verarbeitet die Funktion save settings.
-     * @param string $theme Übergabewert.
-     * @param string $name Übergabewert.
-     * @param string $intro Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function saveSettings(string $theme, string $name, string $intro): array {
-        return self::fetch([
-            "write" => "settings",
-            "theme" => $theme,
-            "name" => $name,
-            "intro" => $intro
-        ]);
-    }
-
-    /**
-     * Verarbeitet die Funktion new lang.
-     * @param string $lid Übergabewert.
-     * @param string $name Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function newLang(string $lid, string $name): array {
-        return self::fetch([
-            "write" => "langs",
-            "lid" => $lid,
-            "name" => $name
-        ]);
-    }
-
-    /**
-     * Verarbeitet die Funktion new tour.
-     * @param string $name Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function newTour(string $name): array {
-        return self::fetch([
-            "write" => "tours",
-            "name" => $name
-        ]);
-    }
 }

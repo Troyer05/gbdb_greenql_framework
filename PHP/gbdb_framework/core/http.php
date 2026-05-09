@@ -2,13 +2,12 @@
 
 class Http {
 
-    /** Führt einen HTTP-GET-Request aus */
     /**
-     * Liest Daten aus der angegebenen Quelle.
-     * @param string $url Übergabewert.
-     * @param array $headers Übergabewert.
-     * @param int $timeout Übergabewert.
-     * @return string|false Rückgabewert.
+     * fetches an api with GET-methos
+     * @param string $url
+     * @param array $headers
+     * @param int $timeout
+     * @return bool|string
      */
     public static function get(string $url, array $headers = [], int $timeout = 10): string|false {
         if (function_exists('curl_init')) {
@@ -44,14 +43,13 @@ class Http {
         return @file_get_contents($url, false, stream_context_create($opts));
     }
 
-    /** Führt einen HTTP-POST-Request aus */
     /**
-     * Verarbeitet die Funktion post.
-     * @param string $url Übergabewert.
-     * @param array $data Übergabewert.
-     * @param array $headers Übergabewert.
-     * @param int $timeout Übergabewert.
-     * @return string|false Rückgabewert.
+     * fetches an api with POST-method
+     * @param string $url
+     * @param array $data
+     * @param array $headers
+     * @param int $timeout
+     * @return bool|string
      */
     public static function post(string $url, array $data = [], array $headers = [], int $timeout = 10): string|false {
         $json = json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -98,9 +96,9 @@ class Http {
     }
 
     /**
-     * Verarbeitet die Funktion send mail.
-     * @param array $mail Übergabewert.
-     * @return bool|array Rückgabewert.
+     * uses my private-open mail API to send a mail (the api basicly just uses PHPMailer)
+     * @param array $mail
+     * @return array{error: string, response: bool|string|array{error: string}|bool}
      */
     public static function sendMail(array $mail): bool|array {
         $required = ["to_name", "to_email", "from_name", "from_email", "subject", "mail_content"];
@@ -109,6 +107,7 @@ class Http {
             if (!isset($mail[$key]) || trim($mail[$key]) === "") {
                 return ["error" => "Missing required field: $key"];
             }
+
         }
 
         $url = "https://museumqr.de/mailing/index.php";
@@ -117,30 +116,24 @@ class Http {
             "Accept" => "application/json"
         ];
 
-        // Mail abschicken
         $response = self::post($url, $mail, $headers);
 
-        // Fehler bei Request?
         if ($response === false) {
             return ["error" => "No response from mail server"];
         }
 
-        // Deine API gibt "ok" zurück
         if (trim($response) === "ok") {
             return true;
         }
 
-        // Alles andere → Fehler
         return ["error" => "Unexpected response from server", "response" => $response];
     }
 
-
-    /** JSON Antwort an Browser */
     /**
-     * Verarbeitet die Funktion json response.
-     * @param array $data Übergabewert.
-     * @param int $status Übergabewert.
-     * @return void Rückgabewert.
+     * json response to a browser
+     * @param array $data
+     * @param int $status
+     * @return never
      */
     public static function jsonResponse(array $data, int $status = 200): void {
         http_response_code($status);
@@ -151,12 +144,11 @@ class Http {
         exit;
     }
 
-    /** Weiterleitung */
     /**
-     * Verarbeitet die Funktion redirect.
-     * @param string $url Übergabewert.
-     * @param int $status Übergabewert.
-     * @return void Rückgabewert.
+     * redirect
+     * @param string $url
+     * @param int $status
+     * @return never
      */
     public static function redirect(string $url, int $status = 302): void {
         http_response_code($status);
@@ -165,10 +157,9 @@ class Http {
         exit;
     }
 
-    /** Request header */
     /**
-     * Verarbeitet die Funktion get headers.
-     * @return array Rückgabewert.
+     * get all headers
+     * @return array
      */
     public static function getHeaders(): array {
         if (function_exists('getallheaders')) {
@@ -184,34 +175,33 @@ class Http {
 
                 $headers[$key] = $value;
             }
+
         }
 
         return $headers;
     }
 
-    /** GET / POST */
     /**
-     * Verarbeitet die Funktion method.
-     * @return string Rückgabewert.
+     * gets a request method
+     * @return string
      */
     public static function method(): string {
         return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     }
 
-    /** JSON? */
     /**
-     * Verarbeitet die Funktion is json.
-     * @return bool Rückgabewert.
+     * is it valid json?
+     * @return bool
      */
     public static function isJson(): bool {
         $ctype = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+
         return str_contains($ctype, 'application/json');
     }
 
-    /** JSON Body */
     /**
-     * Verarbeitet die Funktion json input.
-     * @return array Rückgabewert.
+     * gets body of request
+     * @return array
      */
     public static function jsonInput(): array {
         $raw = file_get_contents('php://input');
@@ -220,12 +210,6 @@ class Http {
         return is_array($parsed) ? $parsed : [];
     }
 
-    /** Header-Tools */
-    /**
-     * Verarbeitet die Funktion format headers.
-     * @param array $headers Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function formatHeaders(array $headers): array {
         $result = [];
 
@@ -236,11 +220,6 @@ class Http {
         return $result;
     }
 
-    /**
-     * Verarbeitet die Funktion implode headers.
-     * @param array $headers Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function implodeHeaders(array $headers): string {
         $r = "";
 
@@ -250,4 +229,5 @@ class Http {
 
         return $r;
     }
+
 }

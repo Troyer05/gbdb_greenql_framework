@@ -14,6 +14,7 @@ trait GBDB_ClusterBackupTrait {
             if (!is_dir($dir)) {
                 @mkdir($dir, 0777, true);
             }
+
         }
 
         return $path;
@@ -44,6 +45,7 @@ trait GBDB_ClusterBackupTrait {
     private static function copyTreeInternal(string $from, string $to, array &$report): void {
         if (!is_dir($from)) {
             $report["errors"][] = "Quelle fehlt: " . $from;
+
             return;
         }
 
@@ -83,7 +85,9 @@ trait GBDB_ClusterBackupTrait {
             } else {
                 $report["errors"][] = "Konnte nicht kopieren: " . $src;
             }
+
         }
+
     }
 
     private static function deleteTreeInternal(string $path): void {
@@ -106,7 +110,9 @@ trait GBDB_ClusterBackupTrait {
                 } else {
                     @unlink($p);
                 }
+
             }
+
         }
 
         @rmdir($path);
@@ -160,11 +166,20 @@ trait GBDB_ClusterBackupTrait {
             if (!empty($readonly[$key])) {
                 return false;
             }
+
         }
 
         return true;
     }
 
+    /**
+     * handles repair partitions.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function repairPartitions(string $database, string $table): array {
         self::syncPartitioningToMeta($database, $table);
 
@@ -204,6 +219,7 @@ trait GBDB_ClusterBackupTrait {
             if ((int)$data["updated_at"] <= 0) {
                 $partitions[$key]["updated_at"] = time();
             }
+
         }
 
         $before = $meta["partitions"] ?? [];
@@ -221,6 +237,16 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles backup partition.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $partition value.
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function backupPartition(string $database, string $table, string $partition, string $target = ""): array {
         $partition = self::safeSegment($partition);
         $target = $target !== ""
@@ -245,6 +271,7 @@ trait GBDB_ClusterBackupTrait {
             if (is_array($row) && !self::isHeaderRow($row) && self::partitionKey($database, $table, $row) === $partition) {
                 $rows[] = $row;
             }
+
         }
 
         $meta = [
@@ -274,6 +301,16 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles set partition read only.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $partition value.
+     * @param bool $readonly value.
+     *
+     * @return bool result.
+     */
     public static function setPartitionReadOnly(string $database, string $table, string $partition, bool $readonly = true): bool {
         $partition = self::safeSegment($partition);
         $metaFile = self::metaFileForTable($database, $table, true);
@@ -295,6 +332,16 @@ trait GBDB_ClusterBackupTrait {
         return self::writeMeta($metaFile, $meta);
     }
 
+    /**
+     * handles archive old partitions.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $olderThan value.
+     * @param bool $readonly value.
+     *
+     * @return array result.
+     */
     public static function archiveOldPartitions(string $database, string $table, int $olderThan, bool $readonly = true): array {
         $repair = self::repairPartitions($database, $table);
         $metaFile = self::metaFileForTable($database, $table, true);
@@ -333,6 +380,16 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare partition merge.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $partitions value.
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function preparePartitionMerge(string $database, string $table, array $partitions, string $target): array {
         $plan = [
             "type" => "partition_merge",
@@ -348,6 +405,16 @@ trait GBDB_ClusterBackupTrait {
         return self::storeSystemPlan("partition_merge", $plan);
     }
 
+    /**
+     * handles prepare partition split.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $partition value.
+     * @param array $targets value.
+     *
+     * @return array result.
+     */
     public static function preparePartitionSplit(string $database, string $table, string $partition, array $targets): array {
         $plan = [
             "type" => "partition_split",
@@ -363,6 +430,16 @@ trait GBDB_ClusterBackupTrait {
         return self::storeSystemPlan("partition_split", $plan);
     }
 
+    /**
+     * handles prepare partition migration.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $partition value.
+     * @param string $targetInstance value.
+     *
+     * @return array result.
+     */
     public static function preparePartitionMigration(
         string $database,
         string $table,
@@ -385,6 +462,13 @@ trait GBDB_ClusterBackupTrait {
         return self::storeSystemPlan("partition_migration", $plan);
     }
 
+    /**
+     * handles define shard concept.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function defineShardConcept(array $config = []): array {
         $file = self::dbRootPath(".system/shards/config.json", true);
         $current = self::readJsonConfig($file, []);
@@ -401,6 +485,14 @@ trait GBDB_ClusterBackupTrait {
         return $current;
     }
 
+    /**
+     * handles register shard.
+     *
+     * @param string $name value.
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function registerShard(string $name, array $config = []): array {
         $name = self::safeSegment($name);
         $file = self::dbRootPath(".system/shards/map.json", true);
@@ -418,10 +510,25 @@ trait GBDB_ClusterBackupTrait {
         return $map;
     }
 
+    /**
+     * handles shard map.
+     *
+     * @return array result.
+     */
     public static function shardMap(): array {
         return self::readJsonConfig(self::dbRootPath(".system/shards/map.json"), ["shards" => []]);
     }
 
+    /**
+     * handles define shard key.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param string $strategy value.
+     *
+     * @return bool result.
+     */
     public static function defineShardKey(string $database, string $table, string $column, string $strategy = "hash"): bool {
         $schema = self::schemaTable($database, $table);
         $schema["sharding"] = [
@@ -437,6 +544,14 @@ trait GBDB_ClusterBackupTrait {
         return self::writeSchemaTable($database, $table, $schema);
     }
 
+    /**
+     * handles shard for value.
+     *
+     * @param mixed $value value.
+     * @param string $strategy value.
+     *
+     * @return string result.
+     */
     public static function shardForValue(mixed $value, string $strategy = "hash"): string {
         $map = self::shardMap();
         $names = array_keys((array)($map["shards"] ?? []));
@@ -451,6 +566,15 @@ trait GBDB_ClusterBackupTrait {
         return $names[abs(crc32((string)$value)) % count($names)];
     }
 
+    /**
+     * handles shard router.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $row value.
+     *
+     * @return array result.
+     */
     public static function shardRouter(string $database, string $table, array $row): array {
         $schema = self::schemaTable($database, $table);
         $sharding = is_array($schema["sharding"] ?? null) ? $schema["sharding"] : [];
@@ -466,24 +590,67 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare user sharding.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return bool result.
+     */
     public static function prepareUserSharding(string $database, string $table, string $column = "user_id"): bool {
         return self::defineShardKey($database, $table, $column, "user");
     }
 
+    /**
+     * handles prepare tenant sharding.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return bool result.
+     */
     public static function prepareTenantSharding(string $database, string $table, string $column = "tenant_id"): bool {
         return self::defineShardKey($database, $table, $column, "tenant");
     }
 
+    /**
+     * handles prepare hash sharding.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return bool result.
+     */
     public static function prepareHashSharding(string $database, string $table, string $column = "id"): bool {
         return self::defineShardKey($database, $table, $column, "hash");
     }
 
+    /**
+     * handles shard aware id.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $row value.
+     *
+     * @return string result.
+     */
     public static function shardAwareId(string $database, string $table, array $row = []): string {
         $route = self::shardRouter($database, $table, $row);
 
         return self::distributedId(self::getInstance(), (string)$route["shard"]);
     }
 
+    /**
+     * handles cross shard query rules.
+     *
+     * @param array $rules value.
+     *
+     * @return array result.
+     */
     public static function crossShardQueryRules(array $rules = []): array {
         $file = self::dbRootPath(".system/shards/query_rules.json", true);
         $current = self::readJsonConfig($file, [
@@ -515,6 +682,11 @@ trait GBDB_ClusterBackupTrait {
         return $plan;
     }
 
+    /**
+     * handles prepare shard rebalancing.
+     *
+     * @return array result.
+     */
     public static function prepareShardRebalancing(): array {
         $map = self::shardMap();
         $plan = [
@@ -536,6 +708,15 @@ trait GBDB_ClusterBackupTrait {
         return self::storeSystemPlan("shard_rebalance", $plan);
     }
 
+    /**
+     * handles prepare shard migration.
+     *
+     * @param string $fromShard value.
+     * @param string $toShard value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function prepareShardMigration(string $fromShard, string $toShard, array $options = []): array {
         return self::storeSystemPlan("shard_migration", [
             "type" => "shard_migration",
@@ -547,6 +728,11 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles shard health.
+     *
+     * @return array result.
+     */
     public static function shardHealth(): array {
         $map = self::shardMap();
         $out = [];
@@ -566,6 +752,11 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare cross shard transactions.
+     *
+     * @return array result.
+     */
     public static function prepareCrossShardTransactions(): array {
         return self::storeSystemPlan("cross_shard_transactions", [
             "type" => "cross_shard_transactions",
@@ -575,6 +766,11 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles prepare shard aware backups.
+     *
+     * @return array result.
+     */
     public static function prepareShardAwareBackups(): array {
         return self::storeSystemPlan("shard_backups", [
             "type" => "shard_aware_backups",
@@ -583,6 +779,11 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles prepare shard monitoring.
+     *
+     * @return array result.
+     */
     public static function prepareShardMonitoring(): array {
         return self::storeSystemPlan("shard_monitoring", [
             "type" => "shard_monitoring",
@@ -596,6 +797,13 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles define primary replica model.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function definePrimaryReplicaModel(array $config = []): array {
         $file = self::dbRootPath(".system/replication/config.json", true);
         $current = self::readJsonConfig($file, [
@@ -611,6 +819,11 @@ trait GBDB_ClusterBackupTrait {
         return $current;
     }
 
+    /**
+     * handles replication log.
+     *
+     * @return string result.
+     */
     public static function replicationLog(): string {
         return self::dbRootPath(".system/replication/log.jsonl", true);
     }
@@ -635,6 +848,11 @@ trait GBDB_ClusterBackupTrait {
         return $json !== false && GBDBStorage::appendLine(self::replicationLog(), $json . "\n");
     }
 
+    /**
+     * handles replicate async.
+     *
+     * @return array result.
+     */
     public static function replicateAsync(): array {
         $log = self::replicationLog();
         $cfg = self::definePrimaryReplicaModel();
@@ -659,6 +877,14 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare read replica.
+     *
+     * @param string $name value.
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function prepareReadReplica(string $name, array $config = []): array {
         $cfg = self::definePrimaryReplicaModel();
         $cfg["replicas"][] = array_replace([
@@ -670,6 +896,13 @@ trait GBDB_ClusterBackupTrait {
         return self::definePrimaryReplicaModel($cfg);
     }
 
+    /**
+     * handles replica catchup.
+     *
+     * @param string $replica value.
+     *
+     * @return array result.
+     */
     public static function replicaCatchup(string $replica): array {
         $replica = self::safeSegment($replica);
         $sync = self::replicateAsync();
@@ -681,6 +914,11 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles replica lag.
+     *
+     * @return array result.
+     */
     public static function replicaLag(): array {
         $entries = is_file(self::replicationLog())
             ? count(file(self::replicationLog(), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
@@ -700,6 +938,11 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles replica health.
+     *
+     * @return array result.
+     */
     public static function replicaHealth(): array {
         $lag = self::replicaLag();
         $health = [];
@@ -717,6 +960,13 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare replica repair.
+     *
+     * @param string $replica value.
+     *
+     * @return array result.
+     */
     public static function prepareReplicaRepair(string $replica = ""): array {
         return self::storeSystemPlan("replica_repair", [
             "type" => "replica_repair",
@@ -727,6 +977,13 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles prepare failover.
+     *
+     * @param string $replica value.
+     *
+     * @return array result.
+     */
     public static function prepareFailover(string $replica = ""): array {
         return self::storeSystemPlan("failover", [
             "type" => "failover",
@@ -737,6 +994,13 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles promote replica to primary.
+     *
+     * @param string $replica value.
+     *
+     * @return array result.
+     */
     public static function promoteReplicaToPrimary(string $replica): array {
         $cfg = self::definePrimaryReplicaModel();
         $cfg["old_primary"] = $cfg["primary"] ?? "";
@@ -746,6 +1010,13 @@ trait GBDB_ClusterBackupTrait {
         return self::definePrimaryReplicaModel($cfg);
     }
 
+    /**
+     * handles enable split brain protection.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function enableSplitBrainProtection(array $config = []): array {
         $file = self::dbRootPath(".system/replication/split_brain.json", true);
         $cfg = array_replace([
@@ -760,6 +1031,13 @@ trait GBDB_ClusterBackupTrait {
         return $cfg;
     }
 
+    /**
+     * handles prepare replication slots.
+     *
+     * @param array $replicas value.
+     *
+     * @return array result.
+     */
     public static function prepareReplicationSlots(array $replicas = []): array {
         $slots = ["slots" => []];
 
@@ -775,6 +1053,13 @@ trait GBDB_ClusterBackupTrait {
         return $slots;
     }
 
+    /**
+     * handles prepare shard replication.
+     *
+     * @param string $shard value.
+     *
+     * @return array result.
+     */
     public static function prepareShardReplication(string $shard = ""): array {
         return self::storeSystemPlan("shard_replication", [
             "type" => "shard_replication",
@@ -784,6 +1069,13 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles prepare tenant replication.
+     *
+     * @param string $tenant value.
+     *
+     * @return array result.
+     */
     public static function prepareTenantReplication(string $tenant = ""): array {
         return self::storeSystemPlan("tenant_replication", [
             "type" => "tenant_replication",
@@ -793,6 +1085,14 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles register cluster node.
+     *
+     * @param string $node value.
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function registerClusterNode(string $node, array $config = []): array {
         $node = self::safeSegment($node);
         $file = self::dbRootPath(".system/cluster/nodes.json", true);
@@ -810,10 +1110,22 @@ trait GBDB_ClusterBackupTrait {
         return $nodes;
     }
 
+    /**
+     * handles cluster nodes.
+     *
+     * @return array result.
+     */
     public static function clusterNodes(): array {
         return self::readJsonConfig(self::dbRootPath(".system/cluster/nodes.json"), ["nodes" => []]);
     }
 
+    /**
+     * handles heartbeat node.
+     *
+     * @param string $node value.
+     *
+     * @return array result.
+     */
     public static function heartbeatNode(string $node = ""): array {
         $node = self::safeSegment($node !== "" ? $node : (gethostname() ?: "node0"));
 
@@ -823,6 +1135,11 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles prepare leader election.
+     *
+     * @return array result.
+     */
     public static function prepareLeaderElection(): array {
         $nodes = self::clusterNodes();
         $names = array_keys((array)($nodes["nodes"] ?? []));
@@ -840,6 +1157,13 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles define quorum.
+     *
+     * @param int $minNodes value.
+     *
+     * @return array result.
+     */
     public static function defineQuorum(int $minNodes = 1): array {
         $file = self::dbRootPath(".system/cluster/quorum.json", true);
         $cfg = [
@@ -852,6 +1176,11 @@ trait GBDB_ClusterBackupTrait {
         return $cfg;
     }
 
+    /**
+     * handles cluster health.
+     *
+     * @return array result.
+     */
     public static function clusterHealth(): array {
         $nodes = self::clusterNodes();
         $now = time();
@@ -871,6 +1200,13 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles define node roles.
+     *
+     * @param array $roles value.
+     *
+     * @return array result.
+     */
     public static function defineNodeRoles(array $roles = []): array {
         $file = self::dbRootPath(".system/cluster/roles.json", true);
         $cfg = array_replace([
@@ -885,6 +1221,13 @@ trait GBDB_ClusterBackupTrait {
         return $cfg;
     }
 
+    /**
+     * handles prepare service discovery.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function prepareServiceDiscovery(array $config = []): array {
         return self::storeSystemPlan("service_discovery", array_replace([
             "type" => "service_discovery",
@@ -894,6 +1237,11 @@ trait GBDB_ClusterBackupTrait {
         ], $config));
     }
 
+    /**
+     * handles prepare distributed locks.
+     *
+     * @return array result.
+     */
     public static function prepareDistributedLocks(): array {
         return self::storeSystemPlan("distributed_locks", [
             "type" => "distributed_locks",
@@ -904,22 +1252,57 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles set primary node.
+     *
+     * @param string $node value.
+     *
+     * @return array result.
+     */
     public static function setPrimaryNode(string $node): array {
         return self::registerClusterNode($node, ["role" => "primary"]);
     }
 
+    /**
+     * handles set replica node.
+     *
+     * @param string $node value.
+     *
+     * @return array result.
+     */
     public static function setReplicaNode(string $node): array {
         return self::registerClusterNode($node, ["role" => "replica"]);
     }
 
+    /**
+     * handles set worker node.
+     *
+     * @param string $node value.
+     *
+     * @return array result.
+     */
     public static function setWorkerNode(string $node): array {
         return self::registerClusterNode($node, ["role" => "worker"]);
     }
 
+    /**
+     * handles set maintenance node.
+     *
+     * @param string $node value.
+     *
+     * @return array result.
+     */
     public static function setMaintenanceNode(string $node): array {
         return self::registerClusterNode($node, ["role" => "maintenance"]);
     }
 
+    /**
+     * handles cluster config.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function clusterConfig(array $config = []): array {
         $file = self::dbRootPath(".system/cluster/config.json", true);
         $cfg = array_replace_recursive(
@@ -936,6 +1319,11 @@ trait GBDB_ClusterBackupTrait {
         return $cfg;
     }
 
+    /**
+     * handles detect split brain.
+     *
+     * @return array result.
+     */
     public static function detectSplitBrain(): array {
         $nodes = self::clusterNodes();
         $primaries = [];
@@ -944,6 +1332,7 @@ trait GBDB_ClusterBackupTrait {
             if (($node["role"] ?? "") === "primary" && (($node["status"] ?? "online") === "online")) {
                 $primaries[] = $name;
             }
+
         }
 
         return [
@@ -953,6 +1342,11 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare cluster recovery.
+     *
+     * @return array result.
+     */
     public static function prepareClusterRecovery(): array {
         return self::storeSystemPlan("cluster_recovery", [
             "type" => "cluster_recovery",
@@ -963,6 +1357,14 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles backup log.
+     *
+     * @param string $action value.
+     * @param array $payload value.
+     *
+     * @return bool result.
+     */
     public static function backupLog(string $action, array $payload = []): bool {
         $entry = [
             "action" => $action,
@@ -1015,10 +1417,22 @@ trait GBDB_ClusterBackupTrait {
         return $report;
     }
 
+    /**
+     * handles full backup.
+     *
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function fullBackup(string $target = ""): array {
         return self::createBackupFromPath(self::dbRootPath(""), "full", $target);
     }
 
+    /**
+     * handles prepare incremental backup.
+     *
+     * @return array result.
+     */
     public static function prepareIncrementalBackup(): array {
         return self::storeSystemPlan("incremental_backup", [
             "type" => "incremental_backup",
@@ -1029,6 +1443,11 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles prepare differential backup.
+     *
+     * @return array result.
+     */
     public static function prepareDifferentialBackup(): array {
         return self::storeSystemPlan("differential_backup", [
             "type" => "differential_backup",
@@ -1039,10 +1458,22 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles snapshot backup.
+     *
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function snapshotBackup(string $target = ""): array {
         return self::createBackupFromPath(Vars::DB_PATH(), "snapshot", $target);
     }
 
+    /**
+     * handles prepare hot backup.
+     *
+     * @return array result.
+     */
     public static function prepareHotBackup(): array {
         return self::storeSystemPlan("hot_backup", [
             "type" => "hot_backup",
@@ -1055,10 +1486,24 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles cold backup.
+     *
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function coldBackup(string $target = ""): array {
         return self::createBackupFromPath(self::dbRootPath(""), "cold", $target);
     }
 
+    /**
+     * handles verify backup.
+     *
+     * @param string $path value.
+     *
+     * @return array result.
+     */
     public static function verifyBackup(string $path): array {
         $path = rtrim($path, "/");
         $meta = self::readJsonConfig($path . "/metadata.json", []);
@@ -1074,6 +1519,7 @@ trait GBDB_ClusterBackupTrait {
                     "actual" => $actual[$file]
                 ];
             }
+
         }
 
         return [
@@ -1084,6 +1530,13 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles restore test.
+     *
+     * @param string $backupPath value.
+     *
+     * @return array result.
+     */
     public static function restoreTest(string $backupPath): array {
         $verify = self::verifyBackup($backupPath);
         $target = self::dbRootPath(
@@ -1111,6 +1564,13 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles prepare point in time recovery.
+     *
+     * @param null|int $timestamp value.
+     *
+     * @return array result.
+     */
     public static function preparePointInTimeRecovery(?int $timestamp = null): array {
         return self::storeSystemPlan("pitr", [
             "type" => "point_in_time_recovery",
@@ -1125,6 +1585,13 @@ trait GBDB_ClusterBackupTrait {
         ]);
     }
 
+    /**
+     * handles encrypted backup.
+     *
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function encryptedBackup(string $target = ""): array {
         $backup = self::fullBackup($target);
         $manifest = json_encode($backup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -1146,6 +1613,13 @@ trait GBDB_ClusterBackupTrait {
         return $backup;
     }
 
+    /**
+     * handles prepare remote backups.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function prepareRemoteBackups(array $config = []): array {
         $file = self::dbRootPath(".backups/remote.json", true);
         $cfg = array_replace([
@@ -1160,6 +1634,13 @@ trait GBDB_ClusterBackupTrait {
         return $cfg;
     }
 
+    /**
+     * handles prepare offsite backups.
+     *
+     * @param array $config value.
+     *
+     * @return array result.
+     */
     public static function prepareOffsiteBackups(array $config = []): array {
         $file = self::dbRootPath(".backups/offsite.json", true);
         $cfg = array_replace([
@@ -1174,6 +1655,13 @@ trait GBDB_ClusterBackupTrait {
         return $cfg;
     }
 
+    /**
+     * handles rotate backups.
+     *
+     * @param int $keep value.
+     *
+     * @return array result.
+     */
     public static function rotateBackups(int $keep = 10): array {
         $base = self::dbRootPath(".backups");
         $dirs = glob($base . "/*/*", GLOB_ONLYDIR) ?: [];
@@ -1199,6 +1687,13 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles apply backup retention.
+     *
+     * @param int $days value.
+     *
+     * @return array result.
+     */
     public static function applyBackupRetention(int $days = 30): array {
         $base = self::dbRootPath(".backups");
         $dirs = glob($base . "/*/*", GLOB_ONLYDIR) ?: [];
@@ -1210,6 +1705,7 @@ trait GBDB_ClusterBackupTrait {
                 self::deleteTreeInternal($dir);
                 $deleted[] = $dir;
             }
+
         }
 
         self::backupLog("backup_retention", [
@@ -1224,6 +1720,14 @@ trait GBDB_ClusterBackupTrait {
         ];
     }
 
+    /**
+     * handles tenant backup.
+     *
+     * @param string $tenant value.
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function tenantBackup(string $tenant, string $target = ""): array {
         $old = self::getInstance();
 
@@ -1236,10 +1740,27 @@ trait GBDB_ClusterBackupTrait {
         return self::createBackupFromPath($path, "tenant_" . self::safeSegment($tenant), $target);
     }
 
+    /**
+     * handles instance backup.
+     *
+     * @param string $instance value.
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function instanceBackup(string $instance, string $target = ""): array {
         return self::tenantBackup($instance, $target);
     }
 
+    /**
+     * handles table backup.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $target value.
+     *
+     * @return array result.
+     */
     public static function tableBackup(string $database, string $table, string $target = ""): array {
         $dir = dirname(self::makePath($database, $table, true));
         $name = basename(self::makePath($database, $table, true));
@@ -1275,6 +1796,7 @@ trait GBDB_ClusterBackupTrait {
             } else {
                 $report["errors"][] = $file;
             }
+
         }
 
         $report["checksums"] = self::checksumTreeInternal($target . "/data");
@@ -1288,4 +1810,5 @@ trait GBDB_ClusterBackupTrait {
 
         return $report;
     }
+
 }

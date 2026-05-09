@@ -1,5 +1,329 @@
 {
+    "test": {
+        "main": {
+            "kunden": {
+                "format": "2.0",
+                "version": 2,
+                "types_enabled": false,
+                "columns": {
+                    "aktiv": {
+                        "type": "mixed",
+                        "default": 1,
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "knr": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "name": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    }
+                },
+                "constraints": [],
+                "relations": [],
+                "partitioning": [],
+                "sequences": [],
+                "migration_history": [
+                    {
+                        "id": "mig_fa3d9766f837d632",
+                        "area": "types",
+                        "action": "disable",
+                        "payload": [],
+                        "created_at": 1778171922
+                    }
+                ],
+                "created_at": 1778171922,
+                "updated_at": 1778362427
+            }
+        }
+    },
     "__greenql_ui_v2_system": {
+        "papi": {
+            "keys": {
+                "format": "2.0",
+                "version": 1,
+                "types_enabled": false,
+                "columns": {
+                    "active": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "created_at": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "created_by": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "exp": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "key": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "name": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "rights": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    }
+                },
+                "constraints": [],
+                "relations": [],
+                "partitioning": [],
+                "sequences": [],
+                "migration_history": [],
+                "created_at": 1778363587,
+                "updated_at": 1778363591
+            }
+        },
+        "plog": {
+            "fetches": {
+                "format": "2.0",
+                "version": 1,
+                "types_enabled": false,
+                "columns": {
+                    "action": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "datetime": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "ip": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "key": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    }
+                },
+                "constraints": [],
+                "relations": [],
+                "partitioning": [],
+                "sequences": [],
+                "migration_history": [],
+                "created_at": 1778363587,
+                "updated_at": 1778363587
+            },
+            "key_log": {
+                "format": "2.0",
+                "version": 1,
+                "types_enabled": false,
+                "columns": {
+                    "action": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "datetime": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "key": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "user": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    }
+                },
+                "constraints": [],
+                "relations": [],
+                "partitioning": [],
+                "sequences": [],
+                "migration_history": [],
+                "created_at": 1778363587,
+                "updated_at": 1778363587
+            }
+        },
         "system": {
             "users": {
                 "format": "2.0",
@@ -181,7 +505,7 @@
                 "sequences": [],
                 "migration_history": [],
                 "created_at": 1778063309,
-                "updated_at": 1778063309
+                "updated_at": 1778362388
             }
         }
     }

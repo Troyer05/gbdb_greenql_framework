@@ -13,10 +13,10 @@ class GBDBStorage {
     public const DEFAULT_CHUNK_ROWS = 128;
 
     /**
-     * Schreibt Nutzdaten atomar auf die Festplatte.
-     * @param string $file Ziel-Datei.
-     * @param string $payload Datei-Inhalt.
-     * @return bool true bei Erfolg.
+     * writes data to file in atomic way
+     * @param string $file
+     * @param string $payload
+     * @return bool
      */
     public static function atomicWrite(string $file, string $payload): bool {
         $dir = dirname($file);
@@ -30,6 +30,7 @@ class GBDBStorage {
 
         if (!$handle) {
             error_log("[GBDBStorage] Konnte Temp-Datei nicht öffnen: {$tmp}");
+
             return false;
         }
 
@@ -51,6 +52,7 @@ class GBDBStorage {
 
                 @flock($handle, LOCK_UN);
             }
+
         } finally {
             @fclose($handle);
         }
@@ -58,24 +60,27 @@ class GBDBStorage {
         if (!$ok) {
             @unlink($tmp);
             error_log("[GBDBStorage] Konnte Temp-Datei nicht vollständig schreiben: {$tmp}");
+
             return false;
         }
 
         if (!@rename($tmp, $file)) {
             @unlink($tmp);
             error_log("[GBDBStorage] Konnte {$tmp} nicht nach {$file} verschieben");
+
             return false;
         }
 
         self::syncDir($dir);
+
         return true;
     }
 
     /**
-     * Fügt eine Zeile sicher an eine Datei an.
-     * @param string $file Ziel-Datei.
-     * @param string $line Zeile.
-     * @return bool true bei Erfolg.
+     * adds a line safely to a file
+     * @param string $file
+     * @param string $line
+     * @return bool
      */
     public static function appendLine(string $file, string $line): bool {
         $dir = dirname($file);
@@ -88,6 +93,7 @@ class GBDBStorage {
 
         if (!$handle) {
             error_log("[GBDBStorage] Konnte Append-Datei nicht öffnen: {$file}");
+
             return false;
         }
 
@@ -109,6 +115,7 @@ class GBDBStorage {
 
                 @flock($handle, LOCK_UN);
             }
+
         } finally {
             @fclose($handle);
         }
@@ -117,12 +124,12 @@ class GBDBStorage {
     }
 
     /**
-     * Schreibt eine WAL-Operation.
-     * @param string $appendFile Append-Datei.
-     * @param array $op Operation.
-     * @param string $state Status.
-     * @param string $tx Transaktions-ID.
-     * @return bool true bei Erfolg.
+     * creates a WAL operation
+     * @param string $appendFile
+     * @param array $op
+     * @param string $state
+     * @param string $tx
+     * @return bool
      */
     public static function wal(string $appendFile, array $op, string $state, string $tx): bool {
         $entry = [
@@ -140,68 +147,83 @@ class GBDBStorage {
         }
 
         $line = self::encodeLine($json) . "\n";
+
         return self::appendLine($appendFile . self::WAL_SUFFIX, $line);
     }
 
     /**
-     * Erzeugt eine Prüfsumme für Journal-/WAL-Einträge.
-     * @param array $entry Eintrag.
-     * @return string Checksum.
+     * creates a cehck sum for Journal-/WAL- entrys
+     * @param array $entry
+     * @return string
      */
     public static function journalChecksum(array $entry): string {
         unset($entry["checksum"]);
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         return hash("sha256", $json === false ? "" : $json);
     }
 
     /**
-     * Schreibt einen generischen Journal-Eintrag inklusive Checksum und Rotation.
-     * @param string $file Journal-Datei.
-     * @param array $entry Eintrag.
-     * @return bool true bei Erfolg.
+     * writes a generic journal entry with checksum and rotation
+     * @param string $file
+     * @param array $entry
+     * @return bool
      */
     public static function journal(string $file, array $entry): bool {
         $entry["ts"] = (int)($entry["ts"] ?? time());
         $entry["checksum"] = self::journalChecksum($entry);
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         if ($json === false) return false;
+
         if (is_file($file) && (int)@filesize($file) >= self::JOURNAL_ROTATE_BYTES) {
             @rename($file, $file . "." . date("Ymd_His") . ".old");
         }
+
         return self::appendLine($file, self::encodeLine($json) . "\n");
     }
 
     /**
-     * Liest ein Journal und prüft Checksums.
-     * @param string $file Journal-Datei.
-     * @return array Report.
+     * reads journal and checks checksum
+     * @param string $file
+     * @return array{entries: array, invalid: int, ok: bool}
      */
     public static function readJournal(string $file): array {
         if (!is_file($file)) return ["ok" => true, "entries" => [], "invalid" => 0];
+
         $handle = @fopen($file, "r");
+
         if (!$handle) return ["ok" => false, "entries" => [], "invalid" => 0];
+
         $entries = [];
         $invalid = 0;
+
         try {
             while (!feof($handle)) {
                 $line = fgets($handle);
+
                 if ($line === false) break;
                 $json = self::decodeLine($line);
+
                 if ($json === null) continue;
                 $entry = json_decode($json, true);
+
                 if (!is_array($entry)) { $invalid++; continue; }
                 $checksum = (string)($entry["checksum"] ?? "");
+
                 if ($checksum !== "" && $checksum !== self::journalChecksum($entry)) $invalid++;
                 $entries[] = $entry;
             }
+
         } finally { @fclose($handle); }
+
         return ["ok" => $invalid === 0, "entries" => $entries, "invalid" => $invalid];
     }
 
     /**
-     * Kodiert eine Journal-Zeile passend zur DB-Konfiguration.
-     * @param string $json JSON-Zeile.
-     * @return string kodierte Zeile.
+     * creates journal line by db-config
+     * @param string $json
+     * @return string
      */
     public static function encodeLine(string $json): string {
         if (class_exists("Vars") && method_exists("Vars", "crypt_data") && Vars::crypt_data() && class_exists("Crypt")) {
@@ -212,9 +234,9 @@ class GBDBStorage {
     }
 
     /**
-     * Liefert Standard-Meta-Daten für Tabellen.
-     * @param array $meta vorhandene Meta-Daten.
-     * @return array normalisierte Meta-Daten.
+     * standard metadata for tables
+     * @param array $meta
+     * @return array{append_ops: int, checksum: string, chunk_size: int, constraints: array, created_at: int, deleted_rows: int, indexes: array, last_compaction: int, last_id: int, last_snapshot: int, page_size: mixed, rows: int, schema_version: int, storage_checksum: string, storage_format: int, storage_last_repair: int, storage_verified_at: int, updated_at: int, version: int}
      */
     public static function normalizeMeta(array $meta = []): array {
         $now = time();
@@ -255,10 +277,10 @@ class GBDBStorage {
     }
 
     /**
-     * Aktualisiert Meta-Daten vor einem Schreibzugriff.
-     * @param array $meta Meta-Daten.
-     * @param bool $bumpVersion Version erhöhen.
-     * @return array aktualisierte Meta-Daten.
+     * updates meta data before writing to file
+     * @param array $meta
+     * @param bool $bumpVersion
+     * @return array{append_ops: int, checksum: string, chunk_size: int, constraints: array, created_at: int, deleted_rows: int, indexes: array, last_compaction: int, last_id: int, last_snapshot: int, page_size: mixed, rows: int, schema_version: int, storage_checksum: string, storage_format: int, storage_last_repair: int, storage_verified_at: int, updated_at: int, version: int}
      */
     public static function touchMeta(array $meta, bool $bumpVersion = true): array {
         $meta = self::normalizeMeta($meta);
@@ -272,10 +294,10 @@ class GBDBStorage {
     }
 
     /**
-     * Prüft, ob eine Tabelle komprimiert werden sollte.
-     * @param array $meta Meta-Daten.
-     * @param string $appendFile Append-Datei.
-     * @return bool true wenn Komprimierung sinnvoll ist.
+     * checks if a table should be compromized/optimized
+     * @param array $meta
+     * @param string $appendFile
+     * @return bool
      */
     public static function shouldCompact(array $meta, string $appendFile): bool {
         $meta = self::normalizeMeta($meta);
@@ -284,46 +306,53 @@ class GBDBStorage {
         $appendSize = is_file($appendFile) ? (int)@filesize($appendFile) : 0;
 
         if ($appendOps <= 0) return false;
+
         if ($appendOps >= 100) return true;
+
         if ($appendOps >= max(25, (int)ceil($rows * 0.20))) return true;
+
         if ($appendSize >= 1024 * 1024) return true;
 
         return false;
     }
 
     /**
-     * Erzeugt eine Prüfsumme für Tabelleninhalt.
-     * @param array $rows Tabellenzeilen.
-     * @return string Prüfsumme.
+     * creates checksum for table data
+     * @param array $rows
+     * @return string
      */
     public static function checksum(array $rows): string {
         $json = json_encode($rows, JSON_UNESCAPED_UNICODE);
+
         return hash("sha256", $json === false ? "" : $json);
     }
 
     /**
-     * Gibt den Index-Dateipfad für eine Spalte zurück.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $column Spalte.
-     * @return string Index-Datei.
+     * gets index-path of a column
+     * @param string $dataFile
+     * @param string $column
+     * @return string
      */
     public static function indexFile(string $dataFile, string $column): string {
         $column = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $column);
+
         return dirname($dataFile) . "/" . self::INDEX_PREFIX . basename($dataFile) . "__" . $column . ".idx";
     }
 
     /**
-     * Baut eine Index-Map aus Tabellenzeilen.
-     * @param array $rows Tabellenzeilen inkl. Header.
-     * @param string $column Spalte.
-     * @return array Index-Map.
+     * creates a index map
+     * @param array $rows
+     * @param string $column
+     * @return array<array>
      */
     public static function buildIndex(array $rows, string $column): array {
         $idx = [];
 
         foreach ($rows as $i => $row) {
             if (!is_array($row)) continue;
+
             if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) continue;
+
             if (!array_key_exists($column, $row) || !isset($row["id"])) continue;
 
             $key = self::indexKey($row[$column]);
@@ -339,11 +368,11 @@ class GBDBStorage {
     }
 
     /**
-     * Schreibt einen Spaltenindex.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $column Spalte.
-     * @param array $rows Tabellenzeilen.
-     * @return bool true bei Erfolg.
+     * creates a column index
+     * @param string $dataFile
+     * @param string $column
+     * @param array $rows
+     * @return bool
      */
     public static function writeIndex(string $dataFile, string $column, array $rows): bool {
         $payload = json_encode([
@@ -364,24 +393,24 @@ class GBDBStorage {
     }
 
     /**
-     * Löscht einen Spaltenindex.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $column Spalte.
-     * @return bool true bei Erfolg.
+     * delete a column index
+     * @param string $dataFile
+     * @param string $column
+     * @return bool
      */
     public static function deleteIndex(string $dataFile, string $column): bool {
         $file = self::indexFile($dataFile, $column);
+
         return !is_file($file) || @unlink($file);
     }
 
-
     /**
-     * Prüft einfache Tabellen-Constraints.
-     * @param array $rows vorhandene Tabellenzeilen.
-     * @param array $candidate neue oder geänderte Zeile.
-     * @param array $constraints Constraints aus Meta.
-     * @param int|null $excludeId ID, die beim Unique-Check ignoriert wird.
-     * @return bool true wenn gültig.
+     * checks table constrains
+     * @param array $rows
+     * @param array $candidate
+     * @param array $constraints
+     * @param mixed $excludeId
+     * @return bool
      */
     public static function validateConstraints(array $rows, array $candidate, array $constraints, ?int $excludeId = null): bool {
         if (empty($constraints)) return true;
@@ -394,6 +423,7 @@ class GBDBStorage {
                 if (!array_key_exists($column, $candidate) || $candidate[$column] === "" || $candidate[$column] === null) {
                     return false;
                 }
+
             }
 
             if (($rules["unique"] ?? false) === true && array_key_exists($column, $candidate)) {
@@ -401,37 +431,46 @@ class GBDBStorage {
 
                 foreach ($rows as $i => $row) {
                     if (!is_array($row)) continue;
+
                     if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) continue;
+
                     if ($excludeId !== null && isset($row["id"]) && (int)$row["id"] === $excludeId) continue;
+
                     if (!array_key_exists($column, $row)) continue;
 
                     if (self::indexKey($row[$column]) === $value) {
                         return false;
                     }
+
                 }
+
             }
+
         }
 
         return true;
     }
 
     /**
-     * Erzeugt einen stabilen Index-Key.
-     * @param mixed $value Wert.
-     * @return string Index-Key.
+     * creates stable index key
+     * @param mixed $value
+     * @return string
      */
     public static function indexKey(mixed $value): string {
         if (is_bool($value)) return $value ? "bool:true" : "bool:false";
+
         if ($value === null) return "null";
+
         if (is_int($value) || is_float($value)) return "num:" . (string)$value;
+
         return "str:" . (string)$value;
     }
 
     /**
-     * Schreibt alle bekannten Indexe neu.
-     * @param string $dataFile Tabellen-Datei.
-     * @param array $meta Meta-Daten.
-     * @param array $rows Tabellenzeilen.
+     * reqrites all known indexes
+     * @param string $dataFile
+     * @param array $meta
+     * @param array $rows
      * @return void
      */
     public static function rebuildIndexes(string $dataFile, array $meta, array $rows): void {
@@ -439,17 +478,19 @@ class GBDBStorage {
 
         foreach ($meta["indexes"] as $column) {
             $column = (string)$column;
+
             if ($column === "" || $column === "id") continue;
             self::writeIndex($dataFile, $column, $rows);
         }
+
     }
 
     /**
-     * Erstellt einen Snapshot der Tabellen-Dateien.
-     * @param string $dataFile Tabellen-Datei.
-     * @param array $extraFiles zusätzliche Dateien.
-     * @param string $reason Grund.
-     * @return string Snapshot-ID oder leer.
+     * creates a snapshot of a table-file
+     * @param string $dataFile
+     * @param array $extraFiles
+     * @param string $reason
+     * @return string
      */
     public static function snapshot(string $dataFile, array $extraFiles = [], string $reason = "manual"): string {
         if (!is_file($dataFile)) {
@@ -475,6 +516,7 @@ class GBDBStorage {
             if (@copy($file, $target)) {
                 $copied[] = basename($file);
             }
+
         }
 
         $manifest = [
@@ -490,10 +532,9 @@ class GBDBStorage {
         return empty($copied) ? "" : $id;
     }
 
-
     /**
-     * Entfernt zusätzliche Tabellen-Artefakte wie WAL, Indexe und Snapshots.
-     * @param string $dataFile Tabellen-Datei.
+     * delete table artefacts
+     * @param string $dataFile
      * @return void
      */
     public static function deleteTableArtifacts(string $dataFile): void {
@@ -518,6 +559,7 @@ class GBDBStorage {
 
         if (is_dir($blocksRoot)) {
             $items = array_diff(scandir($blocksRoot) ?: [], [".", ".."]);
+
             if (empty($items)) @rmdir($blocksRoot);
         }
 
@@ -535,13 +577,15 @@ class GBDBStorage {
             if (empty($items)) {
                 @rmdir($rootSnapDir);
             }
+
         }
+
     }
 
     /**
-     * Löscht ein Verzeichnis rekursiv.
-     * @param string $dir Verzeichnis.
-     * @return bool true bei Erfolg.
+     * deletes dir recursively
+     * @param string $dir
+     * @return bool
      */
     public static function deleteDir(string $dir): bool {
         if (!is_dir($dir)) return true;
@@ -560,16 +604,16 @@ class GBDBStorage {
             } else {
                 @unlink($path);
             }
+
         }
 
         return @rmdir($dir);
     }
 
-
     /**
-     * Dekodiert eine Journal-Zeile passend zur DB-Konfiguration.
-     * @param string $line kodierte Zeile.
-     * @return string|null dekodierte JSON-Zeile oder null.
+     * decodes a journal line by gb-config
+     * @param string $line
+     * @return string|null
      */
     public static function decodeLine(string $line): ?string {
         $line = trim($line);
@@ -580,6 +624,7 @@ class GBDBStorage {
 
         if (class_exists("Vars") && method_exists("Vars", "crypt_data") && Vars::crypt_data() && class_exists("Crypt")) {
             $decoded = Crypt::decode($line);
+
             return is_string($decoded) ? $decoded : null;
         }
 
@@ -587,9 +632,9 @@ class GBDBStorage {
     }
 
     /**
-     * Liest WAL-Einträge einer Append-Datei.
-     * @param string $appendFile Append-Datei.
-     * @return array WAL-Einträge.
+     * reads WAL entrys of append file
+     * @param string $appendFile
+     * @return array[]
      */
     public static function readWal(string $appendFile): array {
         $walFile = $appendFile . self::WAL_SUFFIX;
@@ -609,19 +654,24 @@ class GBDBStorage {
         try {
             while (!feof($handle)) {
                 $line = fgets($handle);
+
                 if ($line === false) break;
 
                 $json = self::decodeLine($line);
+
                 if ($json === null) continue;
 
                 $entry = json_decode($json, true);
 
                 if (is_array($entry) && isset($entry["tx"], $entry["state"], $entry["op"])) {
                     $checksum = (string)($entry["checksum"] ?? "");
+
                     if ($checksum !== "" && $checksum !== self::journalChecksum($entry)) continue;
                     $entries[] = $entry;
                 }
+
             }
+
         } finally {
             @fclose($handle);
         }
@@ -630,9 +680,9 @@ class GBDBStorage {
     }
 
     /**
-     * Stellt committed WAL-Operationen sicher in der Append-Datei wieder her.
-     * @param string $appendFile Append-Datei.
-     * @return array Recovery-Status.
+     * recreates commited WAL-operations safely in the append file
+     * @param string $appendFile
+     * @return array{dangling: int, ok: bool, replayed: int}
      */
     public static function recoverWal(string $appendFile): array {
         $entries = self::readWal($appendFile);
@@ -660,16 +710,21 @@ class GBDBStorage {
                 try {
                     while (!feof($handle)) {
                         $line = fgets($handle);
+
                         if ($line === false) break;
 
                         $json = self::decodeLine($line);
+
                         if ($json === null) continue;
                         $existing[hash("sha256", $json)] = true;
                     }
+
                 } finally {
                     @fclose($handle);
                 }
+
             }
+
         }
 
         $replayed = 0;
@@ -678,28 +733,32 @@ class GBDBStorage {
         foreach ($states as $tx => $txStates) {
             if (!empty($txStates["committed"]) && isset($ops[$tx])) {
                 $json = json_encode($ops[$tx], 0);
+
                 if ($json === false) continue;
 
                 $hash = hash("sha256", $json);
 
                 if (!isset($existing[$hash])) {
                     self::appendLine($appendFile, self::encodeLine($json) . "\n");
+
                     $existing[$hash] = true;
                     $replayed++;
                 }
-            } elseif (!empty($txStates["prepared"]) && empty($txStates["failed"])) {
+
+            } else if (!empty($txStates["prepared"]) && empty($txStates["failed"])) {
                 $dangling++;
             }
+
         }
 
         return ["ok" => true, "replayed" => $replayed, "dangling" => $dangling];
     }
 
     /**
-     * Stellt einen Snapshot wieder her.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $snapshotId Snapshot-ID.
-     * @return bool true bei Erfolg.
+     * restores a snapshot
+     * @param string $dataFile
+     * @param string $snapshotId
+     * @return bool
      */
     public static function restoreSnapshot(string $dataFile, string $snapshotId): bool {
         $snapshotId = preg_replace('/[^a-zA-Z0-9_\-]/', '', $snapshotId);
@@ -729,18 +788,20 @@ class GBDBStorage {
                 if ($payload === false || !self::atomicWrite($target, $payload)) {
                     $ok = false;
                 }
+
             }
+
         }
 
         return $ok;
     }
 
     /**
-     * Liest einen Index und gibt die Row-IDs für einen Wert zurück.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $column Spalte.
-     * @param mixed $value Suchwert.
-     * @return array Row-IDs.
+     * reads index and gets row-ids for a specific value
+     * @param string $dataFile
+     * @param string $column
+     * @param mixed $value
+     * @return array
      */
     public static function indexLookup(string $dataFile, string $column, mixed $value): array {
         $file = self::indexFile($dataFile, $column);
@@ -757,9 +818,11 @@ class GBDBStorage {
 
         if (class_exists("Vars") && method_exists("Vars", "crypt_data") && Vars::crypt_data() && class_exists("Crypt")) {
             $decoded = Crypt::decode($payload);
+
             if (is_string($decoded)) {
                 $payload = $decoded;
             }
+
         }
 
         $idx = json_decode($payload, true);
@@ -769,29 +832,30 @@ class GBDBStorage {
         }
 
         $key = self::indexKey($value);
+
         return array_values(array_map("intval", $idx["map"][$key] ?? []));
     }
 
-
     /**
-     * Gibt den Ordner fuer moderne Index-Sidecars zurueck.
-     * @param string $dataFile Tabellen-Datei.
-     * @return string Index-Ordner.
+     * dir of index-files
+     * @param string $dataFile
+     * @return string
      */
     public static function advancedIndexDir(string $dataFile): string {
         return self::storageDir($dataFile) . "/index/indexes";
     }
 
     /**
-     * Normalisiert eine Index-Definition.
-     * @param string $name Indexname.
-     * @param string $type Indextyp.
-     * @param array $columns Spalten.
-     * @param array $options Optionen.
-     * @return array Definition.
+     * normalizes a index definition
+     * @param string $name
+     * @param string $type
+     * @param array $columns
+     * @param array $options
+     * @return array{columns: array, created_at: int, fulltext: bool, name: array|string|null, prefix: bool, sorted: bool, type: string, unique: bool, updated_at: int}
      */
     public static function normalizeIndexDefinition(string $name, string $type, array $columns, array $options = []): array {
         $type = strtolower(trim($type));
+
         if ($type === '') $type = 'single';
 
         $columns = array_values(array_filter(array_map(function ($column) {
@@ -818,100 +882,126 @@ class GBDBStorage {
     }
 
     /**
-     * Baut einen Indexnamen aus Typ und Spalten.
-     * @param string $type Indextyp.
-     * @param array $columns Spalten.
-     * @return string Indexname.
+     * builds index name by types and columns
+     * @param string $type
+     * @param array $columns
+     * @return array|string|null
      */
     public static function indexName(string $type, array $columns): string {
         return preg_replace('/[^a-zA-Z0-9_\-]/', '_', strtolower($type) . '_' . implode('_', $columns));
     }
 
     /**
-     * Gibt die Index-Datei einer Definition zurueck.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $name Indexname.
-     * @return string Datei.
+     * gets index of a definition
+     * @param string $dataFile
+     * @param string $name
+     * @return string
      */
     public static function advancedIndexFile(string $dataFile, string $name): string {
         $name = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $name);
+
         return self::advancedIndexDir($dataFile) . '/' . $name . '.idx.json';
     }
 
     /**
-     * Gibt die Meta-Datei fuer Indexe zurueck.
-     * @param string $dataFile Tabellen-Datei.
-     * @return string Datei.
+     * gets meta data for indexes
+     * @param string $dataFile
+     * @return string
      */
     public static function advancedIndexMetaFile(string $dataFile): string {
         return self::advancedIndexDir($dataFile) . '/_meta.json';
     }
 
     /**
-     * Erstellt eine zusammengesetzte Index-Key-Darstellung.
-     * @param array $row Datensatz.
-     * @param array $columns Spalten.
-     * @return string Key.
+     * display of indexes
+     * @param array $row
+     * @param array $columns
+     * @return string
      */
     public static function compositeIndexKey(array $row, array $columns): string {
         $parts = [];
+
         foreach ($columns as $column) $parts[] = self::indexKey($row[$column] ?? null);
+
         return implode('|', $parts);
     }
 
     /**
-     * Tokenisiert Text fuer den Volltext-Index.
-     * @param string $text Text.
-     * @return array Tokens.
+     * tokenizer for full-text index
+     * @param string $text
+     * @return array
      */
     public static function tokenizeFulltext(string $text): array {
         $text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
         $stopwords = array_flip(['der','die','das','den','dem','und','oder','aber','ein','eine','einer','eines','ist','sind','war','waren','the','a','an','and','or','of','to','in','for','on','with']);
+
         preg_match_all('/[#@]?[\p{L}\p{N}_\-]+/u', $text, $m);
+
         $tokens = [];
+
         foreach (($m[0] ?? []) as $token) {
             $token = trim((string)$token);
+
             if ($token === '') continue;
+
             $plain = ltrim($token, '#@');
             $len = function_exists('mb_strlen') ? mb_strlen($plain, 'UTF-8') : strlen($plain);
+
             if ($len < 2) continue;
+
             if (!str_starts_with($token, '#') && !str_starts_with($token, '@') && isset($stopwords[$plain])) continue;
+
             $tokens[] = $token;
+
             if (str_starts_with($token, '#')) $tokens[] = 'hashtag:' . substr($token, 1);
+
             if (str_starts_with($token, '@')) $tokens[] = 'mention:' . substr($token, 1);
+
             $prefix = '';
             $chars = preg_split('//u', $plain, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
             foreach ($chars as $i => $ch) {
                 $prefix .= $ch;
+
                 if ($i >= 1) $tokens[] = 'prefix:' . $prefix;
+
                 if ($i >= 11) break;
             }
+
         }
+
         return array_values(array_unique($tokens));
     }
 
     /**
-     * Baut eine moderne Index-Map.
-     * @param array $rows Tabellenzeilen.
-     * @param array $definition Indexdefinition.
-     * @return array Map.
+     * builds index map
+     * @param array $rows
+     * @param array $definition
+     * @return array
      */
     public static function buildAdvancedIndex(array $rows, array $definition): array {
         $type = (string)($definition['type'] ?? 'single');
         $columns = is_array($definition['columns'] ?? null) ? $definition['columns'] : [];
         $map = [];
+
         if (empty($columns)) return $map;
 
         foreach ($rows as $i => $row) {
             if (!is_array($row)) continue;
+
             if ($i === 0 && isset($row['id']) && (int)$row['id'] === -1) continue;
+
             if (!isset($row['id'])) continue;
+
             $id = (int)$row['id'];
 
             if ($type === 'fulltext') {
                 $haystack = '';
+
                 foreach ($columns as $column) if (array_key_exists($column, $row) && (is_scalar($row[$column]) || $row[$column] === null)) $haystack .= ' ' . (string)$row[$column];
+
                 foreach (self::tokenizeFulltext($haystack) as $token) $map[$token][] = $id;
+
                 continue;
             }
 
@@ -923,115 +1013,135 @@ class GBDBStorage {
                 $raw = function_exists('mb_strtolower') ? mb_strtolower($raw, 'UTF-8') : strtolower($raw);
                 $chars = preg_split('//u', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
                 $prefix = '';
+
                 foreach ($chars as $pos => $ch) {
                     $prefix .= $ch;
+
                     if ($pos >= 1) $map['prefix:' . $prefix][] = $id;
+
                     if ($pos >= 31) break;
                 }
+
             }
+
         }
 
         foreach ($map as $key => $ids) $map[$key] = array_values(array_unique(array_map('intval', $ids)));
+
         if (!empty($definition['sorted'])) ksort($map, SORT_NATURAL);
+
         return $map;
     }
 
     /**
-     * Schreibt einen modernen Index samt Checksum.
-     * @param string $dataFile Tabellen-Datei.
-     * @param array $definition Indexdefinition.
-     * @param array $rows Tabellenzeilen.
-     * @return bool true bei Erfolg.
+     * writes index with checksum
+     * @param string $dataFile
+     * @param array $definition
+     * @param array $rows
+     * @return bool
      */
     public static function writeAdvancedIndex(string $dataFile, array $definition, array $rows): bool {
         $dir = self::advancedIndexDir($dataFile);
+
         if (!is_dir($dir)) @mkdir($dir, 0777, true);
+
         $definition = self::normalizeIndexDefinition((string)($definition['name'] ?? ''), (string)($definition['type'] ?? 'single'), (array)($definition['columns'] ?? []), $definition);
         $map = self::buildAdvancedIndex($rows, $definition);
         $payload = ['definition' => $definition, 'map' => $map, 'checksum' => self::checksum($map), 'updated_at' => time()];
         $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
         if ($json === false) return false;
+
         return self::atomicWrite(self::advancedIndexFile($dataFile, $definition['name']), $json . "\n");
     }
 
     /**
-     * Liest einen modernen Index.
-     * @param string $dataFile Tabellen-Datei.
-     * @param string $name Indexname.
-     * @return array Indexdaten.
+     * reads index
+     * @param string $dataFile
+     * @param string $name
+     * @return array
      */
     public static function readAdvancedIndex(string $dataFile, string $name): array {
         return self::readJsonFile(self::advancedIndexFile($dataFile, $name));
     }
 
     /**
-     * Schreibt die Index-Meta-Datei.
-     * @param string $dataFile Tabellen-Datei.
-     * @param array $definitions Definitionen.
-     * @return bool true bei Erfolg.
+     * writes index meta file
+     * @param string $dataFile
+     * @param array $definitions
+     * @return bool
      */
     public static function writeAdvancedIndexMeta(string $dataFile, array $definitions): bool {
         $meta = ['format' => self::STORAGE_FORMAT, 'updated_at' => time(), 'definitions' => $definitions, 'checksum' => self::checksum($definitions)];
         $json = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
         return $json !== false && self::atomicWrite(self::advancedIndexMetaFile($dataFile), $json . "\n");
     }
 
     /**
-     * Sucht Row-IDs in einem modernen Index.
-     * @param string $dataFile Tabellen-Datei.
-     * @param array $definition Indexdefinition.
-     * @param mixed $value Wert oder Werteliste.
-     * @return array IDs.
+     * searches row-ids of index
+     * @param string $dataFile
+     * @param array $definition
+     * @param mixed $value
+     * @return array
      */
     public static function advancedIndexLookup(string $dataFile, array $definition, mixed $value): array {
         $idx = self::readAdvancedIndex($dataFile, (string)($definition['name'] ?? ''));
+
         if (empty($idx['map']) || !is_array($idx['map'])) return [];
+
         $type = (string)($definition['type'] ?? 'single');
+
         if ($type === 'fulltext') {
             $ids = [];
+
             foreach (self::tokenizeFulltext((string)$value) as $token) foreach (($idx['map'][$token] ?? []) as $id) $ids[] = (int)$id;
+
             return array_values(array_unique($ids));
         }
+
         $vals = is_array($value) ? $value : [$value];
         $row = [];
+
         foreach ((array)($definition['columns'] ?? []) as $i => $column) $row[$column] = $vals[$i] ?? null;
+
         $key = self::compositeIndexKey($row, (array)($definition['columns'] ?? []));
+
         return array_values(array_map('intval', $idx['map'][$key] ?? []));
     }
 
-
     /**
-     * Gibt die unterstützten festen Page-Größen zurück.
-     * @return array Page-Größen in Bytes.
+     * gets page sizes
+     * @return int[]
      */
     public static function pageSizes(): array {
         return [self::PAGE_4K, self::PAGE_8K, self::PAGE_16K];
     }
 
     /**
-     * Normalisiert eine Page-Größe auf eine erlaubte Größe.
-     * @param int $pageSize gewünschte Größe.
-     * @return int erlaubte Page-Größe.
+     * normalize page size
+     * @param int $pageSize
+     * @return int
      */
     public static function normalizePageSize(int $pageSize): int {
         return in_array($pageSize, self::pageSizes(), true) ? $pageSize : self::DEFAULT_PAGE_SIZE;
     }
 
     /**
-     * Liefert den Sidecar-Storage-Ordner einer Tabelle.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @return string Storage-Ordner.
+     * gets sidecar-storage-dir of a table
+     * @param string $dataFile
+     * @return string
      */
     public static function storageDir(string $dataFile): string {
         return dirname($dataFile) . "/.blocks/" . basename($dataFile);
     }
 
     /**
-     * Initialisiert die Page-/Chunk-basierte Storage-Struktur einer Tabelle.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @param array $rows Tabellenzeilen inklusive Header.
-     * @param array $meta Tabellen-Meta.
-     * @return array Storage-Bericht.
+     * initializes page-/chunk storage structure of a table
+     * @param string $dataFile
+     * @param array $rows
+     * @param array $meta
+     * @return array
      */
     public static function initStorage(string $dataFile, array $rows, array $meta = []): array {
         return self::syncStorage($dataFile, $rows, $meta, "init");
@@ -1051,6 +1161,15 @@ class GBDBStorage {
      * @param string $reason Grund der Synchronisierung.
      * @return array Storage-Bericht.
      */
+
+    /**
+     * rewrites a sidecar-storage-file of a table
+     * @param string $dataFile
+     * @param array $rows
+     * @param array $meta
+     * @param string $reason
+     * @return array{checksum: mixed, dir: string, format: int, ok: bool, page_size: int, pages: int, rows: int}
+     */
     public static function syncStorage(string $dataFile, array $rows, array $meta = [], string $reason = "sync"): array {
         $meta = self::normalizeMeta($meta);
         $pageSize = self::normalizePageSize((int)($meta["page_size"] ?? self::DEFAULT_PAGE_SIZE));
@@ -1059,6 +1178,7 @@ class GBDBStorage {
 
         foreach (["data", "index", "meta", "journal", "free", "repair", "tmp"] as $sub) {
             $path = $dir . "/" . $sub;
+
             if (!is_dir($path)) @mkdir($path, 0777, true);
         }
 
@@ -1074,13 +1194,16 @@ class GBDBStorage {
             }
 
             if (!isset($row["id"])) continue;
+
             $body[] = $row;
         }
 
         $oldFree = self::readJsonFile($dir . "/free/free.json");
         $oldTombstones = is_array($oldFree["tombstones"] ?? null) ? $oldFree["tombstones"] : [];
         $liveIds = [];
+
         foreach ($body as $row) $liveIds[(string)(int)$row["id"]] = true;
+
         foreach ($oldTombstones as $id => $item) {
             if (isset($liveIds[(string)$id])) unset($oldTombstones[$id]);
         }
@@ -1115,6 +1238,7 @@ class GBDBStorage {
                     "checksum" => $rowChecksum,
                     "row" => $row
                 ];
+
                 $pointers[(string)$rowId] = [
                     "file" => $logical,
                     "chunk" => (int)$chunkNo,
@@ -1134,10 +1258,12 @@ class GBDBStorage {
                 "header" => $header,
                 "rows" => $rowsOut
             ];
-            $page["checksum"] = self::checksum($page["rows"]);
 
+            $page["checksum"] = self::checksum($page["rows"]);
             $payload = json_encode($page, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
             if ($payload === false) $payload = "{}";
+
             self::atomicWrite($pageFile, $payload . "\n");
 
             $chunks[] = [
@@ -1147,8 +1273,8 @@ class GBDBStorage {
                 "bytes" => strlen($payload),
                 "checksum" => $page["checksum"]
             ];
-            $pageChecksums[$logical] = $page["checksum"];
 
+            $pageChecksums[$logical] = $page["checksum"];
             $current = [];
             $currentSize = 0;
         };
@@ -1173,6 +1299,7 @@ class GBDBStorage {
             "tombstones" => $oldTombstones,
             "reusable_slots" => count($oldTombstones)
         ];
+
         self::atomicWrite($dir . "/free/free.json", json_encode($free, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
         $manifest = [
@@ -1189,7 +1316,9 @@ class GBDBStorage {
             "data_checksum" => self::checksum($rows),
             "page_checksums" => $pageChecksums
         ];
+
         $manifest["checksum"] = self::checksum($manifest);
+
         self::atomicWrite($dir . "/manifest.json", json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
         $pointerPayload = [
@@ -1197,7 +1326,9 @@ class GBDBStorage {
             "updated_at" => time(),
             "pointers" => $pointers
         ];
+
         $pointerPayload["checksum"] = self::checksum($pointerPayload["pointers"]);
+
         self::atomicWrite($dir . "/index/primary.ptr", json_encode($pointerPayload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
         $storageMeta = [
@@ -1216,6 +1347,7 @@ class GBDBStorage {
             "tombstones" => count($oldTombstones),
             "checksum" => $manifest["checksum"]
         ];
+
         self::atomicWrite($dir . "/meta/storage.json", json_encode($storageMeta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
         self::appendStorageJournal($dataFile, [
@@ -1238,47 +1370,54 @@ class GBDBStorage {
     }
 
     /**
-     * Schreibt eine Storage-Journal-Operation.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @param array $op Operation.
-     * @return bool true bei Erfolg.
+     * writes storage-journal operation
+     * @param string $dataFile
+     * @param array $op
+     * @return bool
      */
     public static function appendStorageJournal(string $dataFile, array $op): bool {
         $dir = self::storageDir($dataFile) . "/journal";
+
         if (!is_dir($dir)) @mkdir($dir, 0777, true);
 
         $entry = [
             "ts" => time(),
             "op" => $op
         ];
-        $entry["checksum"] = self::checksum($entry["op"]);
 
+        $entry["checksum"] = self::checksum($entry["op"]);
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE);
+
         if ($json === false) return false;
 
         return self::appendLine($dir . "/operations.log", $json . "\n");
     }
 
     /**
-     * Markiert Datensätze als Tombstone im Storage-Sidecar.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @param array $ids Row-IDs.
-     * @return bool true bei Erfolg.
+     * marks data as tombstone im storage-sidecar
+     * @param string $dataFile
+     * @param array $ids
+     * @return bool
      */
     public static function markTombstones(string $dataFile, array $ids): bool {
         $dir = self::storageDir($dataFile);
+
         if (!is_dir($dir . "/free")) @mkdir($dir . "/free", 0777, true);
 
         $freeFile = $dir . "/free/free.json";
         $free = self::readJsonFile($freeFile);
+
         if (empty($free)) {
             $free = ["format" => self::STORAGE_FORMAT, "free_slots" => [], "tombstones" => []];
         }
+
         if (!is_array($free["tombstones"] ?? null)) $free["tombstones"] = [];
 
         foreach ($ids as $id) {
             $id = (int)$id;
+
             if ($id <= 0) continue;
+
             $free["tombstones"][(string)$id] = [
                 "id" => $id,
                 "deleted_at" => time(),
@@ -1290,13 +1429,14 @@ class GBDBStorage {
         $free["reusable_slots"] = count($free["tombstones"]);
 
         self::appendStorageJournal($dataFile, ["op" => "tombstone", "ids" => array_values(array_map("intval", $ids))]);
+
         return self::atomicWrite($freeFile, json_encode($free, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
     }
 
     /**
-     * Prüft die Storage-Sidecar-Dateien und Page-Checksums.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @return array Prüfbericht.
+     * checks storage-sidecar-files and page checksum
+     * @param string $dataFile
+     * @return array{checksum: string, errors: array, format: int, ok: bool, pages: int, rows: int, warnings: array|array{errors: string[], ok: bool, warnings: array}}
      */
     public static function verifyStorage(string $dataFile): array {
         $dir = self::storageDir($dataFile);
@@ -1308,12 +1448,15 @@ class GBDBStorage {
         }
 
         $manifest = self::readJsonFile($dir . "/manifest.json");
+
         if (empty($manifest)) $errors[] = "manifest_missing_or_invalid";
 
         $storageMeta = self::readJsonFile($dir . "/meta/storage.json");
+
         if (empty($storageMeta)) $warnings[] = "storage_meta_missing_or_invalid";
 
         $pointer = self::readJsonFile($dir . "/index/primary.ptr");
+
         if (empty($pointer)) $warnings[] = "primary_pointer_missing_or_invalid";
 
         $pageChecks = is_array($manifest["page_checksums"] ?? null) ? $manifest["page_checksums"] : [];
@@ -1322,18 +1465,21 @@ class GBDBStorage {
 
         foreach ($pageChecks as $pageFile => $expected) {
             $file = $dir . "/data/" . basename((string)$pageFile);
+
             if (!is_file($file)) {
                 $errors[] = "page_missing:" . basename($file);
                 continue;
             }
 
             $page = self::readJsonFile($file);
+
             if (empty($page) || !is_array($page["rows"] ?? null)) {
                 $errors[] = "page_invalid:" . basename($file);
                 continue;
             }
 
             $actual = self::checksum($page["rows"]);
+
             if (!hash_equals((string)$expected, (string)$actual)) {
                 $errors[] = "page_checksum_mismatch:" . basename($file);
             }
@@ -1361,25 +1507,29 @@ class GBDBStorage {
         ];
 
         if (!is_dir($dir . "/repair")) @mkdir($dir . "/repair", 0777, true);
+
         self::atomicWrite($dir . "/repair/last_report.json", json_encode($report, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
         return $report;
     }
 
     /**
-     * Repariert die Sidecar-Storage-Struktur aus den aktuell gültigen Tabellenzeilen.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @param array $rows Tabellenzeilen inklusive Header.
-     * @param array $meta Tabellen-Meta.
-     * @return array Reparaturbericht.
+     * repairs sidecar-storage-files
+     * @param string $dataFile
+     * @param array $rows
+     * @param array $meta
+     * @return array{ok: bool, repaired_at: int, sync: array{checksum: mixed, dir: string, format: int, ok: bool, page_size: int, pages: int, rows: int, verify: array}}
      */
     public static function repairStorage(string $dataFile, array $rows, array $meta = []): array {
         $dir = self::storageDir($dataFile);
+
         if (is_dir($dir . "/tmp")) self::deleteDir($dir . "/tmp");
 
         self::appendStorageJournal($dataFile, ["op" => "repair_start"]);
+
         $sync = self::syncStorage($dataFile, $rows, $meta, "repair");
         $verify = self::verifyStorage($dataFile);
+
         self::appendStorageJournal($dataFile, ["op" => "repair_done", "ok" => (bool)$verify["ok"]]);
 
         $report = [
@@ -1390,22 +1540,25 @@ class GBDBStorage {
         ];
 
         if (!is_dir($dir . "/repair")) @mkdir($dir . "/repair", 0777, true);
+
         self::atomicWrite($dir . "/repair/last_report.json", json_encode($report, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
         return $report;
     }
 
     /**
-     * Bereinigt Storage-Artefakte und baut die Chunk-Dateien neu auf.
-     * @param string $dataFile Hauptdatei der Tabelle.
-     * @param array $rows Tabellenzeilen inklusive Header.
-     * @param array $meta Tabellen-Meta.
-     * @return array Vacuum-Bericht.
+     * cleans storage-artefacts and rebuilds chunk files
+     * @param string $dataFile
+     * @param array $rows
+     * @param array $meta
+     * @return array{checksum: mixed, dir: string, format: int, ok: bool, page_size: int, pages: int, rows: int}
      */
     public static function vacuumStorage(string $dataFile, array $rows, array $meta = []): array {
         $dir = self::storageDir($dataFile);
+
         foreach (glob($dir . "/tmp/*") ?: [] as $tmp) {
             if (is_file($tmp)) @unlink($tmp);
+
             if (is_dir($tmp)) self::deleteDir($tmp);
         }
 
@@ -1417,24 +1570,27 @@ class GBDBStorage {
     }
 
     /**
-     * Liest eine unverschlüsselte JSON-Sidecar-Datei.
-     * @param string $file Datei.
-     * @return array Inhalt.
+     * get decrypted sidecar-storage-json
+     * @param string $file
+     * @return array
      */
+
     private static function readJsonFile(string $file): array {
         if (!is_file($file)) return [];
         $raw = @file_get_contents($file);
+
         if (!is_string($raw) || trim($raw) === "") return [];
         $json = json_decode($raw, true);
+
         return is_array($json) ? $json : [];
     }
 
-
     /**
-     * Synchronisiert ein Verzeichnis, sofern möglich.
-     * @param string $dir Verzeichnis.
+     * syncs a dir if possible
+     * @param string $dir
      * @return void
      */
+
     private static function syncDir(string $dir): void {
         if (!function_exists("fsync")) {
             return;
@@ -1446,5 +1602,7 @@ class GBDBStorage {
             @fsync($handle);
             @fclose($handle);
         }
+
     }
+
 }

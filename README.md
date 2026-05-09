@@ -1,79 +1,93 @@
-# greenbucket® GBDB Framework / SecondServerModul
+# GBDB Framework / SecondServer Module
 
-This package is a PHP 8.1+ framework bundle around GBDB, GreenQL, a developer UI, a public API layer and a remote SecondServer bridge.
+The **GBDB Framework** is a lightweight PHP framework built around a file-based database engine, a custom query language called **GreenQL**, a remote backend interface called **SecondServer**, and a modular public API system.
 
-## What is included
+It is designed for projects that need a simple but powerful backend without requiring a traditional SQL database. The framework includes authentication, session and cookie helpers, JSON/file utilities, routing helpers, API modules, update/licensing plugins, remote database access, and a web-based GreenQL UI.
 
-- **GBDB**: file-based, instance-aware database engine with CRUD, schema handling, indexes, backups, recovery, MVCC/transaction helpers and maintenance APIs.
-- **GreenQL**: a script/query language for GBDB with variables, constants, database commands, function calls, ENV access and script execution.
-- **GBDB UI**: developer interface for databases, GreenQL Studio, scripts, PHP execution, users, plugins, migration, backup, crypt, optimization, enterprise tools and monitoring.
-- **Enterprise Ops**: pattern installation, quotas, rate limits, jobs, queue monitoring, intranet/social patterns and operations helpers.
-- **SecondServer/SrvP**: remote JSON bridge and local service jobs for distributed or separated deployments.
-- **Public API**: controlled JSON endpoints with auth gates for external integrations.
+---
 
-## Quick start
+## What is GBDB?
 
-1. Place the `PHP/` folder in your web root.
-2. Include the framework through:
+**GBDB** stands for **GreenBucket Database**.
 
-```php
-require_once __DIR__ . '/PHP/gbdb_framework/gbdb.php';
-```
+It is a file-based database system that stores data in structured files instead of relying on MySQL, MariaDB, PostgreSQL, or SQLite. GBDB is useful when you want:
 
-3. Configure the project in:
+- a lightweight backend
+- simple deployment
+- no external database server
+- portable project folders
+- isolated instances
+- API-driven data access
+- custom scripting through GreenQL
 
-```text
-PHP/gbdb_framework/.config/.framework.env.php
-```
+The framework supports both a classic GBDB engine and an instance-aware GBDBv2 engine.
 
-4. Open the UI in DEV mode through:
+---
 
-```text
-PHP/gbdb_ui.php
-```
+## Main Features
 
-## Configuration files
+The framework includes:
 
-The framework no longer uses `_config.inc.php`. The active configuration entrypoint is:
+- File-based database engine
+- Instance-based database separation
+- GreenQL query/script language
+- Authentication system
+- JWT-based login sessions
+- 2FA and email verification support
+- Public API with API key permissions
+- Modular public API extensions
+- SecondServer remote backend module
+- Remote database access through `SrvP`
+- Cache, Cookie and Session helpers
+- File, JSON, HTTP and validation helpers
+- mRoot license and update plugin
+- GreenQL UI / Admin interface
+- Optional SQL bridge
+- Documentation and developer recipes
 
-```text
-PHP/gbdb_framework/autoloader.php
-PHP/gbdb_framework/.config/.framework.env.php
-PHP/gbdb_framework/.config/.greenql.env.php
-```
+---
 
-`Vars::db_arch()` controls whether the runtime uses `GBDB` or `SQL` where bridge code supports both modes.
+## Typical Use Cases
 
-## Basic GBDB example
+GBDB is useful for projects such as:
 
-```php
-GBDB::setInstance('demo');
-GBDB::createInstance('demo');
-GBDB::create('main', 'users', true, [
-    'uid' => 'string',
-    'name' => 'string',
-    'active' => 'bool'
-]);
-GBDB::insertData('main', 'users', [
-    'uid' => 'u_1',
-    'name' => 'Max M.',
-    'active' => true
-]);
-$users = GBDB::get('main', 'users');
-```
+- admin panels
+- small to medium web applications
+- API backends
+- file-based CMS systems
+- IoT dashboards
+- internal tools
+- museum or kiosk systems
+- multi-instance applications
+- self-hosted applications
+- lightweight SaaS prototypes
 
-## GreenQL example
+It is especially useful when you want full control over the project folder and do not want to depend on an external database server.
 
-```gql
-GROW INSTANCE demo;
-USE INSTANCE demo;
-GROW BASE main;
-ROOT main;
-GROW TABLE users (uid, name, active);
-SEED users WITH uid="u_1", name="Max M.", active=true;
-PICK * FROM users;
-```
+---
 
-## Documentation
+## Project Structure
 
-Detailed docs are in `docs/`.
+A typical framework project contains:
+
+```txt
+assets/
+└── php/
+    └── inc/
+        ├── .config/
+        │   └── _config.inc.php
+        ├── gbdb_framework/
+        │   ├── ENV.php
+        │   ├── gbdb.php
+        │   ├── core/
+        │   ├── plugins/
+        │   ├── public/
+        │   ├── dev/
+        │   ├── backend.php
+        │   ├── public_api.php
+        │   └── docs/
+        ├── Srv.php
+        └── functions.php
+
+assets/
+└── DB/

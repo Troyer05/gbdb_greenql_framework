@@ -1,8 +1,8 @@
 {
   "name": "greenql-language",
-  "displayName": "greenQL Language Support",
-  "description": "greenQL / GreenQLv2 Language Support massiv erweitert: Parser-nahe Commands, Runtime-Funktionen, typed Tables, Snippets, Hovers, Semantic Highlighting, Symbols, Folding und Diagnostics.",
-  "version": "1.8.0",
+  "displayName": "greenQL Language Support Pro",
+  "description": "greenQL / GreenQLv2 Pro Language Support 2.1.2: präzises Semantic Highlighting, SRV/SecondServer Slash-Calls ohne Fake-Fehler, noch robustere Diagnostics, IntelliSense, Signatures, Hovers, Symbols, Formatter und Snippets.",
+  "version": "2.1.2",
   "publisher": "greenbucket",
   "engines": {
     "vscode": "^1.90.0"
@@ -47,7 +47,7 @@
     ],
     "themes": [
       {
-        "label": "greenQL Bunt",
+        "label": "greenQL Pro Ultra Semantic 2026",
         "uiTheme": "vs-dark",
         "path": "./themes/greenql-bunt-color-theme.json"
       }
@@ -63,8 +63,67 @@
           "other": true,
           "comments": false,
           "strings": false
-        }
+        },
+        "editor.formatOnType": true,
+        "editor.formatOnPaste": true,
+        "editor.wordSeparators": "`~!@#%^&*()=+[{]}\\|;:'\",.<>/?",
+        "files.trimTrailingWhitespace": true
       }
+    },
+    "commands": [
+      {
+        "command": "greenql.insertMegaDemo",
+        "title": "greenQL: Insert Mega Demo Script"
+      },
+      {
+        "command": "greenql.showBuiltins",
+        "title": "greenQL: Show Built-ins Cheat Sheet"
+      },
+      {
+        "command": "greenql.wrapSelectionOutput",
+        "title": "greenQL: Wrap Selection in OUTPUT"
+      },
+      {
+        "command": "greenql.wrapSelectionLog",
+        "title": "greenQL: Wrap Selection in LOG"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "greenql.wrapSelectionOutput",
+          "when": "editorLangId == greenql",
+          "group": "greenql@1"
+        },
+        {
+          "command": "greenql.wrapSelectionLog",
+          "when": "editorLangId == greenql",
+          "group": "greenql@2"
+        },
+        {
+          "command": "greenql.insertMegaDemo",
+          "when": "editorLangId == greenql",
+          "group": "greenql@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "greenql.insertMegaDemo",
+          "when": "editorLangId == greenql"
+        },
+        {
+          "command": "greenql.showBuiltins",
+          "when": "editorLangId == greenql"
+        },
+        {
+          "command": "greenql.wrapSelectionOutput",
+          "when": "editorLangId == greenql"
+        },
+        {
+          "command": "greenql.wrapSelectionLog",
+          "when": "editorLangId == greenql"
+        }
+      ]
     }
   },
   "devDependencies": {

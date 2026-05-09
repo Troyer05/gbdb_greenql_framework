@@ -1,0 +1,33 @@
+{
+    "name": "SRV Backend Initialization",
+    "description": "SRV Backend Structure initializing - used by SRV class",
+    "active": true,
+    "structure": [
+        {
+            "base": "main",
+            "tables": [
+                {
+                    "name": "tokens",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "token",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "exp",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "static",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

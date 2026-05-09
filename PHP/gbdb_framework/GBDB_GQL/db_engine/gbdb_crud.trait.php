@@ -3,9 +3,11 @@
 trait GBDB_CrudTrait {
 
     /**
-     * Erstellt eine Instanz.
-     * @param string $name Übergabewert.
-     * @return bool Rückgabewert.
+     * handles create instance.
+     *
+     * @param string $name value.
+     *
+     * @return bool result.
      */
     public static function createInstance(string $name): bool {
         $name = Format::cleanString($name);
@@ -37,12 +39,13 @@ trait GBDB_CrudTrait {
         return true;
     }
 
-
     /**
-     * Löscht eine Instanz.
-     * @param string $name Übergabewert.
-     * @param bool $force Übergabewert.
-     * @return bool Rückgabewert.
+     * handles delete instance.
+     *
+     * @param string $name value.
+     * @param bool $force value.
+     *
+     * @return bool result.
      */
     public static function deleteInstance(string $name, bool $force = false): bool {
         $name = Format::cleanString($name);
@@ -60,6 +63,7 @@ trait GBDB_CrudTrait {
             foreach ($databases as $database) {
                 self::deleteAll($database);
             }
+
         }
 
         $dirName = Vars::crypt_data()
@@ -68,6 +72,7 @@ trait GBDB_CrudTrait {
 
         if ($dirName === null) {
             self::setInstance($old);
+
             return false;
         }
 
@@ -87,11 +92,13 @@ trait GBDB_CrudTrait {
                     @unlink($path . "/" . $idx);
                     $rest = [];
                 }
+
             }
 
             if (count($rest) === 0) {
                 $ok = @rmdir($path);
             }
+
         }
 
         if ($ok) {
@@ -104,12 +111,6 @@ trait GBDB_CrudTrait {
         return $ok;
     }
 
-
-    /**
-     * Prüft, ob eine Instanz nur intern vom Framework genutzt wird.
-     * @param string $instance Instanzname.
-     * @return bool true bei System-/Default-Instanzen.
-     */
     private static function isInternalInstanceName(string $instance): bool {
         $slug = strtolower(Format::cleanString($instance));
 
@@ -127,9 +128,11 @@ trait GBDB_CrudTrait {
     }
 
     /**
-     * Listet Instanzen aus dem Storage, optional inklusive interner Systeminstanzen.
-     * @param bool $includeSystem true gibt auch Framework-Systeminstanzen zurück.
-     * @return array Rückgabewert.
+     * handles list instances.
+     *
+     * @param bool $includeSystem value.
+     *
+     * @return array result.
      */
     public static function listInstances(bool $includeSystem = false): array {
         $base = Vars::DB_PATH();
@@ -154,6 +157,7 @@ trait GBDB_CrudTrait {
                 if (is_dir($base . $entry)) {
                     $instances[] = $entry;
                 }
+
             }
 
             $instances = $includeSystem ? $instances : array_values(array_filter($instances, fn($i) => !self::isInternalInstanceName((string)$i)));
@@ -169,6 +173,7 @@ trait GBDB_CrudTrait {
             if (is_dir($base . $token)) {
                 $out[] = $plain;
             }
+
         }
 
         $out = $includeSystem ? $out : array_values(array_filter($out, fn($i) => !self::isInternalInstanceName((string)$i)));
@@ -177,15 +182,21 @@ trait GBDB_CrudTrait {
         return $out;
     }
 
-    /** Gibt alle Instanzen inklusive interner Framework-Instanzen zurück. */
+    /**
+     * handles list all instances.
+     *
+     * @return array result.
+     */
     public static function listAllInstances(): array {
         return self::listInstances(true);
     }
 
     /**
-     * Erstellt eine Datenbank innerhalb der aktiven Instanz.
-     * @param string $name Übergabewert.
-     * @return bool Rückgabewert.
+     * handles create database.
+     *
+     * @param string $name value.
+     *
+     * @return bool result.
      */
     public static function createDatabase(string $name): bool {
         $name = Format::cleanString($name);
@@ -219,11 +230,12 @@ trait GBDB_CrudTrait {
         return true;
     }
 
-
     /**
-     * Löscht eine leere Datenbank.
-     * @param string $name Übergabewert.
-     * @return bool Rückgabewert.
+     * handles delete database.
+     *
+     * @param string $name value.
+     *
+     * @return bool result.
      */
     public static function deleteDatabase(string $name): bool {
         $name = Format::cleanString($name);
@@ -259,7 +271,9 @@ trait GBDB_CrudTrait {
                             @unlink($path . "/" . $idx);
                             $rest = [];
                         }
+
                     }
+
                 }
 
                 if (count($rest) === 0) {
@@ -271,19 +285,22 @@ trait GBDB_CrudTrait {
 
                     return $ok;
                 }
+
             }
+
         }
 
         return false;
     }
 
-
     /**
-     * Erstellt eine Tabelle.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $cols Übergabewert.
-     * @return bool Rückgabewert.
+     * handles create table.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $cols value.
+     *
+     * @return bool result.
      */
     public static function createTable(string $database, string $table, array $cols): bool {
         self::createDatabase($database);
@@ -328,6 +345,7 @@ trait GBDB_CrudTrait {
                 if (!GBDBStorage::atomicWrite($appendFile, "")) {
                 return false;
             }
+
             }
 
             return true;
@@ -336,6 +354,7 @@ trait GBDB_CrudTrait {
         if ($res) {
             self::setSchemaTable($database, $table, $cols);
             self::syncStorageForTable($database, $table, "create_table");
+
             if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
             self::autoCompact($database, $table);
         }
@@ -343,14 +362,15 @@ trait GBDB_CrudTrait {
         return $res;
     }
 
-
     /**
-     * Fügt eine Spalte hinzu.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param string $column Übergabewert.
-     * @param mixed $default Übergabewert.
-     * @return bool Rückgabewert.
+     * handles add column.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param mixed $default value.
+     *
+     * @return bool result.
      */
     public static function addColumn(string $database, string $table, string $column, mixed $default = ""): bool {
         $column = trim($column);
@@ -396,6 +416,7 @@ trait GBDB_CrudTrait {
                 if ($key === "id") {
                     $newHeader[$column] = "-header-";
                 }
+
             }
 
             if (!array_key_exists($column, $newHeader)) {
@@ -452,6 +473,7 @@ trait GBDB_CrudTrait {
         if ($res) {
             self::setSchemaTable($database, $table, [$column => $default]);
             self::syncStorageForTable($database, $table, "add_column");
+
             if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
             self::autoCompact($database, $table);
         }
@@ -459,12 +481,13 @@ trait GBDB_CrudTrait {
         return $res;
     }
 
-
     /**
-     * Löscht eine Tabelle.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @return bool Rückgabewert.
+     * handles delete table.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return bool result.
      */
     public static function deleteTable(string $database, string $table): bool {
         $file = self::makePath($database, $table);
@@ -496,9 +519,11 @@ trait GBDB_CrudTrait {
 
                 if (method_exists(static::class, "mvccFile")) {
                     $mvccFile = self::mvccFile($database, $table);
+
                     if (is_file($mvccFile)) @unlink($mvccFile);
                     $mvccDir = dirname($mvccFile);
                     $left = is_dir($mvccDir) ? array_diff(scandir($mvccDir) ?: [], [".", ".."]) : [];
+
                     if (is_dir($mvccDir) && empty($left)) @rmdir($mvccDir);
                 }
 
@@ -507,6 +532,7 @@ trait GBDB_CrudTrait {
                 if (is_file($lockFile)) {
                     @unlink($lockFile);
                 }
+
             }
 
             return $ok;
@@ -514,19 +540,21 @@ trait GBDB_CrudTrait {
 
         if ($res) {
             self::dropSchemaTable($database, $table);
+
             if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
         }
 
         return $res;
     }
 
-
     /**
-     * Fügt Daten ein.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param mixed $data Übergabewert.
-     * @return int Rückgabewert.
+     * handles insert data.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $data value.
+     *
+     * @return int result.
      */
     public static function insertData(string $database, string $table, mixed $data): int {
         if (!is_array($data)) {
@@ -537,7 +565,9 @@ trait GBDB_CrudTrait {
 
         if (method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeInsert", $database, $table, ["data" => $data]);
+
             if (($trigger["ok"] ?? true) === false) return -1;
+
             if (isset($trigger["context"]["data"]) && is_array($trigger["context"]["data"])) $data = $trigger["context"]["data"];
         }
 
@@ -554,6 +584,7 @@ trait GBDB_CrudTrait {
             $id = self::reserveTransactionId($database, $table, $data);
             $data["id"] = $id;
             self::$txOps[] = ["type" => "insert", "instance" => self::getInstance(), "db" => $database, "table" => $table, "data" => $data, "id" => $id];
+
             return $id;
         }
 
@@ -570,6 +601,7 @@ trait GBDB_CrudTrait {
                 if (!self::writeTable($file, $base)) {
                     return -1;
                 }
+
             }
 
             $header = $base[0];
@@ -587,9 +619,11 @@ trait GBDB_CrudTrait {
 
             if (method_exists(static::class, "prepareSchemaRow")) {
                 $schemaPrepared = self::prepareSchemaRow($database, $table, $row, $full, $id, true);
+
                 if (!($schemaPrepared["ok"] ?? false)) {
                     return -1;
                 }
+
                 $row = $schemaPrepared["row"];
             }
 
@@ -622,33 +656,43 @@ trait GBDB_CrudTrait {
 
         if (is_int($res) && $res > 0) {
             if (method_exists(static::class, 'appendReplicationEvent')) self::appendReplicationEvent('insert', ['database' => $database, 'table' => $table, 'id' => $res]);
+
             if (method_exists(static::class, 'recordPartitionStats')) {
                 $insertedRow = self::getData($database, $table, true, "id", $res);
+
                 if (is_array($insertedRow) && !empty($insertedRow)) self::recordPartitionStats($database, $table, $insertedRow);
             }
+
             if (method_exists(static::class, 'rebuildIndexes')) self::rebuildIndexes($database, $table);
             self::syncStorageForTable($database, $table, "insert");
+
             if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
             self::autoCompact($database, $table);
+
             if (method_exists(static::class, 'auditDataChange') || method_exists(static::class, 'runDataTriggers')) {
                 $insertedRow = self::getData($database, $table, true, "id", $res);
+
                 if (method_exists(static::class, 'auditDataChange')) self::auditDataChange('insert', $database, $table, [], is_array($insertedRow) ? $insertedRow : []);
+
                 if (method_exists(static::class, 'runDataTriggers')) self::runDataTriggers('afterInsert', $database, $table, ["id" => $res, "row" => is_array($insertedRow) ? $insertedRow : []]);
+
                 if (method_exists(static::class, 'enqueueEvent')) self::enqueueEvent('insert', $database, $table, ["id" => $res]);
             }
+
         }
 
         return is_int($res) ? $res : -1;
     }
 
-
     /**
-     * Löscht Daten.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param mixed $where Übergabewert.
-     * @param mixed $is Übergabewert.
-     * @return bool Rückgabewert.
+     * handles delete data.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return bool result.
      */
     public static function deleteData(string $database, string $table, mixed $where, mixed $is): bool {
         $file = self::makePath($database, $table);
@@ -659,12 +703,14 @@ trait GBDB_CrudTrait {
 
         if (method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeDelete", $database, $table, ["where" => $where, "is" => $is]);
+
             if (($trigger["ok"] ?? true) === false) return false;
         }
 
         if (self::inTransaction()) {
             if (!self::checkTransactionTimeout()) return false;
             self::$txOps[] = ["type" => "delete", "instance" => self::getInstance(), "db" => $database, "table" => $table, "where" => $where, "is" => $is];
+
             return true;
         }
 
@@ -700,6 +746,7 @@ trait GBDB_CrudTrait {
                     $ids[] = $rid;
                     $beforeRows[$rid] = $row;
                 }
+
             }
 
             if (empty($ids)) {
@@ -712,6 +759,7 @@ trait GBDB_CrudTrait {
 
             if (method_exists(static::class, "beforeRelationDelete")) {
                 $rel = self::beforeRelationDelete($database, $table, array_values($beforeRows));
+
                 if (!($rel["ok"] ?? false)) return false;
             }
 
@@ -727,6 +775,7 @@ trait GBDB_CrudTrait {
                 if (method_exists(static::class, "writeRowVersion")) {
                     self::writeRowVersion($database, $table, $id, "delete", (array)($beforeRows[$id] ?? []), []);
                 }
+
             }
 
             GBDBStorage::markTombstones($file, $ids);
@@ -742,27 +791,33 @@ trait GBDB_CrudTrait {
 
         if ($res) {
             if (method_exists(static::class, 'appendReplicationEvent')) self::appendReplicationEvent('delete', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+
             if (method_exists(static::class, 'rebuildIndexes')) self::rebuildIndexes($database, $table);
             self::syncStorageForTable($database, $table, "delete");
+
             if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
             self::autoCompact($database, $table);
+
             if (method_exists(static::class, 'auditDataChange')) self::auditDataChange('delete', $database, $table, ["where" => $where, "is" => $is], []);
+
             if (method_exists(static::class, 'runDataTriggers')) self::runDataTriggers('afterDelete', $database, $table, ["where" => $where, "is" => $is]);
+
             if (method_exists(static::class, 'enqueueEvent')) self::enqueueEvent('delete', $database, $table, ["where" => $where, "is" => $is]);
         }
 
         return (bool)$res;
     }
 
-
     /**
-     * Bearbeitet Daten.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param mixed $where Übergabewert.
-     * @param mixed $is Übergabewert.
-     * @param mixed $newData Übergabewert.
-     * @return bool Rückgabewert.
+     * handles edit data.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param mixed $newData value.
+     *
+     * @return bool result.
      */
     public static function editData(string $database, string $table, mixed $where, mixed $is, mixed $newData): bool {
         if (!is_array($newData)) {
@@ -777,13 +832,16 @@ trait GBDB_CrudTrait {
 
         if (method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeUpdate", $database, $table, ["where" => $where, "is" => $is, "data" => $newData]);
+
             if (($trigger["ok"] ?? true) === false) return false;
+
             if (isset($trigger["context"]["data"]) && is_array($trigger["context"]["data"])) $newData = $trigger["context"]["data"];
         }
 
         if (self::inTransaction()) {
             if (!self::checkTransactionTimeout()) return false;
             self::$txOps[] = ["type" => "edit", "instance" => self::getInstance(), "db" => $database, "table" => $table, "where" => $where, "is" => $is, "data" => $newData];
+
             return true;
         }
 
@@ -814,6 +872,7 @@ trait GBDB_CrudTrait {
                 if ($hasHeader && array_key_exists($key, $header)) {
                     $set[$key] = $value;
                 }
+
             }
 
             if (empty($set)) {
@@ -834,6 +893,7 @@ trait GBDB_CrudTrait {
                 if (isset($row[$where]) && $row[$where] == $is && isset($row["id"])) {
                     $ids[] = (int)$row["id"];
                 }
+
             }
 
             if (empty($ids)) {
@@ -846,6 +906,7 @@ trait GBDB_CrudTrait {
                 if (is_array($row) && isset($row["id"])) {
                     $rowsById[(int)$row["id"]] = $row;
                 }
+
             }
 
             $meta = self::readMeta($metaFile);
@@ -869,17 +930,23 @@ trait GBDB_CrudTrait {
 
                 if (method_exists(static::class, "prepareSchemaRow")) {
                     $schemaPrepared = self::prepareSchemaRow($database, $table, $after, $full, $id, true);
+
                     if (!($schemaPrepared["ok"] ?? false)) {
                         return false;
                     }
+
                     $after = $schemaPrepared["row"];
                     $set = [];
+
                     foreach ($after as $aKey => $aValue) {
                         if ($aKey === "id") continue;
+
                         if (!array_key_exists($aKey, $before) || $before[$aKey] !== $aValue) {
                             $set[$aKey] = $aValue;
                         }
+
                     }
+
                 }
 
                 if (!GBDBStorage::validateConstraints($full, $after, $meta["constraints"] ?? [], $id)) {
@@ -888,6 +955,7 @@ trait GBDB_CrudTrait {
 
                 if (method_exists(static::class, "afterRelationUpdate")) {
                     $rel = self::afterRelationUpdate($database, $table, [$id => $before], [$id => $after]);
+
                     if (!($rel["ok"] ?? false)) return false;
                 }
 
@@ -903,6 +971,7 @@ trait GBDB_CrudTrait {
                 if (method_exists(static::class, "writeRowVersion")) {
                     self::writeRowVersion($database, $table, $id, "update", $before, $after);
                 }
+
             }
 
             $meta = self::readMeta($metaFile);
@@ -914,27 +983,33 @@ trait GBDB_CrudTrait {
 
         if ($res) {
             if (method_exists(static::class, 'appendReplicationEvent')) self::appendReplicationEvent('edit', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+
             if (method_exists(static::class, 'rebuildIndexes')) self::rebuildIndexes($database, $table);
             self::syncStorageForTable($database, $table, "edit");
+
             if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
             self::autoCompact($database, $table);
+
             if (method_exists(static::class, 'auditDataChange')) self::auditDataChange('update', $database, $table, ["where" => $where, "is" => $is], is_array($newData) ? $newData : []);
+
             if (method_exists(static::class, 'runDataTriggers')) self::runDataTriggers('afterUpdate', $database, $table, ["where" => $where, "is" => $is, "data" => $newData]);
+
             if (method_exists(static::class, 'enqueueEvent')) self::enqueueEvent('update', $database, $table, ["where" => $where, "is" => $is]);
         }
 
         return (bool)$res;
     }
 
-
     /**
-     * Holt Daten.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param bool $filter Übergabewert.
-     * @param mixed $where Übergabewert.
-     * @param mixed $is Übergabewert.
-     * @return mixed Rückgabewert.
+     * handles get data.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param bool $filter value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return mixed result.
      */
     public static function getData(
         string $database,
@@ -965,10 +1040,12 @@ trait GBDB_CrudTrait {
                 foreach ($defs as $definition) {
                     $cols = is_array($definition["columns"] ?? null) ? $definition["columns"] : [];
                     $type = (string)($definition["type"] ?? "");
+
                     if (count($cols) === 1 && (string)$cols[0] === (string)$where && $type !== "fulltext") {
                         $ids = GBDBStorage::advancedIndexLookup($file, $definition, $is);
                         break;
                     }
+
                 }
 
                 if (empty($ids) && in_array((string)$where, $indexes, true)) {
@@ -978,11 +1055,15 @@ trait GBDB_CrudTrait {
                 if (!empty($ids)) {
                     foreach ($full as $i => $row) {
                         if (!is_array($row)) continue;
+
                         if ($i === 0 && self::isHeaderRow($row)) continue;
+
                         if (isset($row["id"]) && in_array((int)$row["id"], $ids, true)) return $row;
                     }
+
                     return [];
                 }
+
             }
 
             $hasHeader = isset($full[0]) && is_array($full[0]) && self::isHeaderRow($full[0]);
@@ -1000,6 +1081,7 @@ trait GBDB_CrudTrait {
                     if (isset($row[$where]) && $row[$where] == $is) {
                         return $row;
                     }
+
                 }
 
                 return [];
@@ -1015,6 +1097,7 @@ trait GBDB_CrudTrait {
 
         if (method_exists(static::class, "withReadLock")) {
             $locked = self::withReadLock("table-file:" . self::lockFileForTable($database, $table), $reader);
+
             return $locked === false ? [] : $locked;
         }
 
@@ -1022,22 +1105,25 @@ trait GBDB_CrudTrait {
     }
 
     /**
-     * Prüft, ob ein Element existiert.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param mixed $where Übergabewert.
-     * @param mixed $is Übergabewert.
-     * @return bool Rückgabewert.
+     * handles element exists.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return bool result.
      */
     public static function elementExists(string $database, string $table, mixed $where, mixed $is): bool {
         $row = self::getData($database, $table, true, $where, $is);
+
         return is_array($row) && !empty($row);
     }
 
-
     /**
-     * Listet Datenbanken der aktiven Instanz.
-     * @return array Rückgabewert.
+     * handles list dbs.
+     *
+     * @return array result.
      */
     public static function listDBs(): array {
         $instancePath = self::instancePath(false);
@@ -1062,6 +1148,7 @@ trait GBDB_CrudTrait {
                 if (is_dir($instancePath . $entry)) {
                     $dirs[] = $entry;
                 }
+
             }
 
             sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
@@ -1082,6 +1169,7 @@ trait GBDB_CrudTrait {
             if (is_dir($instancePath . $token)) {
                 $out[] = $plain;
             }
+
         }
 
         sort($out, SORT_NATURAL | SORT_FLAG_CASE);
@@ -1089,12 +1177,13 @@ trait GBDB_CrudTrait {
         return $out;
     }
 
-
     /**
-     * Listet Tabellen einer Datenbank.
-     * @param string $database Übergabewert.
-     * @param bool $descending Übergabewert.
-     * @return array Rückgabewert.
+     * handles list tables.
+     *
+     * @param string $database value.
+     * @param bool $descending value.
+     *
+     * @return array result.
      */
     public static function listTables(string $database, bool $descending = false): array {
         $database = Format::cleanString($database);
@@ -1177,6 +1266,7 @@ trait GBDB_CrudTrait {
             if (is_file($file)) {
                 $tables[] = $plain;
             }
+
         }
 
         if ($descending) {
@@ -1188,11 +1278,12 @@ trait GBDB_CrudTrait {
         return $tables;
     }
 
-
     /**
-     * Löscht eine komplette Datenbank innerhalb der aktiven Instanz.
-     * @param string $database Übergabewert.
-     * @return bool Rückgabewert.
+     * handles delete all.
+     *
+     * @param string $database value.
+     *
+     * @return bool result.
      */
     public static function deleteAll(string $database): bool {
         $ok = true;
@@ -1203,6 +1294,7 @@ trait GBDB_CrudTrait {
                 $ok = false;
                 break;
             }
+
         }
 
         if (!self::deleteDatabase($database)) {
@@ -1216,12 +1308,13 @@ trait GBDB_CrudTrait {
         return $ok;
     }
 
-
     /**
-     * Gibt die nächste ID zurück.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @return int Rückgabewert.
+     * handles next id.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return int result.
      */
     public static function nextID(string $database, string $table): int {
         $file = self::makePath($database, $table);
@@ -1235,18 +1328,20 @@ trait GBDB_CrudTrait {
 
         $res = self::withTableLock($lockFile, function () use ($metaFile) {
             $meta = self::readMeta($metaFile);
+
             return (int)($meta["last_id"] ?? 0) + 1;
         });
 
         return is_int($res) ? $res : 0;
     }
 
-
     /**
-     * Gibt die Keys einer Tabelle zurück.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @return array Rückgabewert.
+     * handles get keys.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function getKeys(string $database, string $table): array {
         $file = self::makePath($database, $table);
@@ -1259,29 +1354,38 @@ trait GBDB_CrudTrait {
         return array_keys($db[0]);
     }
 
-
     /**
-     * Führt eine GreenQL-Abfrage aus.
-     * @param string $script Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @param array $params Übergabewert.
-     * @return array Rückgabewert.
+     * handles query.
+     *
+     * @param string $script value.
+     * @param array $ctx value.
+     * @param array $params value.
+     *
+     * @return array result.
      */
     public static function query(string $script, array $ctx = [], array $params = []): array {
         $ctx["instance"] = self::instanceName();
+
         return GreenQL::run($script, $ctx, $params);
     }
 
-
     /**
-     * Führt ein GreenQL-Script aus.
-     * @param string $path Übergabewert.
-     * @param array $params Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
+     * handles run script.
+     *
+     * @param string $scriptName value.
+     * @param array $params value.
+     * @param array $ctx value.
+     *
+     * @return array result.
      */
-    public static function runScript(string $path, array $params = [], array $ctx = []): array {
+    public static function runScript(string $scriptName, array $params = [], array $ctx = []): array {
+        if (!str_contains($scriptName, ".gql")) {
+            $scriptName = $scriptName . ".gql";
+        }
+
+        $path = dirname(__DIR__) . "/.DB/.scripts/" . $scriptName;
         $originalPath = $path;
+
         if (!is_file($path)) {
             $rel = str_replace('\\', '/', trim($path));
             $rel = preg_replace('#/+#', '/', $rel) ?? '';
@@ -1304,6 +1408,7 @@ trait GBDB_CrudTrait {
             $scriptRoot = dirname(rtrim(Vars::DB_PATH(), '/')) . '/.scripts';
             $rootReal = realpath($scriptRoot) ?: $scriptRoot;
             $candidates = $rel === '' ? [] : [$scriptRoot . '/' . $rel];
+
             if ($rel !== '' && !str_ends_with(strtolower($rel), '.gql')) $candidates[] = $scriptRoot . '/' . $rel . '.gql';
 
             foreach ($candidates as $candidate) {
@@ -1313,8 +1418,11 @@ trait GBDB_CrudTrait {
                     $path = $candidateReal;
                     break;
                 }
+
             }
+
         }
+
         if (!is_file($path)) {
             return [
                 "ok" => false,
@@ -1359,4 +1467,5 @@ trait GBDB_CrudTrait {
 
         return self::query($script, $ctx, $params);
     }
+
 }

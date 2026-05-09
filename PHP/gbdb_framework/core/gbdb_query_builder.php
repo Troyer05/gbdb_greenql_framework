@@ -2,9 +2,9 @@
 declare(strict_types=1);
 
 /**
- * Developer API für GBDB: kleine, fluente Query-Builder-Fassade.
+ * Developer API for GBDB: short, fluent query builder wrapper.
  *
- * Beispiel:
+ * example:
  * GBDBQueryBuilder::table('main', 'users')
  *   ->where('email', 'demo@example.com')
  *   ->limit(1)
@@ -22,23 +22,27 @@ class GBDBQueryBuilder {
         $qb = new self();
         $qb->database = $database;
         $qb->table = $table;
+
         return $qb;
     }
 
     public function where(string $column, mixed $value, string $operator = '='): self {
         $this->where[] = ['column' => $column, 'operator' => $operator, 'value' => $value];
+
         return $this;
     }
 
     public function orderBy(string $column, string $direction = 'ASC'): self {
         $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
         $this->order[] = ['column' => $column, 'direction' => $direction];
+
         return $this;
     }
 
     public function limit(int $limit, int $offset = 0): self {
         $this->limit = max(0, $limit);
         $this->offset = max(0, $offset);
+
         return $this;
     }
 
@@ -55,6 +59,7 @@ class GBDBQueryBuilder {
                 $left = $a[$order['column']] ?? null;
                 $right = $b[$order['column']] ?? null;
                 $cmp = $left <=> $right;
+
                 return $order['direction'] === 'DESC' ? -$cmp : $cmp;
             });
         }
@@ -73,6 +78,7 @@ class GBDBQueryBuilder {
         $rows = $this->get();
         $this->limit = $oldLimit;
         $this->offset = $oldOffset;
+
         return $rows[0] ?? null;
     }
 
@@ -83,26 +89,33 @@ class GBDBQueryBuilder {
     public function update(array $data): array {
         $rows = $this->get();
         $changed = 0;
+
         foreach ($rows as $row) {
             if (!isset($row['id'])) continue;
+
             if (GBDB::editData($this->database, $this->table, 'id', $row['id'], $data)) $changed++;
         }
+
         return ['ok' => true, 'changed' => $changed];
     }
 
     public function delete(): array {
         $rows = $this->get();
         $deleted = 0;
+
         foreach ($rows as $row) {
             if (!isset($row['id'])) continue;
+
             if (GBDB::deleteData($this->database, $this->table, 'id', $row['id'])) $deleted++;
         }
+
         return ['ok' => true, 'deleted' => $deleted];
     }
 
     private function match(array $row, array $filter): bool {
         $value = $row[$filter['column']] ?? null;
         $needle = $filter['value'];
+
         return match ($filter['operator']) {
             '!=', '<>' => $value != $needle,
             '>', 'gt' => is_numeric($value) && is_numeric($needle) && $value > $needle,
@@ -113,4 +126,5 @@ class GBDBQueryBuilder {
             default => $value == $needle,
         };
     }
+
 }

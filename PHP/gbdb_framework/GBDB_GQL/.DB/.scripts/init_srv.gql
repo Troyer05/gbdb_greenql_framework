@@ -1,0 +1,11 @@
+declare $instance = param("instance");
+declare $pattern = load_pattern("used_by_srv_class");
+
+if (!instance_exists($instance)) {
+    GROW INSTANCE $instance;
+}
+
+USE INSTANCE $instance;
+EXEC PATTERN $pattern;
+
+FILE.BACK true;

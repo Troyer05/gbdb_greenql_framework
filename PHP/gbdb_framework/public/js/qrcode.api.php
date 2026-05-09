@@ -41,22 +41,28 @@
 
                 switch (parameter) {
                     case 'zielurl':
+
                         return ziellink
                     case 'width':
+
                         return width
                     case 'height':
+
                         return height
                     case 'correctlevel':
+
                         return correctlevel
                 }
+
             } else {
                 console.log('Fehler: Parameter ' + parameter + ' fehlt');
             }
+
         } else {
             console.log('Fehler: ? fehlt');
         }
-    }
 
+    }
 
     function lade_seite() {
         var url_string = window.location.href;
@@ -84,17 +90,21 @@
                     } else {
                         $('div#qrcode').html('Kein Korrekturlevel angegeben!');
                     }
+
                 } else {
                     $('div#qrcode').html('Keine Breite und/oder Höhe angegeben!');
                 }
+
             } else {
                 $('div#qrcode').html('');
                 $('div#qrcode').html('Zieladresse zu kurz!');
             }
+
         } else {
             $('div#qrcode').html('');
             $('div#qrcode').html('keine Zieladresse übergeben');
         }
+
     }
 
     function erstelle_qrcode(zielurl, width, height, correctlevel) {
@@ -143,6 +153,7 @@
                 break
             default:
         }
+
     }
 
     $(document).ready(function() {
@@ -169,6 +180,7 @@
         margin: 0px;
         padding: 0px;
     }
+
     </style>
 </head>
 

@@ -26,5 +26,7 @@ class GreenQL {
 }
 
 if (!class_exists("GreenQLv2", false)) { class_alias("GreenQL", "GreenQLv2"); }
+
 if (!class_exists("GreenQLv3", false)) { class_alias("GreenQL", "GreenQLv3"); }
+
 if (!class_exists("GreenQLv4", false)) { class_alias("GreenQL", "GreenQLv4"); }

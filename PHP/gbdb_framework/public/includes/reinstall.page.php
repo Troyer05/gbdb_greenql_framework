@@ -10,9 +10,9 @@ $msg = '';
 $ok = false;
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    if (!GreenQLUIv2Helper::checkCsrf((string)($_POST['csrf'] ?? ''))) {
+    if (!GreenQLUIv2Helper::checkCsrf((string) ($_POST['csrf'] ?? ''))) {
         $msg = 'Ungültiger CSRF Token.';
-    } elseif ((string)($_POST['confirm1'] ?? '') === 'DATEN LÖSCHEN' && (string)($_POST['confirm2'] ?? '') === 'ICH VERSTEHE DAS RISIKO') {
+    } else if ((string) ($_POST['confirm1'] ?? '') === 'DATEN LÖSCHEN' && (string) ($_POST['confirm2'] ?? '') === 'ICH VERSTEHE DAS RISIKO') {
         gbdbui_delete_tree(Vars::DB_PATH());
         @mkdir(Vars::DB_PATH(), 0777, true);
         $msg = 'GBDB Daten wurden gelöscht und der DB-Ordner wurde neu angelegt.';
@@ -20,16 +20,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } else {
         $msg = 'Bestätigungen stimmen nicht. Nichts gelöscht.';
     }
+
 }
+
 ?>
 <!doctype html>
 <html lang="de">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GBDB Re-Install</title>
     <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
 </head>
+
 <body class="gbdbui-dashboard gbdbui-pro">
     <?php gbdbui_nav('reinstall'); ?>
     <main class="gbdbui-wide">
@@ -39,14 +43,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             <p>Gefahrenbereich: löscht alle GBDB-Daten erst nach zwei expliziten Warnbestätigungen.</p>
         </section>
 
-        <?php if ($msg): ?><div class="gbdbui-flash <?= $ok ? 'ok' : 'bad' ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
+        <?php if ($msg): ?>
+            <div class="gbdbui-flash <?= $ok ? 'ok' : 'bad' ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
 
         <section class="gbdbui-page-grid">
             <div class="gbdbui-panel gbdbui-danger-zone span-7">
                 <div class="gbdbui-panel-head">
                     <div>
                         <h2>Endgültig löschen</h2>
-                        <p>Das entfernt Datenbanken, Tabellen, Append-Logs, WALs, Journals und Script-Daten im GBDB-Datenpfad.</p>
+                        <p>Das entfernt Datenbanken, Tabellen, Append-Logs, WALs, Journals und Script-Daten im
+                            GBDB-Datenpfad.</p>
                     </div>
                     <span class="gbdbui-pill bad">irreversibel</span>
                 </div>
@@ -68,7 +74,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             </div>
 
             <div class="gbdbui-panel span-5">
-                <div class="gbdbui-panel-head"><div><h2>Checkliste</h2><p>Vor dem Löschen kurz prüfen.</p></div></div>
+                <div class="gbdbui-panel-head">
+                    <div>
+                        <h2>Checkliste</h2>
+                        <p>Vor dem Löschen kurz prüfen.</p>
+                    </div>
+                </div>
                 <p class="gbdbui-help">1. Backup wurde erstellt und liegt außerhalb des DB-Pfads.</p>
                 <p class="gbdbui-help">2. Kein Live-System nutzt diese Daten gerade produktiv.</p>
                 <p class="gbdbui-help">3. Du willst wirklich einen frischen DB-Ordner.</p>
@@ -77,4 +88,5 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         </section>
     </main>
 </body>
+
 </html>

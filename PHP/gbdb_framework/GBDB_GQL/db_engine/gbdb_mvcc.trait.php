@@ -4,7 +4,6 @@ trait GBDB_MVCCTrait {
     private static string $isolationLevel = 'read_committed';
     private static array $snapshots = [];
 
-    /** Pfad der Version-Datei einer Tabelle. */
     private static function mvccFile(string $database, string $table): string {
         $file = self::makePath($database, $table, true);
         $dir = dirname($file) . '/.mvcc';
@@ -16,7 +15,13 @@ trait GBDB_MVCCTrait {
         return $dir . '/' . basename($file) . '.versions.jsonl';
     }
 
-    /** Setzt das Isolation-Level. */
+    /**
+     * handles isolation level.
+     *
+     * @param string $level value.
+     *
+     * @return string result.
+     */
     public static function isolationLevel(string $level): string {
         $level = strtolower(trim($level));
 
@@ -29,7 +34,11 @@ trait GBDB_MVCCTrait {
         return self::$isolationLevel;
     }
 
-    /** Startet einen Transaction Snapshot. */
+    /**
+     * handles begin snapshot.
+     *
+     * @return string result.
+     */
     public static function beginSnapshot(): string {
         $id = 'snap_' . bin2hex(random_bytes(8));
 
@@ -42,7 +51,13 @@ trait GBDB_MVCCTrait {
         return $id;
     }
 
-    /** Beendet einen Transaction Snapshot. */
+    /**
+     * handles end snapshot.
+     *
+     * @param string $snapshotId value.
+     *
+     * @return bool result.
+     */
     public static function endSnapshot(string $snapshotId): bool {
         if (!isset(self::$snapshots[$snapshotId])) {
             return false;
@@ -53,17 +68,19 @@ trait GBDB_MVCCTrait {
         return true;
     }
 
-    /** Aktive Snapshots für alte Row-Versionen. */
+    /**
+     * handles transaction snapshots.
+     *
+     * @return array result.
+     */
     public static function transactionSnapshots(): array {
         return array_values(self::$snapshots);
     }
 
-    /** Aktuelle Row-Version bestimmen. */
     private static function nextRowVersion(array $row): int {
         return max((int)($row['_gbdb_version'] ?? 0), (int)($row['_gbdb_revision'] ?? 0)) + 1;
     }
 
-    /** Schreibt eine Row-Version in die Version-Chain. */
     private static function writeRowVersion(
         string $database,
         string $table,
@@ -101,7 +118,15 @@ trait GBDB_MVCCTrait {
         );
     }
 
-    /** Liefert Version Chain pro Row. */
+    /**
+     * handles row versions.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $rowId value.
+     *
+     * @return array result.
+     */
     public static function rowVersions(string $database, string $table, int $rowId): array {
         $file = self::mvccFile($database, $table);
 
@@ -131,14 +156,6 @@ trait GBDB_MVCCTrait {
         return $out;
     }
 
-    /**
-     * Rekonstruiert die sichtbare Row-Version zu einem Snapshot-Zeitpunkt.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @param array $row aktuelle Row.
-     * @param float $snapshotTs Snapshot-Zeitpunkt.
-     * @return array|null Sichtbare Row oder null.
-     */
     private static function visibleRowAtSnapshot(string $database, string $table, array $row, float $snapshotTs): ?array {
         $created = (float)($row['_gbdb_visible_from'] ?? 0);
 
@@ -161,19 +178,12 @@ trait GBDB_MVCCTrait {
                 $after = $version['after'] ?? [];
                 $visible = is_array($after) && !empty($after) ? $after : null;
             }
+
         }
 
         return $visible;
     }
 
-    /**
-     * Wendet Snapshot-Sichtbarkeit inklusive Version-Chain-Rekonstruktion an.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @param array $rows Zeilen.
-     * @param string|null $snapshotId Snapshot-ID.
-     * @return array Sichtbare Zeilen.
-     */
     private static function applySnapshotVisibility(string $database, string $table, array $rows, ?string $snapshotId = null): array {
         if ($snapshotId === null || !isset(self::$snapshots[$snapshotId])) {
             return $rows;
@@ -193,12 +203,12 @@ trait GBDB_MVCCTrait {
             if ($visible !== null) {
                 $out[] = $visible;
             }
+
         }
 
         return array_values($out);
     }
 
-    /** MVCC Sichtbarkeitsregeln für Read Committed / Snapshot / Repeatable Read. */
     private static function applyVisibilityRules(array $rows, ?string $snapshotId = null): array {
         if ($snapshotId === null || !isset(self::$snapshots[$snapshotId])) {
             return $rows;
@@ -216,12 +226,24 @@ trait GBDB_MVCCTrait {
             if ($created > 0 && $created > $visibleTs) {
                 unset($rows[$i]);
             }
+
         }
 
         return array_values($rows);
     }
 
-    /** MVCC-Daten lesen. Ohne Snapshot entspricht es Read Committed. */
+    /**
+     * handles get data snapshot.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param null|string $snapshotId value.
+     * @param bool $filter value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return mixed result.
+     */
     public static function getDataSnapshot(
         string $database,
         string $table,
@@ -243,6 +265,7 @@ trait GBDB_MVCCTrait {
                 if (is_array($row) && isset($row[$where]) && $row[$where] == $is) {
                     return $row;
                 }
+
             }
 
             return [];
@@ -251,7 +274,18 @@ trait GBDB_MVCCTrait {
         return $rows;
     }
 
-    /** Optimistic Locking: prüft erwartete Version/Revision einer Row. */
+    /**
+     * handles optimistic edit data.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param array $newData value.
+     * @param int $expectedVersion value.
+     *
+     * @return bool result.
+     */
     public static function optimisticEditData(
         string $database,
         string $table,
@@ -275,12 +309,29 @@ trait GBDB_MVCCTrait {
         return self::editData($database, $table, $where, $is, $newData);
     }
 
-    /** Pessimistic Locking Vorbereitung für direkte Nutzung. */
+    /**
+     * handles pessimistic row lock.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $rowId value.
+     * @param int $timeoutMs value.
+     *
+     * @return string|false result.
+     */
     public static function pessimisticRowLock(string $database, string $table, int $rowId, int $timeoutMs = 0): string|false {
         return self::lockRow($database, $table, $rowId, 'write', $timeoutMs);
     }
 
-    /** Entfernt alte Versionen, behält aber Versionen aktiver Snapshots. */
+    /**
+     * handles cleanup row versions.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $keepSeconds value.
+     *
+     * @return array result.
+     */
     public static function cleanupRowVersions(string $database, string $table, int $keepSeconds = 3600): array {
         $file = self::mvccFile($database, $table);
 
@@ -328,10 +379,12 @@ trait GBDB_MVCCTrait {
     }
 
     /**
-     * Gibt die vollständige Version-Chain einer Tabelle gruppiert nach Row-ID zurück.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @return array Version-Chain.
+     * handles version chains.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function versionChains(string $database, string $table): array {
         $file = self::mvccFile($database, $table);
@@ -374,20 +427,24 @@ trait GBDB_MVCCTrait {
     }
 
     /**
-     * Führt Garbage Collection für alte MVCC-Versionen einer Tabelle aus.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @param int $keepSeconds Mindest-Aufbewahrung in Sekunden.
-     * @return array Bericht.
+     * handles garbage collect versions.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $keepSeconds value.
+     *
+     * @return array result.
      */
     public static function garbageCollectVersions(string $database, string $table, int $keepSeconds = 3600): array {
         return self::cleanupRowVersions($database, $table, $keepSeconds);
     }
 
     /**
-     * Führt MVCC-Cleanup für alle Tabellen der aktiven Instanz aus.
-     * @param int $keepSeconds Mindest-Aufbewahrung in Sekunden.
-     * @return array Bericht.
+     * handles mvcc cleanup.
+     *
+     * @param int $keepSeconds value.
+     *
+     * @return array result.
      */
     public static function mvccCleanup(int $keepSeconds = 3600): array {
         $report = [
@@ -407,15 +464,18 @@ trait GBDB_MVCCTrait {
                 if (!($res['ok'] ?? false)) {
                     $report['ok'] = false;
                 }
+
             }
+
         }
 
         return $report;
     }
 
     /**
-     * Testet konsistente Snapshot-Reads während Schreiboperationen.
-     * @return array Testbericht.
+     * handles test consistent reads.
+     *
+     * @return array result.
      */
     public static function testConsistentReads(): array {
         $oldInstance = self::getInstance();
@@ -450,9 +510,11 @@ trait GBDB_MVCCTrait {
     }
 
     /**
-     * Einfacher MVCC-Lasttest ohne externe Abhängigkeiten.
-     * @param int $writes Anzahl Writes.
-     * @return array Bericht.
+     * handles mvcc load test.
+     *
+     * @param int $writes value.
+     *
+     * @return array result.
      */
     public static function mvccLoadTest(int $writes = 100): array {
         $writes = max(1, min(5000, $writes));
@@ -488,7 +550,14 @@ trait GBDB_MVCCTrait {
         ];
     }
 
-    /** MVCC-Statistiken. */
+    /**
+     * handles mvcc stats.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function mvccStats(string $database, string $table): array {
         $file = self::mvccFile($database, $table);
         $lines = is_file($file)
@@ -503,4 +572,5 @@ trait GBDB_MVCCTrait {
             'active_snapshots' => count(self::$snapshots)
         ];
     }
+
 }

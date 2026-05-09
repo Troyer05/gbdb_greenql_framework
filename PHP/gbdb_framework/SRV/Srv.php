@@ -1,459 +1,447 @@
 <?php
 
 class Srv {
+    public static array $body = [];
+    public static string $tmpInstance = "";
+
+    private const FUNCTIONS = [
+        "ping" => "ping",
+        "get_data" => "getData",
+        "register_user" => "registerUser",
+        "login_user" => "login",
+        "logout_user" => "logout",
+        "init" => "init_auth",
+        "verify_email" => "verifyEmail",
+        "verify_2fa_code" => "verify2fa",
+        "get_engine_driver" => "driver"
+    ];
+
+    private const JOB_FUNCTIONS = [
+        "start_job",
+        "list_jobs"
+    ];
+
     /**
-     * Liefert den aktiven DB-Treiber für optionale GBDB-Instanz-Kontexte.
-     * @param array $ctx Übergabewert.
-     * @return string Rückgabewert.
+     * ensures srv-system instance
+     *
+     * @return void
      */
-    private static function driver(array $ctx = []): string {
-        if (function_exists("DB_DRIVER")) {
-            return DB_DRIVER($ctx);
-        }
-
-        if (!empty($ctx["instance"]) && class_exists("GBDB")) {
-            GBDB::setInstance((string)$ctx["instance"]);
-            return "GBDB";
-        }
-
-        return "GBDB";
+    public static function ensureInstance(): void {
+        GBDB::runScript("used_by_srv_class.gql", ["instance" => self::instance()]);
+        Ref::this_file();
     }
 
     /**
-     * Stellt die SRV Tabellen sicher.
-     * @param array $ctx Übergabewert.
-     * @return void Rückgabewert.
+     * initializes backend api for secondserver module
+     *
+     * @return void
      */
-    private static function ensureTables(array $ctx = []): void {
-        $driver = self::driver($ctx);
+    public static function init(): void {
+        self::ensureInstance();
 
-        if (!in_array("main", $driver::listDBs(), true)) {
-            $driver::createDatabase("main");
+        if (($_SERVER["REQUEST_METHOD"] ?? "") != "POST") {
+            self::respond(403, "request method blocked");
         }
 
-        if (!in_array("srv_jobs", $driver::listTables("main"), true)) {
-            $driver::createTable("main", "srv_jobs", [
-                "service",
-                "action",
-                "payload",
-                "status",
-                "created",
-                "started_at",
-                "finished_at",
-                "error_msg"
-            ]);
+        $json = file_get_contents("php://input");
+
+        if ($json === false || trim($json) == "") {
+            self::respond(400, "empty request body");
         }
+
+        $body = json_decode($json, true);
+
+        if (!is_array($body)) {
+            self::respond(400, "invalid json body");
+        }
+
+        self::$body = $body;
+
+        self::testParams(["do", "static_auth"]);
+        self::authenticate((string)self::$body["static_auth"], (string)self::$body["do"]);
+        self::applyRequestInstance();
+
+        foreach (self::FUNCTIONS as $key => $function) {
+            if (self::$body["do"] == $key) {
+                if (!class_exists("SrvFunctions") || !method_exists("SrvFunctions", $function)) {
+                    self::respond(500, "srv function not found: " . $function);
+                }
+
+                SrvFunctions::{$function}();
+
+                exit;
+            }
+        }
+
+        if (in_array((string)self::$body["do"], self::JOB_FUNCTIONS, true)) {
+            if (self::$body["do"] == "start_job") {
+                self::runJob();
+            }
+
+            if (self::$body["do"] == "list_jobs") {
+                self::listJobs();
+            }
+
+            exit;
+        }
+
+        self::respond(404, "unknown action: " . self::$body["do"]);
     }
 
     /**
-     * Normalisiert einen Script-Pfad relativ zum Projekt-Root des Backends.
-     * @param string $path Übergabewert.
-     * @return string Rückgabewert.
+     * sets temporary target instance
+     *
+     * @param string $instance
+     * @return void
      */
-    private static function scriptPath(string $path): string {
-        $path = trim($path);
-        $path = str_replace("\\", "/", $path);
-        $path = preg_replace('#/+#', '/', $path) ?? $path;
+    public static function setInstance(string $instance): void {
+        $instance = trim($instance);
 
-        if ($path === "") {
-            return "";
+        if ($instance == "") {
+            self::respond(403, "instance is empty");
         }
 
-        if (preg_match('#(^|/)\.\.(/|$)#', $path)) {
-            return "";
+        if (!GBDB::existsInstance($instance)) {
+            self::respond(403, "instance " . $instance . " not found");
         }
 
-        if (is_file($path)) {
-            return $path;
-        }
+        self::$tmpInstance = $instance;
 
-        $root = dirname(__DIR__, 3);
-        $candidate = $root . "/" . ltrim($path, "/");
-
-        if (is_file($candidate)) {
-            return $candidate;
-        }
-
-        return $candidate;
+        GBDB::setInstance($instance);
     }
 
     /**
-     * Verarbeitet die Funktion enqueue.
-     * @param string $service Übergabewert.
-     * @param string $action Übergabewert.
-     * @param array $payload Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return mixed Rückgabewert.
+     * returns json response
+     *
+     * @param int $status
+     * @param mixed $data
+     * @return void
      */
-    public static function enqueue(string $service, string $action, array $payload = [], array $ctx = []) {
-        self::ensureTables($ctx);
-        $driver = self::driver($ctx);
+    public static function respond(int $status, mixed $data): void {
+        header("Content-Type: application/json; charset=utf-8");
+        http_response_code($status);
 
-        $job = [
-            "service" => $service,
-            "action" => $action,
-            "payload" => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            "status" => "pending",
-            "created" => date("Y-m-d H:i:s"),
-            "started_at" => "",
-            "finished_at" => "",
-            "error_msg" => ""
+        $response = [
+            "ok" => ($status >= 200 && $status < 300),
+            "status" => $status,
+            "data" => $data
         ];
 
-        return $driver::insertData("main", "srv_jobs", $job);
+        die(json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
     /**
-     * Verarbeitet die Funktion get jobs.
-     * @param array $ctx Übergabewert.
-     * @return mixed Rückgabewert.
+     * validates request parameters
+     *
+     * @param array $params
+     * @return void
      */
-    public static function getJobs(array $ctx = []) {
-        self::ensureTables($ctx);
-        $driver = self::driver($ctx);
-        return $driver::getData("main", "srv_jobs");
+    public static function testParams(array $params): void {
+        foreach ($params as $param) {
+            if (!isset(self::$body[$param])) {
+                self::respond(403, "parameter " . $param . " not found");
+            }
+        }
     }
 
-    /**
-     * Verarbeitet die Funktion get job.
-     * @param int $id Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return mixed Rückgabewert.
-     */
-    public static function getJob(int $id, array $ctx = []) {
-        self::ensureTables($ctx);
-
-        $driver = self::driver($ctx);
-        $job = $driver::getData("main", "srv_jobs", true, "id", (string)$id);
-
-        return $job[0] ?? $job;
+    private static function instance(): string {
+        return Vars::srvp_sys_instance();
     }
 
-    /**
-     * Führt ein Script aus und gibt das Ergebnis zurück.
-     * @param string $path Übergabewert.
-     * @param array $params Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function runScript(string $path, array $params = [], array $ctx = []): array {
-        $file = self::scriptPath($path);
+    private static function modulePath(): string {
+        return __DIR__ . "/srv_modules";
+    }
 
-        if ($file === "" || !is_file($file)) {
-            return [
-                "ok" => false,
-                "msg" => "Script not found on backend: " . $path
-            ];
+    private static function applyRequestInstance(): void {
+        if (!isset(self::$body["instance"])) {
+            return;
         }
 
-        if (!is_readable($file)) {
-            return [
-                "ok" => false,
-                "msg" => "Script not readable on backend: " . $path
-            ];
+        self::setInstance((string)self::$body["instance"]);
+    }
+
+    private static function toggleInstance(bool $switchToTmpInstance = false): void {
+        if ($switchToTmpInstance) {
+            if (self::$tmpInstance != "") {
+                GBDB::setInstance(self::$tmpInstance);
+            }
+
+            return;
         }
 
-        $script = file_get_contents($file);
+        GBDB::setInstance(self::instance());
+    }
 
-        if ($script === false) {
-            return [
-                "ok" => false,
-                "msg" => "Script could not be read on backend: " . $path
-            ];
+    private static function expires(): string {
+        return (string)(time() + 300);
+    }
+
+    private static function expired(string $time): bool {
+        if ($time == "") {
+            return true;
         }
 
-        return [
-            "ok" => true,
-            "path" => $file,
-            "result" => DB_QUERY($script, $ctx, $params)
+        return ((int)$time) < time();
+    }
+
+    private static function authenticate(string $staticAuth, string $do): void {
+        if (!hash_equals(Vars::srvp_static_key(), $staticAuth)) {
+            self::respond(403, "static authentification failed");
+        }
+
+        if ($do == "start_session(srvp.init)") {
+            self::newToken();
+        }
+
+        self::testParams(["tmp_token"]);
+        self::checkToken((string)self::$body["tmp_token"]);
+    }
+
+    private static function newToken(): void {
+        self::toggleInstance();
+
+        do {
+            $retry = false;
+            $token = bin2hex(random_bytes(32));
+            $exists = GBDB::get("main", "tokens", true, "token", $token);
+
+            if (!empty($exists)) {
+                $retry = true;
+            }
+        } while ($retry);
+
+        $exp = self::expires();
+
+        $obj = [
+            "token" => $token,
+            "exp" => $exp,
+            "created_at" => (string)time()
         ];
-    }
 
-    /**
-     * Verarbeitet Auth-Aktionen.
-     * @param string $action Übergabewert.
-     * @param array $body Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth(string $action, array $body): array {
-        try {
-            if ($action == "init") {
-                return Auth::initRemote();
-            }
+        $tokens = GBDB::get("main", "tokens");
 
-            if ($action == "login") {
-                return Auth::loginRemote($body["username_or_email"] ?? "", $body["plain_text_password"] ?? "");
-            }
-
-            if ($action == "login_2fa") {
-                return Auth::login2FaRemote($body["uid"] ?? "", $body["code"] ?? "");
-            }
-
-            if ($action == "token") {
-                return Auth::authByToken($body["jwt"] ?? "");
-            }
-
-            if ($action == "me") {
-                $jwt = $body["jwt"] ?? "";
-                $auth = $jwt !== "" ? Auth::authByToken($jwt) : [];
-
-                if (empty($auth["ok"])) {
-                    return ["ok" => false, "msg" => "Not authenticated"];
+        if (is_array($tokens)) {
+            foreach ($tokens as $t) {
+                if (!isset($t["exp"], $t["token"])) {
+                    continue;
                 }
 
-                return ["ok" => true, "user" => Auth::user((string)($auth["uid"] ?? ""))];
-            }
-
-            if ($action == "get") {
-                $table = $body["table"] ?? "";
-
-                if ($table == "") {
-                    return ["ok" => false, "msg" => "Table not provided"];
+                if (self::expired((string)$t["exp"])) {
+                    GBDB::delete("main", "tokens", "token", $t["token"]);
                 }
-
-                if (($body["where"] ?? "") != "") {
-                    return [
-                        "ok" => true,
-                        "data" => Auth::get($table, $body["where"], $body["is"] ?? "")
-                    ];
-                }
-
-                return [
-                    "ok" => true,
-                    "data" => Auth::get($table)
-                ];
             }
-
-            if ($action == "user") {
-                return [
-                    "ok" => true,
-                    "user" => Auth::user($body["uid"] ?? "")
-                ];
-            }
-
-            if ($action == "new_user") {
-                $err = Auth::newUser(
-                    is_array($body["user_data"] ?? null) ? $body["user_data"] : [],
-                    is_array($body["user_meta"] ?? null) ? $body["user_meta"] : [],
-                    (bool)($body["is_this_register"] ?? false)
-                );
-
-                return [
-                    "ok" => $err == "",
-                    "msg" => $err
-                ];
-            }
-
-            if ($action == "edit_user") {
-                $err = Auth::editUser(
-                    $body["uid"] ?? "",
-                    is_array($body["user_data"] ?? null) ? $body["user_data"] : [],
-                    is_array($body["user_meta"] ?? null) ? $body["user_meta"] : []
-                );
-
-                return [
-                    "ok" => $err == "",
-                    "msg" => $err
-                ];
-            }
-
-            if ($action == "delete") {
-                Auth::delete($body["table"] ?? "", $body["where"] ?? "", $body["is"] ?? "");
-
-                return [
-                    "ok" => true,
-                    "msg" => "Deleted"
-                ];
-            }
-
-            if ($action == "logout") {
-                $jwt = $body["jwt"] ?? "";
-
-                if ($jwt !== "") {
-                    Auth::delete("jwt", "token", $jwt);
-                }
-
-                return [
-                    "ok" => true,
-                    "msg" => "Logged out"
-                ];
-            }
-
-            if ($action == "verify_email") {
-                return [
-                    "ok" => Auth::verifyEmail($body["token"] ?? "")
-                ];
-            }
-
-            if ($action == "verify_2fa") {
-                return [
-                    "ok" => Auth::verify2FaCode($body["code"] ?? "")
-                ];
-            }
-
-            return [
-                "ok" => false,
-                "msg" => "Unknown auth action: " . $action
-            ];
-        } catch (Throwable $e) {
-            return [
-                "ok" => false,
-                "msg" => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Verarbeitet die Funktion run one.
-     * @param int $id Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function runOne(int $id, array $ctx = []): array {
-        self::ensureTables($ctx);
-
-        $driver = self::driver($ctx);
-        $job = self::getJob($id, $ctx);
-
-        if (!$job || !isset($job["service"])) {
-            return ["error" => "Job not found"];
         }
 
-        $service = $job["service"];
-        $action = $job["action"];
-        $payload = json_decode($job["payload"] ?? "[]", true) ?: [];
+        GBDB::insert("main", "tokens", $obj);
+        self::toggleInstance(true);
 
-        self::log($id, "info", "Run job #$id: service=$service action=$action");
-
-        $driver::editData("main", "srv_jobs", "id", (string)$id, [
-            "status" => "running",
-            "started_at" => date("Y-m-d H:i:s")
+        self::respond(200, [
+            "token" => $token,
+            "exp" => $exp
         ]);
+    }
 
-        $module = self::loadModule($service);
-
-        if (!$module) {
-            self::log($id, "error", "Module '$service' konnte nicht geladen werden");
-            return ["error" => "Module '$service' not found"];
+    private static function checkToken(string $token): void {
+        if ($token == "") {
+            self::respond(403, "srv-authentification failed");
         }
 
-        if (!method_exists($module, $action)) {
-            self::log($id, "error", "Action '$action' in Modul '" . get_class($module) . "' nicht gefunden");
-            return ["error" => "Action '$action' not found in module"];
+        self::toggleInstance();
+
+        $row = GBDB::get("main", "tokens", true, "token", $token);
+
+        if (empty($row) || !is_array($row)) {
+            self::respond(403, "srv-authentification failed");
         }
 
-        try {
-            self::log($id, "debug", "Starte Action '$action'", $payload);
-            $result = $module->$action($payload, $job);
-            self::log($id, "success", "Job #$id erfolgreich beendet", $result);
+        if (!isset($row["exp"], $row["token"]) || self::expired((string)$row["exp"])) {
+            if (isset($row["token"])) {
+                GBDB::delete("main", "tokens", "token", $row["token"]);
+            }
 
-            $driver::editData("main", "srv_jobs", "id", (string)$id, [
-                "status" => "done",
-                "finished_at" => date("Y-m-d H:i:s")
-            ]);
+            self::respond(403, "srv-token expired");
+        }
 
-            return ["ok" => true, "result" => $result];
-        } catch (Throwable $e) {
-            self::log($id, "error", "Exception: " . $e->getMessage(), $e->getTraceAsString());
+        GBDB::delete("main", "tokens", "token", $row["token"]);
+        self::toggleInstance(true);
+    }
 
-            $driver::editData("main", "srv_jobs", "id", (string)$id, [
-                "status" => "failed",
-                "error_msg" => $e->getMessage(),
-                "finished_at" => date("Y-m-d H:i:s")
-            ]);
+    private static function loadJobModules(): void {
+        $path = self::modulePath();
 
-            return ["error" => $e->getMessage()];
+        if (!is_dir($path)) {
+            self::respond(500, "srv module path not found");
+        }
+
+        $helper = $path . "/SRVJob.php";
+
+        if (is_file($helper)) {
+            require_once $helper;
+        }
+
+        $files = glob($path . "/*.php");
+
+        if (!is_array($files)) {
+            return;
+        }
+
+        foreach ($files as $file) {
+            if (!is_file($file)) {
+                continue;
+            }
+
+            if (basename($file) == "SRVJob.php") {
+                continue;
+            }
+
+            require_once $file;
         }
     }
 
-    /**
-     * Verarbeitet die Funktion load module.
-     * @param string $service Übergabewert.
-     * @return mixed Rückgabewert.
-     */
-    public static function loadModule(string $service) {
-        $service = preg_replace('/[^a-zA-Z0-9_\-]/', '', $service) ?? '';
-        $file = __DIR__ . "/srv_modules/" . ucfirst($service) . ".php";
-        $class = "Srv_" . ucfirst($service);
+    private static function normalizeJobClass(string $job): string {
+        $job = trim($job);
 
-        if (!file_exists($file)) {
-            return null;
+        if ($job == "") {
+            self::respond(400, "job is empty");
         }
 
-        require_once $file;
-
-        if (!class_exists($class)) {
-            return null;
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $job)) {
+            self::respond(400, "invalid job name");
         }
 
-        return new $class();
+        if (!str_starts_with($job, "SRVJob_")) {
+            $job = "SRVJob_" . $job;
+        }
+
+        return $job;
     }
 
-    /**
-     * Verarbeitet die Funktion log.
-     * @param int $jobId Übergabewert.
-     * @param string $level Übergabewert.
-     * @param string $message Übergabewert.
-     * @param mixed $extra Übergabewert.
-     * @return mixed Rückgabewert.
-     */
-    public static function log(int $jobId, string $level, string $message, $extra = null) {
-        $dir = __DIR__ . "/../.logs/srv/";
+    private static function resolveJobClass(string $job): string {
+        self::loadJobModules();
 
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
+        $class = self::normalizeJobClass($job);
+
+        if (class_exists($class, false)) {
+            return $class;
         }
 
-        $file = $dir . $jobId . ".log";
-
-        $entry = [
-            "time" => date("Y-m-d H:i:s"),
-            "level" => $level,
-            "msg" => $message
-        ];
-
-        if ($extra !== null) {
-            $entry["extra"] = $extra;
-        }
-
-        file_put_contents($file, json_encode($entry, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
-    }
-
-    /**
-     * Verarbeitet die Funktion logs.
-     * @param int $jobId Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function logs(int $jobId): array {
-        $file = __DIR__ . "/../.logs/srv/" . $jobId . ".log";
-
-        if (!is_file($file)) {
-            return [];
-        }
-
-        $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
-        $entries = [];
-
-        foreach ($lines as $line) {
-            $entry = json_decode($line, true);
-
-            if (is_array($entry)) {
-                $entries[] = $entry;
+        foreach (get_declared_classes() as $declaredClass) {
+            if (strtolower($declaredClass) == strtolower($class)) {
+                return $declaredClass;
             }
         }
 
-        return $entries;
+        self::respond(404, "srv job not found: " . $job);
+
+        return "";
     }
 
-    /**
-     * Verarbeitet die Funktion module log.
-     * @param int $jobId Übergabewert.
-     * @param string $level Übergabewert.
-     * @param string $message Übergabewert.
-     * @param mixed $extra Übergabewert.
-     * @return mixed Rückgabewert.
-     */
-    public static function moduleLog(int $jobId, string $level, string $message, $extra = null) {
-        self::log($jobId, $level, $message, $extra);
+    private static function getJobClasses(): array {
+        self::loadJobModules();
+
+        $jobs = [];
+
+        foreach (get_declared_classes() as $class) {
+            if (!str_starts_with($class, "SRVJob_")) {
+                continue;
+            }
+
+            if (!method_exists($class, "__start_job")) {
+                continue;
+            }
+
+            $jobs[] = [
+                "class" => $class,
+                "job" => substr($class, strlen("SRVJob_")),
+                "starter" => "__start_job"
+            ];
+        }
+
+        return $jobs;
+    }
+
+    private static function getJobParameters(): array {
+        if (isset(self::$body["parameters"]) && is_array(self::$body["parameters"])) {
+            return self::$body["parameters"];
+        }
+
+        if (isset(self::$body["params"]) && is_array(self::$body["params"])) {
+            return self::$body["params"];
+        }
+
+        return [];
+    }
+
+    private static function listJobs(): void {
+        self::respond(200, [
+            "path" => self::modulePath(),
+            "jobs" => self::getJobClasses()
+        ]);
+    }
+
+    private static function runJob(): void {
+        self::testParams(["job"]);
+
+        $class = self::resolveJobClass((string)self::$body["job"]);
+
+        if (!method_exists($class, "__start_job")) {
+            self::respond(500, "srv job starter not found: " . $class . "::__start_job");
+        }
+
+        $parameters = self::getJobParameters();
+
+        if (class_exists("SRVJob") && method_exists("SRVJob", "setParams")) {
+            SRVJob::setParams($parameters);
+        }
+
+        try {
+            $method = new ReflectionMethod($class, "__start_job");
+
+            if (!$method->isPublic()) {
+                self::respond(500, "srv job starter must be public: " . $class . "::__start_job");
+            }
+
+            ob_start();
+
+            if ($method->getNumberOfParameters() > 0) {
+                if ($method->isStatic()) {
+                    $result = $method->invoke(null, $parameters);
+                } else {
+                    $object = new $class();
+                    $result = $method->invoke($object, $parameters);
+                }
+            } else {
+                if ($method->isStatic()) {
+                    $result = $method->invoke(null);
+                } else {
+                    $object = new $class();
+                    $result = $method->invoke($object);
+                }
+            }
+
+            $output = ob_get_clean();
+
+            self::respond(200, [
+                "job" => (string)self::$body["job"],
+                "class" => $class,
+                "started" => date("Y-m-d H:i:s"),
+                "parameters" => $parameters,
+                "result" => $result,
+                "output" => $output
+            ]);
+        } catch (Throwable $e) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            self::respond(500, [
+                "error" => "srv job failed",
+                "job" => (string)self::$body["job"],
+                "class" => $class,
+                "message" => $e->getMessage()
+            ]);
+        }
     }
 }
+
+?>

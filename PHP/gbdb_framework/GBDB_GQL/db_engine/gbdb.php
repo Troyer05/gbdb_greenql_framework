@@ -71,15 +71,11 @@ class GBDB {
     }
 
     /**
-     * Aktualisiert GBDB auf die neue zentrale Struktur.
+     * handles update.
      *
-     * - legt .DB/.system, .storage, .scripts und .temp an
-     * - übernimmt alte assets/DB/GBDB-Daten nach .DB/.storage/default
-     * - übernimmt alte scripts/greenql-Dateien nach .DB/.scripts
-     * - führt schema.json/schema_v2.json in .DB/.system/schema.json zusammen
+     * @param null|string $pathOfOldDB value.
      *
-     * Vorhandene neue Dateien werden nicht überschrieben.
-     * @return array Update-Bericht.
+     * @return array result.
      */
     public static function update(?string $pathOfOldDB = null): array {
         $root = self::rootPath();
@@ -89,12 +85,15 @@ class GBDB {
 
         foreach ([".system", ".storage", ".storage/default", ".scripts", ".temp", ".temp/locks", ".backups", ".media"] as $dir) {
             $path = $base . "/" . $dir;
+
             if (!is_dir($path)) {
                 if (@mkdir($path, 0777, true) || is_dir($path)) $report["created"][] = $path; else {
                     $report["ok"] = false;
                     $report["errors"][] = "Folder could not be created: " . $path;
                 }
+
             }
+
         }
 
         $htaccess = $base . "/.htaccess"; if (!is_file($htaccess)) { @file_put_contents($htaccess, "Require all denied
@@ -106,26 +105,30 @@ class GBDB {
         $envFile = $root . "/.config/.greenql.env.php";
 
         if (!is_file($envFile)) { @file_put_contents($envFile, "<?php
+
 return [
     'api_auth' => '',
 ];
 "); $report["created"][] = $envFile; }
+
         return $report;
     }
 
-    public static function migrate(?string $pathOfOldDB = null): array { return self::update($pathOfOldDB); }
-    private static function normalizeMigrationSource(?string $pathOfOldDB, string $root): string { $path=trim((string)$pathOfOldDB); if($path==='') return $root . "/assets/DB/GBDB"; $path=str_replace('\\','/',$path); if(!str_starts_with($path,'/')) $path=$root.'/'.ltrim($path,'/'); return rtrim($path,'/'); }
-
     /**
-     * Kopiert eine alte Ordnerstruktur, ohne vorhandene neue Dateien zu überschreiben.
-     * @param string $from Quelle.
-     * @param string $to Ziel.
-     * @param array $report Update-Bericht per Referenz.
-     * @return void
+     * handles migrate.
+     *
+     * @param null|string $pathOfOldDB value.
+     *
+     * @return mixed result.
      */
+    public static function migrate(?string $pathOfOldDB = null): array { return self::update($pathOfOldDB); }
+
+    private static function normalizeMigrationSource(?string $pathOfOldDB, string $root): string { $path=trim((string)$pathOfOldDB); if ($path==='') return $root . "/assets/DB/GBDB"; $path=str_replace('\\','/',$path); if (!str_starts_with($path,'/')) $path=$root.'/'.ltrim($path,'/'); return rtrim($path,'/'); }
+
     private static function copyMissingTree(string $from, string $to, array &$report): void {
         if (!is_dir($from)) {
             $report["skipped"][] = "Quelle fehlt: " . $from;
+
             return;
         }
 
@@ -134,6 +137,7 @@ return [
         }
 
         $items = scandir($from);
+
         if (!is_array($items)) return;
 
         foreach ($items as $item) {
@@ -158,21 +162,17 @@ return [
                 $report["ok"] = false;
                 $report["errors"][] = "Datei konnte nicht kopiert werden: " . $src;
             }
+
         }
+
     }
 
-    /**
-     * Führt alte Schema-Dateien in das neue System-Schema zusammen.
-     * @param string $root Projekt-Root.
-     * @param string $target Ziel-Datei.
-     * @param array $report Update-Bericht per Referenz.
-     * @return void
-     */
     private static function mergeOldSchemas(string $root, string $target, array &$report): void {
         $schema = [];
 
         if (is_file($target)) {
             $current = json_decode((string)@file_get_contents($target), true);
+
             if (is_array($current)) $schema = $current;
         }
 
@@ -198,9 +198,11 @@ return [
         if ($json === false || @file_put_contents($target, $json) === false) {
             $report["ok"] = false;
             $report["errors"][] = "Schema konnte nicht geschrieben werden: " . $target;
+
             return;
         }
 
         $report["copied"][] = $target;
     }
+
 }

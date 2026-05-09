@@ -5,8 +5,8 @@ class DatabaseBridge {
     private static string $instance = "";
 
     /**
-     * Setzt den aktiven Datenbank-Treiber manuell.
-     * @param string $driver Treiber: GBDB, GBDB oder SQL.
+     * Sets database driver manually (SQL or GBDB)
+     * @param string $driver
      * @return void
      */
     public static function setDriver(string $driver): void {
@@ -15,22 +15,20 @@ class DatabaseBridge {
     }
 
     /**
-     * Setzt die aktive GBDB Instanz.
-     * @param string $instance Instanzname.
+     * sets active gbdb-instance
+     * @param string $instance
      * @return void
      */
     public static function setInstance(string $instance): void {
         self::$instance = trim($instance);
+
         if (self::$instance !== "" && class_exists("GBDB")) {
             self::$driver = "GBDB";
             GBDB::setInstance(self::$instance);
         }
+
     }
 
-    /**
-     * Gibt den aktiven Treiber zurück.
-     * @return string Rückgabewert.
-     */
     private static function driver(): string {
         if (self::$driver !== "") {
             return self::$driver;
@@ -47,26 +45,14 @@ class DatabaseBridge {
         return "GBDB";
     }
 
-    /**
-     * Prüft, ob SQL genutzt wird.
-     * @return bool Rückgabewert.
-     */
     private static function isSQL(): bool {
         return self::driver() === "SQL";
     }
 
-    /**
-     * Prüft, ob GBDB genutzt wird.
-     * @return bool Rückgabewert.
-     */
     private static function isGBDB(): bool {
         return self::driver() === "GBDB";
     }
 
-    /**
-     * Stellt sicher, dass SQL verbunden ist.
-     * @return void
-     */
     private static function ensureSQL(): void {
         if (self::isSQL()) {
             try {
@@ -74,31 +60,31 @@ class DatabaseBridge {
             } catch (Throwable $e) {
                 error_log("[DatabaseBridge] SQL connection failed: " . $e->getMessage());
             }
+
         }
+
     }
 
-    /**
-     * Synchronisiert GBDB mit der aktiven Instanz.
-     * @return void
-     */
     private static function ensureGBDB(): void {
         if (self::isGBDB() && self::$instance !== "" && class_exists("GBDB")) {
             GBDB::setInstance(self::$instance);
         }
+
     }
 
     /**
-     * Gibt Daten zurück.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param bool $filter Filter aktiv.
-     * @param string $where Spalte.
-     * @param mixed $is Vergleichswert.
-     * @return mixed Rückgabewert.
+     * gets data
+     * @param string $db
+     * @param string $table
+     * @param bool $filter
+     * @param string $where
+     * @param mixed $is
+     * @return mixed
      */
     public static function get(string $db, string $table, bool $filter = false, string $where = "", mixed $is = ""): mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::getData($db, $table, $filter, $where, $is);
         }
 
@@ -114,23 +100,27 @@ class DatabaseBridge {
             }
 
             $isValue = is_string($is) ? "'" . addslashes($is) . "'" : $is;
+
             return SQL::select($table, "*", $where, $isValue);
         } catch (Throwable $e) {
             error_log("[DatabaseBridge] SQL SELECT failed: " . $e->getMessage());
+
             return [];
         }
+
     }
 
     /**
-     * Fügt neue Daten ein.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param array $data Daten.
-     * @return mixed Rückgabewert.
+     * inserts data
+     * @param string $db
+     * @param string $table
+     * @param array $data
+     * @return bool|int
      */
     public static function insert(string $db, string $table, array $data): mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::insert($db, $table, $data);
         }
 
@@ -144,21 +134,24 @@ class DatabaseBridge {
             return SQL::insert($table, $data);
         } catch (Throwable $e) {
             error_log("[DatabaseBridge] SQL INSERT failed: " . $e->getMessage());
+
             return false;
         }
+
     }
 
     /**
-     * Löscht Daten.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $where Spalte.
-     * @param mixed $is Wert.
-     * @return mixed Rückgabewert.
+     * deletes data
+     * @param string $db
+     * @param string $table
+     * @param string $where
+     * @param mixed $is
+     * @return bool
      */
     public static function delete(string $db, string $table, string $where, mixed $is): mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::delete($db, $table, $where, $is);
         }
 
@@ -172,22 +165,25 @@ class DatabaseBridge {
             return SQL::delete($table, $where, $is);
         } catch (Throwable $e) {
             error_log("[DatabaseBridge] SQL DELETE failed: " . $e->getMessage());
+
             return false;
         }
+
     }
 
     /**
-     * Aktualisiert Daten.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $where Spalte.
-     * @param mixed $is Wert.
-     * @param array $data Daten.
-     * @return mixed Rückgabewert.
+     * updates data
+     * @param string $db
+     * @param string $table
+     * @param string $where
+     * @param mixed $is
+     * @param array $data
+     * @return bool
      */
     public static function update(string $db, string $table, string $where, mixed $is, array $data): mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::edit($db, $table, $where, $is, $data);
         }
 
@@ -201,18 +197,21 @@ class DatabaseBridge {
             return SQL::update($table, $data, $where, $is);
         } catch (Throwable $e) {
             error_log("[DatabaseBridge] SQL UPDATE failed: " . $e->getMessage());
+
             return false;
         }
+
     }
 
     /**
-     * Erstellt eine Base.
-     * @param string $name Name.
-     * @return bool Rückgabewert.
+     * creates database
+     * @param string $name
+     * @return bool
      */
     public static function createDatabase(string $name): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::createDatabase($name);
         }
 
@@ -224,13 +223,14 @@ class DatabaseBridge {
     }
 
     /**
-     * Löscht eine Base.
-     * @param string $name Name.
-     * @return bool Rückgabewert.
+     * deletes database
+     * @param string $name
+     * @return bool
      */
     public static function deleteDatabase(string $name): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::deleteDatabase($name);
         }
 
@@ -242,15 +242,16 @@ class DatabaseBridge {
     }
 
     /**
-     * Erstellt eine Tabelle.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param array $columns Spalten.
-     * @return bool Rückgabewert.
+     * creates table
+     * @param string $db
+     * @param string $table
+     * @param array $columns
+     * @return bool
      */
     public static function createTable(string $db, string $table, array $columns): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::createTable($db, $table, $columns);
         }
 
@@ -262,14 +263,15 @@ class DatabaseBridge {
     }
 
     /**
-     * Löscht eine Tabelle.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @return bool Rückgabewert.
+     * deletes table
+     * @param string $db
+     * @param string $table
+     * @return bool
      */
     public static function deleteTable(string $db, string $table): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::deleteTable($db, $table);
         }
 
@@ -281,16 +283,17 @@ class DatabaseBridge {
     }
 
     /**
-     * Fügt eine Spalte hinzu.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $column Spalte.
-     * @param mixed $default Standardwert.
-     * @return bool Rückgabewert.
+     * adds new column
+     * @param string $db
+     * @param string $table
+     * @param string $column
+     * @param mixed $default
+     * @return bool
      */
     public static function addColumn(string $db, string $table, string $column, mixed $default = ""): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::addColumn($db, $table, $column, $default);
         }
 
@@ -302,15 +305,16 @@ class DatabaseBridge {
     }
 
     /**
-     * Erstellt einen Index.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $column Spalte.
-     * @return bool Rückgabewert.
+     * creates new index
+     * @param string $db
+     * @param string $table
+     * @param string $column
+     * @return bool
      */
     public static function createIndex(string $db, string $table, string $column): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::createIndex($db, $table, $column);
         }
 
@@ -318,12 +322,13 @@ class DatabaseBridge {
     }
 
     /**
-     * Startet eine Transaktion.
-     * @return bool Rückgabewert.
+     * starts transaction
+     * @return bool
      */
     public static function begin(): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::begin();
         }
 
@@ -331,12 +336,13 @@ class DatabaseBridge {
     }
 
     /**
-     * Speichert eine Transaktion.
-     * @return bool Rückgabewert.
+     * saves transaction
+     * @return bool
      */
     public static function commit(): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::commit();
         }
 
@@ -344,15 +350,17 @@ class DatabaseBridge {
     }
 
     /**
-     * Verwirft eine Transaktion.
-     * @return bool Rückgabewert.
+     * deletes transaction
+     * @return bool
      */
     public static function rollback(): bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
+
             return GBDB::rollback();
         }
 
         return !self::isSQL() && GBDB::rollback();
     }
+
 }

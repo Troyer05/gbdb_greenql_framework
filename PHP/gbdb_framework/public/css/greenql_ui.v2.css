@@ -858,3 +858,89 @@ button.xs,
 }
 .greenql-studio-body .main{padding:1.6rem 1.75rem 2rem!important}.greenql-studio-body .topbar{padding:0!important;margin-bottom:1.35rem!important}.greenql-studio-body .empty-state{border-radius:24px;background:linear-gradient(135deg,rgba(30,41,59,.62),rgba(15,23,42,.72))!important;border:1px solid rgba(148,163,184,.2)!important}
 @media(max-width:980px){.greenql-studio-body .app-shell{grid-template-columns:1fr!important}.greenql-studio-body .sidebar{min-height:auto!important;border-right:0!important;border-bottom:1px solid rgba(148,163,184,.18)!important}.greenql-studio-body .main{padding:1rem!important}}
+
+/* greenQL buntes Syntax Highlighting: Builtins, eigene Funktionen und Deklarationen getrennt */
+.gbdbui-highlight-editor .tok-builtin-fn,.tok-builtin-fn{color:#22c55e;font-weight:950;text-shadow:0 0 12px rgba(34,197,94,.24)}
+.gbdbui-highlight-editor .tok-user-fn,.tok-user-fn{color:#c084fc;font-weight:850}
+.gbdbui-highlight-editor .tok-fndef,.tok-fndef{color:#f97316;font-weight:950;text-decoration:underline;text-decoration-color:rgba(249,115,22,.45);text-underline-offset:3px}
+.gbdbui-highlight-editor .tok-fn-key,.tok-fn-key{color:#fb7185;font-weight:950}
+.gbdbui-highlight-editor .tok-var-decl,.tok-var-decl{color:#fde047;font-weight:950}
+.gbdbui-highlight-editor .tok-const,.tok-const{color:#facc15;font-weight:950}
+.gbdbui-highlight-editor .tok-type,.tok-type{color:#38bdf8;font-weight:950}
+.gbdbui-highlight-editor .tok-class-key,.tok-class-key{color:#f472b6;font-weight:950}
+.gbdbui-highlight-editor .tok-class-name,.tok-class-name{color:#f0abfc;font-weight:950}
+
+
+/* greenQL Knallbunt Syntax Highlighting */
+.tok-key, .tok-query { color: #38bdf8; font-weight: 900; }
+.tok-structure { color: #a78bfa; font-weight: 900; }
+.tok-control { color: #ff4fd8; font-weight: 900; }
+.tok-decl { color: #ffe45e; font-weight: 950; }
+.tok-instance { color: #00e5ff; font-weight: 950; }
+.tok-index, .tok-constraint, .tok-health { color: #facc15; font-weight: 900; }
+.tok-string { color: #7cff6b; }
+.tok-num { color: #00e5ff; font-weight: 800; }
+.tok-lit { color: #ff4fd8; font-weight: 900; }
+.tok-fn, .tok-user-fn { color: #ff9f1c; font-weight: 900; }
+.tok-builtin-fn { color: #00e5ff; font-weight: 950; text-shadow: 0 0 10px rgba(0,229,255,.20); }
+.tok-pattern-fn { color: #ff4fd8; font-weight: 950; }
+.tok-data-fn { color: #22c55e; font-weight: 950; }
+.tok-hash-fn { color: #c084fc; font-weight: 950; }
+.tok-fn-key { color: #ff3d81; font-weight: 950; }
+.tok-fndef { color: #ffffff; font-weight: 950; text-decoration: underline; text-decoration-color: #ff4fd8; text-underline-offset: 3px; }
+.tok-class-key { color: #ff3d81; font-weight: 950; }
+.tok-class-name { color: #38bdf8; font-weight: 950; text-decoration: underline; text-decoration-color: #00e5ff; text-underline-offset: 3px; }
+.tok-var { color: #00ffb3; font-weight: 850; }
+.tok-var-decl { color: #ffea00; font-weight: 950; }
+.tok-const { color: #ff4fd8; font-weight: 950; }
+.tok-type { color: #00d4ff; font-weight: 950; font-style: italic; }
+.tok-field { color: #facc15; }
+.tok-brace { color: #e2e8f0; font-weight: 800; }
+.tok-op { color: #ff3d81; }
+.tok-wild { color: #facc15; font-weight: 950; }
+.tok-semi { color: #94a3b8; }
+.tok-comment { color: #6f7d97; font-style: italic; }
+
+/* greenQL Ultra Knallbunt Highlighting */
+.tok-fn, .tok-user-fn { color: #ff9f1c !important; font-weight: 950; font-style: italic; text-shadow: 0 0 10px rgba(255,159,28,.28); }
+.tok-fn-key { color: #ff00e5 !important; font-weight: 950; }
+.tok-fndef { color: #ffffff !important; font-weight: 950; text-decoration: underline; text-decoration-color: #ff00e5; text-shadow: 0 0 12px rgba(255,0,229,.45); }
+.tok-class-key { color: #00e5ff !important; font-weight: 950; }
+.tok-class-name { color: #22ff88 !important; font-weight: 950; text-decoration: underline; text-decoration-color: #22ff88; }
+.tok-identity-fn { color: #00e5ff !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(0,229,255,.36); }
+.tok-builtin-fn { color: #00e5ff !important; font-weight: 950; text-shadow: 0 0 10px rgba(0,229,255,.25); }
+.tok-pattern-fn { color: #ff00e5 !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(255,0,229,.36); }
+.tok-data-fn { color: #22ff88 !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(34,255,136,.28); }
+.tok-hash-fn { color: #ff5c8a !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(255,92,138,.32); }
+.tok-schema-fn { color: #ffe45e !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(255,228,94,.26); }
+.tok-advanced-fn { color: #a78bfa !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(167,139,250,.32); }
+.tok-var-decl { color: #ff4fd8 !important; font-weight: 950; }
+.tok-const { color: #ffea00 !important; font-weight: 950; }
+.tok-var { color: #00ffb3 !important; font-weight: 900; }
+.tok-type { color: #ff9f1c !important; font-weight: 950; font-style: italic; }
+.tok-decl { color: #ff00e5 !important; font-weight: 950; }
+.tok-query { color: #38bdf8 !important; font-weight: 900; }
+.tok-control { color: #ff4fd8 !important; font-weight: 900; }
+.tok-structure { color: #facc15 !important; font-weight: 900; }
+.tok-instance { color: #00ffb3 !important; font-weight: 900; }
+.tok-field { color: #f472b6 !important; font-weight: 800; }
+.tok-string { color: #7cff6b !important; }
+.tok-num { color: #00e5ff !important; font-weight: 900; }
+.tok-lit { color: #c084fc !important; font-weight: 950; }
+
+
+.gbdbui-highlight-editor .tok-api-fn,.tok-api-fn{color:#38bdf8!important;font-weight:950;text-decoration:underline;text-shadow:0 0 12px rgba(56,189,248,.30)}
+.gbdbui-highlight-editor .tok-instance-fn,.tok-instance-fn{color:#00ffb3!important;font-weight:950;text-decoration:underline;text-shadow:0 0 12px rgba(0,255,179,.26)}
+.gbdbui-highlight-editor .tok-srv-fn,.tok-srv-fn{color:#f97316!important;font-weight:950;text-decoration:underline;text-shadow:0 0 12px rgba(249,115,22,.32)}
+.gbdbui-highlight-editor .tok-cluster,.tok-cluster{color:#38bdf8!important;font-weight:900}
+.gbdbui-highlight-editor .tok-security,.tok-security{color:#fb7185!important;font-weight:900}
+.gbdbui-highlight-editor .tok-oop,.tok-oop{color:#ff00e5!important;font-weight:950}
+.gbdbui-highlight-editor .tok-file,.tok-file{color:#a78bfa!important;font-weight:950}
+
+
+/* greenQL High-Contrast Ultra Highlighting 2026.9 */
+.tok-comment{color:#7b879d!important;font-style:italic!important}.tok-string{color:#7cff6b!important}.tok-num{color:#00e5ff!important;font-weight:900!important}.tok-lit{color:#ff4fd8!important;font-weight:950!important}.tok-brace{color:#e2e8f0!important;font-weight:900!important}.tok-op{color:#ff3d81!important;font-weight:900!important}.tok-semi{color:#94a3b8!important}.tok-wild{color:#ffe45e!important;font-weight:950!important}
+.tok-decl{color:#ff00e5!important;font-weight:950!important;text-shadow:0 0 12px rgba(255,0,229,.32)!important}.tok-var-decl{color:#ffea00!important;font-weight:950!important}.tok-var{color:#00ffb3!important;font-weight:900!important}.tok-const{color:#ffd000!important;font-weight:950!important;text-shadow:0 0 10px rgba(255,208,0,.28)!important}.tok-this{color:#ff9f1c!important;font-weight:950!important;font-style:italic!important}.tok-type{color:#38bdf8!important;font-weight:950!important;font-style:italic!important}
+.tok-fn-key{color:#fb7185!important;font-weight:950!important}.tok-fndef{color:#ffffff!important;background:rgba(124,58,237,.38)!important;border-radius:5px!important;font-weight:950!important;text-decoration:underline!important;text-decoration-color:#ff00e5!important;text-underline-offset:3px!important}.tok-user-fn,.tok-fn{color:#ff9f1c!important;font-weight:950!important;font-style:italic!important;text-shadow:0 0 10px rgba(255,159,28,.24)!important}.tok-class-key{color:#00e5ff!important;font-weight:950!important}.tok-class-name{color:#22ff88!important;font-weight:950!important;text-decoration:underline!important;text-decoration-color:#22ff88!important;text-underline-offset:3px!important}
+.tok-identity-fn{color:#00e5ff!important}.tok-hash-fn{color:#ff5c8a!important}.tok-pattern-fn{color:#ff00e5!important}.tok-api-fn{color:#38bdf8!important}.tok-instance-fn{color:#00ffb3!important}.tok-data-fn{color:#22ff88!important}.tok-schema-fn{color:#ffe45e!important}.tok-advanced-fn{color:#a78bfa!important}.tok-builtin-fn{color:#67e8f9!important}.tok-declared-only-fn{color:#fb7185!important;text-decoration-style:dotted!important}.tok-identity-fn,.tok-hash-fn,.tok-pattern-fn,.tok-api-fn,.tok-instance-fn,.tok-data-fn,.tok-schema-fn,.tok-advanced-fn,.tok-builtin-fn,.tok-declared-only-fn{font-weight:950!important;text-decoration:underline!important;text-underline-offset:3px!important;text-shadow:0 0 12px rgba(255,255,255,.16)!important}
+.tok-query{color:#38bdf8!important;font-weight:900!important}.tok-control{color:#ff4fd8!important;font-weight:900!important}.tok-structure{color:#facc15!important;font-weight:900!important}.tok-instance{color:#00ffb3!important;font-weight:900!important}.tok-index{color:#c084fc!important;font-weight:900!important}.tok-constraint{color:#f472b6!important;font-weight:900!important}.tok-health{color:#2dd4bf!important;font-weight:900!important}.tok-cluster{color:#38bdf8!important;font-weight:900!important}.tok-security{color:#fb7185!important;font-weight:950!important}.tok-oop{color:#ff00e5!important;font-weight:950!important}.tok-file{color:#a78bfa!important;font-weight:950!important}.tok-srv-namespace{color:#f97316!important;font-weight:950!important}.tok-srv-fn{color:#fb923c!important;font-weight:950!important;text-decoration:underline!important;text-underline-offset:3px!important;text-shadow:0 0 12px rgba(249,115,22,.28)!important}.tok-field{color:#f472b6!important;font-weight:850!important}

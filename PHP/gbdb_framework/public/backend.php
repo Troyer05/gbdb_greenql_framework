@@ -25,7 +25,9 @@ if (isset($body["do"]) && $body["do"] === "gtoken") {
                     $retry = true;
                     break;
                 }
+
             }
+
         } while ($retry);
 
         add_token($token);
@@ -195,6 +197,7 @@ if ($do == "monitor") {
         foreach ($driver::listTables($dbName) as $tableName) {
             $out[] = method_exists($driver, "monitor") ? $driver::monitor($dbName, $tableName) : ["database" => $dbName, "table" => $tableName];
         }
+
     }
 
     resp(200, $out);
@@ -223,9 +226,13 @@ if ($do == "fulltext_search" || $do == "fulltext") {
 }
 
 if ($do == "gbdb_get") { test_param(["base", "table"], $body); $options = isset($body["options"]) && is_array($body["options"]) ? $body["options"] : []; resp(200, $driver::get((string)$body["base"], (string)$body["table"], $body["where"] ?? "", $body["is"] ?? "", $options)); }
+
 if ($do == "gbdb_create") { test_param(["base"], $body); $rows = $body["rows"] ?? []; if (!is_array($rows) && !is_object($rows)) $rows = []; resp(200, ["created" => $driver::create((string)$body["base"], (string)($body["table"] ?? ""), (bool)($body["use_data_types"] ?? false), $rows)]); }
+
 if ($do == "gbdb_full_text_search") { test_param(["base", "table", "text"], $body); resp(200, $driver::fullTextSearch((string)$body["base"], (string)$body["table"], (string)$body["text"])); }
+
 if ($do == "gbdb_backup") { resp(200, $driver::createBackup((string)($body["path"] ?? ""))); }
+
 if ($do == "gbdb_run_file") { test_param(["path"], $body); $params = isset($body["params"]) && is_array($body["params"]) ? $body["params"] : []; resp(200, $driver::runFile((string)$body["path"], $params)); }
 
 if ($do == "query") {

@@ -2,12 +2,6 @@
 
 trait GreenQL_RuntimeTrait {
 
-
-    /**
-     * Normalisiert GreenQL-Variablennamen inklusive Konstanten-Prefix.
-     * @param string $name Variablenname.
-     * @return string Bereinigter Name.
-     */
     private static function cleanVarName(string $name): string {
         $name = trim($name);
         $prefix = str_starts_with($name, '$') ? '$' : '';
@@ -17,26 +11,119 @@ trait GreenQL_RuntimeTrait {
         return $prefix . $name;
     }
 
-
-    /**
-     * Prüft, ob ein Variablenname GreenQL-konform ist.
-     * @param string $name Variablenname.
-     * @return bool Ergebnis.
-     */
     private static function validVarName(string $name): bool {
         return $name !== '' && ($name[0] === '_' || $name[0] === '$');
     }
 
+    private static function normalizeVarType(string $type): string {
+        $type = strtolower(trim($type));
+        $type = ltrim($type, ':');
 
-    /**
-     * Setzt eine Variable oder Konstante sicher.
-     * @param string $name Variablenname.
-     * @param mixed $value Wert.
-     * @param array $ctx Context.
-     * @param array $vars Variablen.
-     * @return array Ergebnis.
-     */
-    private static function setVar(string $name, mixed $value, array &$ctx, array &$vars): array {
+        return match ($type) {
+            '', 'mixed', 'any', 'var' => '',
+            'str', 'text', 'email', 'url', 'date', 'time', 'datetime', 'datetype', 'timetype', 'timestamp', 'uuid', 'ulid', 'enum', 'blob_reference', 'blob' => $type,
+            'integer' => 'int',
+            'double', 'decimal', 'number' => 'float',
+            'boolean' => 'bool',
+            'arr' => 'array',
+            'obj', 'object', 'map' => 'json',
+            default => $type
+        };
+    }
+
+    private static function castVarValue(mixed $value, string $type): array {
+        $type = self::normalizeVarType($type);
+
+        if ($type === '') {
+            return ['ok' => true, 'value' => $value];
+        }
+
+        if (in_array($type, ['string', 'str', 'text', 'email', 'url', 'date', 'time', 'datetime', 'datetype', 'timetype', 'timestamp', 'uuid', 'ulid', 'enum', 'blob_reference', 'blob'], true)) {
+            if (is_array($value) || is_object($value)) {
+                return ['ok' => true, 'value' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
+            }
+
+            $string = (string)$value;
+
+            if ($type === 'email' && $string !== '' && !filter_var($string, FILTER_VALIDATE_EMAIL)) {
+                return ['ok' => false, 'message' => 'Wert ist keine gültige E-Mail-Adresse.'];
+            }
+
+            if ($type === 'url' && $string !== '' && !filter_var($string, FILTER_VALIDATE_URL)) {
+                return ['ok' => false, 'message' => 'Wert ist keine gültige URL.'];
+            }
+
+            return ['ok' => true, 'value' => $string];
+        }
+
+        if ($type === 'int') {
+            if (is_bool($value) || is_int($value) || is_float($value) || (is_string($value) && is_numeric($value))) {
+                return ['ok' => true, 'value' => (int)$value];
+            }
+
+            return ['ok' => false, 'message' => 'Wert ist nicht als int konvertierbar.'];
+        }
+
+        if ($type === 'float') {
+            if (is_bool($value) || is_int($value) || is_float($value) || (is_string($value) && is_numeric($value))) {
+                return ['ok' => true, 'value' => (float)$value];
+            }
+
+            return ['ok' => false, 'message' => 'Wert ist nicht als float konvertierbar.'];
+        }
+
+        if ($type === 'bool') {
+            if (is_bool($value)) {
+                return ['ok' => true, 'value' => $value];
+            }
+
+            if (is_int($value) || is_float($value)) {
+                return ['ok' => true, 'value' => ((float)$value) != 0.0];
+            }
+
+            if (is_string($value)) {
+                $normalized = strtolower(trim($value));
+
+                if (in_array($normalized, ['true', '1', 'yes', 'ja', 'on'], true)) return ['ok' => true, 'value' => true];
+
+                if (in_array($normalized, ['false', '0', 'no', 'nein', 'off', ''], true)) return ['ok' => true, 'value' => false];
+            }
+
+            return ['ok' => false, 'message' => 'Wert ist nicht als bool konvertierbar.'];
+        }
+
+        if ($type === 'array') {
+            if (is_array($value)) {
+                return ['ok' => true, 'value' => $value];
+            }
+
+            if (is_string($value)) {
+                $decoded = json_decode($value, true);
+
+                if (is_array($decoded)) return ['ok' => true, 'value' => $decoded];
+            }
+
+            return ['ok' => false, 'message' => 'Wert ist nicht als array konvertierbar.'];
+        }
+
+        if ($type === 'json') {
+            if (is_array($value) || is_object($value)) {
+                return ['ok' => true, 'value' => $value];
+            }
+
+            if (is_string($value)) {
+                $decoded = json_decode($value, true);
+
+                if (json_last_error() === JSON_ERROR_NONE) return ['ok' => true, 'value' => $decoded];
+            }
+
+            return ['ok' => false, 'message' => 'Wert ist nicht als json konvertierbar.'];
+        }
+
+        return ['ok' => false, 'message' => 'Unbekannter GreenQL-Variablen-Datentyp: ' . $type];
+    }
+
+    private static function setVar(string $name, mixed $value, array &$ctx, array &$vars, string $type = ''): array {
         $name = self::cleanVarName($name);
 
         if (!self::validVarName($name)) {
@@ -47,27 +134,40 @@ trait GreenQL_RuntimeTrait {
             $ctx['consts'] = [];
         }
 
+        if (!isset($ctx['var_types']) || !is_array($ctx['var_types'])) {
+            $ctx['var_types'] = [];
+        }
+
         if (isset($ctx['consts'][$name]) && array_key_exists($name, $vars)) {
             return ['ok' => false, 'message' => 'Konstante kann nicht überschrieben werden: ' . $name, 'ctx' => $ctx];
         }
 
+        $type = self::normalizeVarType($type);
+
+        if ($type === '' && isset($ctx['var_types'][$name])) {
+            $type = (string)$ctx['var_types'][$name];
+        }
+
+        $cast = self::castVarValue($value, $type);
+
+        if (!($cast['ok'] ?? false)) {
+            return ['ok' => false, 'message' => 'Typfehler bei ' . $name . ($type !== '' ? ' :' . $type : '') . ': ' . (string)($cast['message'] ?? ''), 'ctx' => $ctx];
+        }
+
+        $value = $cast['value'] ?? null;
         $vars[$name] = $value;
+
+        if ($type !== '') {
+            $ctx['var_types'][$name] = $type;
+        }
 
         if ($name[0] === '$') {
             $ctx['consts'][$name] = true;
         }
 
-        return ['ok' => true, 'message' => 'Variable gesetzt: ' . $name, 'ctx' => $ctx, 'vars' => $vars, 'result' => $value];
+        return ['ok' => true, 'message' => 'Variable gesetzt: ' . $name . ($type !== '' ? ' :' . $type : ''), 'ctx' => $ctx, 'vars' => $vars, 'result' => $value];
     }
 
-
-    /**
-     * Konvertiert Funktionsargumente in ausgewertete Werte.
-     * @param string $raw Argument-String.
-     * @param array $vars Variablen.
-     * @param array $params Parameter.
-     * @return array Werte.
-     */
     private static function evalArgs(string $raw, array $vars = [], array $params = []): array {
         $out = [];
 
@@ -78,15 +178,6 @@ trait GreenQL_RuntimeTrait {
         return $out;
     }
 
-
-    /**
-     * Konvertiert Funktionsargumente mit vollständiger Runtime-Schachtellogik.
-     * @param string $raw Argument-String.
-     * @param array $ctx Context.
-     * @param array $vars Variablen.
-     * @param array $params Parameter.
-     * @return array Werte.
-     */
     private static function evalRuntimeArgs(string $raw, array &$ctx, array &$vars, array $params = []): array {
         $out = [];
 
@@ -97,12 +188,131 @@ trait GreenQL_RuntimeTrait {
         return $out;
     }
 
+    private static function fusionValue(mixed $value, string $raw = ''): string {
+        $raw = strtolower(trim($raw));
 
-    /**
-     * Prüft, ob ein Ausdruck komplett von einer äußeren Klammer umschlossen ist.
-     * @param string $value Ausdruck.
-     * @return bool Ergebnis.
-     */
+        if ($raw === 'true') return 'true';
+
+        if ($raw === 'false') return 'false';
+
+        if ($raw === 'null') return 'null';
+
+        if (is_bool($value)) return $value ? 'true' : 'false';
+
+        if ($value === null) return 'null';
+
+        if (is_array($value) || is_object($value)) return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+
+        return (string)$value;
+    }
+
+    private static function fusionRuntime(string $raw, array &$ctx, array &$vars, array $params = []): string {
+        $out = '';
+
+        foreach (self::splitArguments($raw) as $arg) {
+            $out .= self::fusionValue(self::evalRuntimeExpression($arg, $ctx, $vars, $params), $arg);
+        }
+
+        return $out;
+    }
+
+    private static function parseFunctionParams(string $raw): array {
+        $params = [];
+
+        foreach (self::splitArguments($raw) as $part) {
+            $part = trim((string)$part);
+
+            if ($part === '') continue;
+
+            $default = null;
+            $hasDefault = false;
+            $eq = self::findTopLevel($part, '=');
+
+            if ($eq >= 0) {
+                $default = trim(substr($part, $eq + 1));
+                $part = trim(substr($part, 0, $eq));
+                $hasDefault = true;
+            }
+
+            $optional = false;
+
+            if (str_starts_with($part, '?')) {
+                $optional = true;
+                $part = trim(substr($part, 1));
+            }
+
+            $type = '';
+            $colon = self::findTopLevel($part, ':');
+
+            if ($colon >= 0) {
+                $type = trim(substr($part, $colon + 1));
+                $part = trim(substr($part, 0, $colon));
+            }
+
+            $name = self::cleanVarName($part);
+
+            if (!self::validVarName($name)) continue;
+
+            $params[] = [
+                'name' => $name,
+                'type' => self::normalizeVarType($type),
+                'optional' => $optional || $hasDefault,
+                'has_default' => $hasDefault,
+                'default' => $default
+            ];
+        }
+
+        return $params;
+    }
+
+    private static function bindFunctionArguments(array $definitions, array $argTokens, array &$ctx, array $callerVars, array &$localVars, array $params = []): array {
+        foreach ($definitions as $i => $definition) {
+            if (is_array($definition)) {
+                $name = (string)($definition['name'] ?? '');
+                $type = (string)($definition['type'] ?? '');
+                $optional = (bool)($definition['optional'] ?? false);
+                $hasDefault = (bool)($definition['has_default'] ?? false);
+                $default = (string)($definition['default'] ?? '');
+            } else {
+                $name = self::cleanVarName((string)$definition);
+                $type = '';
+                $optional = true;
+                $hasDefault = false;
+                $default = '';
+            }
+
+            if ($name === '') continue;
+
+            $missingOptionalWithoutDefault = false;
+
+            if (array_key_exists($i, $argTokens)) {
+                $value = self::evalRuntimeExpression((string)$argTokens[$i], $ctx, $callerVars, $params);
+            } else if ($hasDefault) {
+                $value = self::evalRuntimeExpression($default, $ctx, $callerVars, $params);
+            } else if ($optional) {
+                $value = null;
+                $missingOptionalWithoutDefault = true;
+            } else {
+                return ['ok' => false, 'message' => 'Pflichtparameter fehlt: ' . $name];
+            }
+
+            if ($missingOptionalWithoutDefault) {
+                $localVars[$name] = null;
+                continue;
+            }
+
+            $cast = self::castVarValue($value, $type);
+
+            if (!($cast['ok'] ?? false)) {
+                return ['ok' => false, 'message' => 'Typfehler bei Parameter ' . $name . ($type !== '' ? ' :' . $type : '') . ': ' . (string)($cast['message'] ?? '')];
+            }
+
+            $localVars[$name] = $cast['value'] ?? null;
+        }
+
+        return ['ok' => true];
+    }
+
     private static function runtimeWrappedByOuterParens(string $value): bool {
         $value = trim($value);
 
@@ -132,22 +342,15 @@ trait GreenQL_RuntimeTrait {
             }
 
             if ($ch === '(') $depth++;
+
             if ($ch === ')') $depth--;
+
             if ($depth === 0 && $i < $len - 1) return false;
         }
 
         return $depth === 0;
     }
 
-
-    /**
-     * Parst Array-/Objekt-Literale mit vollständiger Runtime-Auswertung der Werte.
-     * @param string $value Ausdruck.
-     * @param array $ctx Context.
-     * @param array $vars Variablen.
-     * @param array $params Parameter.
-     * @return mixed Wert oder null.
-     */
     private static function parseRuntimeLiteral(string $value, array &$ctx, array &$vars, array $params = []): mixed {
         $value = trim($value);
 
@@ -172,6 +375,7 @@ trait GreenQL_RuntimeTrait {
                 } else {
                     $out[] = self::evalRuntimeExpression($part, $ctx, $vars, $params);
                 }
+
             }
 
             return $out;
@@ -192,6 +396,7 @@ trait GreenQL_RuntimeTrait {
                     $allBracketObjects = false;
                     break;
                 }
+
             }
 
             if ($allBracketObjects) {
@@ -221,13 +426,6 @@ trait GreenQL_RuntimeTrait {
         return null;
     }
 
-
-    /**
-     * Ermittelt Instance/Base/Table aus Funktionsargumenten oder aktivem Context.
-     * @param array $args Argumente.
-     * @param array $ctx Context.
-     * @return array Aufgelöste Zielwerte.
-     */
     private static function resolveTargetArgs(array $args, array $ctx): array {
         $instance = self::cleanName((string)($ctx['instance'] ?? self::$instance));
         $base = self::cleanName((string)($ctx['db'] ?? ''));
@@ -239,27 +437,33 @@ trait GreenQL_RuntimeTrait {
             $base = self::cleanName((string)$args[1]);
             $table = self::cleanName((string)$args[2]);
             $filter = is_array($args[3]) ? $args[3] : [];
-        } elseif (count($args) >= 3) {
-            $base = self::cleanName((string)$args[0]);
-            $table = self::cleanName((string)$args[1]);
-            $filter = is_array($args[2]) ? $args[2] : [];
-        } elseif (count($args) >= 2) {
-            $table = self::cleanName((string)$args[0]);
-            $filter = is_array($args[1]) ? $args[1] : [];
-        } elseif (count($args) === 1) {
+        } else if (count($args) === 3) {
+            if (is_array($args[2])) {
+                $base = self::cleanName((string)$args[0]);
+                $table = self::cleanName((string)$args[1]);
+                $filter = $args[2];
+            } else {
+                $instance = self::cleanName((string)$args[0]);
+                $base = self::cleanName((string)$args[1]);
+                $table = self::cleanName((string)$args[2]);
+            }
+
+        } else if (count($args) === 2) {
+            if (is_array($args[1])) {
+                $table = self::cleanName((string)$args[0]);
+                $filter = $args[1];
+            } else {
+                $base = self::cleanName((string)$args[0]);
+                $table = self::cleanName((string)$args[1]);
+            }
+
+        } else if (count($args) === 1) {
             $table = self::cleanName((string)$args[0]);
         }
 
         return [$instance, $base, $table, $filter];
     }
 
-
-    /**
-     * Aktiviert temporär eine Instanz und gibt den vorherigen Zustand zurück.
-     * @param string $instance Instanzname.
-     * @param array $ctx Context.
-     * @return array Vorheriger Zustand.
-     */
     private static function pushInstance(string $instance, array &$ctx): array {
         $old = ['driver' => self::$driver, 'instance' => self::$instance, 'ctx_instance' => $ctx['instance'] ?? ''];
 
@@ -275,13 +479,6 @@ trait GreenQL_RuntimeTrait {
         return $old;
     }
 
-
-    /**
-     * Stellt eine zuvor aktive Instanz wieder her.
-     * @param array $old Zustand.
-     * @param array $ctx Context.
-     * @return void
-     */
     private static function popInstance(array $old, array &$ctx): void {
         self::$driver = (string)($old['driver'] ?? 'GBDB');
         self::$instance = (string)($old['instance'] ?? '');
@@ -293,15 +490,9 @@ trait GreenQL_RuntimeTrait {
             self::$driver = 'GBDB';
             self::$instance = '';
         }
+
     }
 
-
-    /**
-     * Filtert Zeilen über ein Objekt wie ["uid": _uid].
-     * @param array $rows Zeilen.
-     * @param array $filter Filter.
-     * @return array Treffer.
-     */
     private static function filterRowsByObject(array $rows, array $filter = []): array {
         if (empty($filter)) return array_values(array_filter($rows, 'is_array'));
 
@@ -311,16 +502,11 @@ trait GreenQL_RuntimeTrait {
             foreach ($filter as $key => $value) {
                 if (($row[$key] ?? null) != $value) return false;
             }
+
             return true;
         }));
     }
 
-
-    /**
-     * Holt den ersten Key/Value aus einem Filterobjekt.
-     * @param array $filter Filter.
-     * @return array|null Key/Value oder null.
-     */
     private static function firstFilterPair(array $filter): ?array {
         foreach ($filter as $key => $value) {
             return [(string)$key, $value];
@@ -329,14 +515,6 @@ trait GreenQL_RuntimeTrait {
         return null;
     }
 
-
-    /**
-     * Prüft, ob ein Zieldatensatz readonly ist.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param array $filter Filter.
-     * @return bool Ergebnis.
-     */
     private static function rowIsReadonly(string $db, string $table, array $filter): bool {
         $rows = self::filterRowsByObject(self::getRows($db, $table), $filter);
 
@@ -347,14 +525,6 @@ trait GreenQL_RuntimeTrait {
         return false;
     }
 
-
-    /**
-     * Löscht eine Spalte über eine Tabellen-Neuanlage.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $column Spalte.
-     * @return bool Ergebnis.
-     */
     private static function deleteColumnRuntime(string $db, string $table, string $column): bool {
         $driver = self::db();
         $column = self::cleanName($column);
@@ -378,6 +548,7 @@ trait GreenQL_RuntimeTrait {
 
         if (!$driver::deleteTable($db, $table)) {
             $driver::deleteTable($db, $tmp);
+
             return false;
         }
 
@@ -392,19 +563,10 @@ trait GreenQL_RuntimeTrait {
         }
 
         $driver::deleteTable($db, $tmp);
+
         return true;
     }
 
-
-    /**
-     * Kopiert eine Tabelle in eine andere Tabelle.
-     * @param string $fromBase Quellbase.
-     * @param string $fromTable Quelltabelle.
-     * @param string $toBase Zielbase.
-     * @param string $toTable Zieltabelle.
-     * @param bool $deleteSource Quelle löschen.
-     * @return bool Ergebnis.
-     */
     private static function copyTableRuntime(string $fromBase, string $fromTable, string $toBase, string $toTable, bool $deleteSource = false): bool {
         $driver = self::db();
         $fromBase = self::cleanName($fromBase);
@@ -427,6 +589,7 @@ trait GreenQL_RuntimeTrait {
         foreach (self::getRows($fromBase, $fromTable) as $row) {
             if (!is_array($row)) continue;
             unset($row['id']);
+
             if ($driver::insertData($toBase, $toTable, $row) <= 0) return false;
         }
 
@@ -437,6 +600,137 @@ trait GreenQL_RuntimeTrait {
         return true;
     }
 
+    private static function hashPassRuntime(string $password): string {
+        if (class_exists('Auth') && method_exists('Auth', 'hashPass')) {
+            return Auth::hashPass($password);
+        }
+
+        return hash('sha256', hash('adler32', hash('md5', hash('sha512', $password))));
+    }
+
+    private static function randomIntRuntime(array $args): int|string {
+        if (count($args) >= 2) {
+            $min = (int)$args[0];
+            $max = (int)$args[1];
+
+            if ($max < $min) {
+                [$min, $max] = [$max, $min];
+            }
+
+            try {
+                return random_int($min, $max);
+            } catch (Throwable $e) {
+                return mt_rand($min, $max);
+            }
+
+        }
+
+        $length = max(1, (int)($args[0] ?? 1));
+
+        if ($length === 1) {
+            try {
+                return random_int(0, 9);
+            } catch (Throwable $e) {
+                return mt_rand(0, 9);
+            }
+
+        }
+
+        $out = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            try {
+                $out .= (string)random_int(0, 9);
+            } catch (Throwable $e) {
+                $out .= (string)mt_rand(0, 9);
+            }
+
+        }
+
+        return $out;
+    }
+
+    private static function bridgeMethodCandidates(string $method): array {
+        $method = trim($method);
+        $clean = preg_replace('/[^a-zA-Z0-9_]/', '', $method) ?: '';
+        $camel = preg_replace_callback('/_([a-zA-Z])/', fn($m) => strtoupper((string)$m[1]), strtolower($clean));
+
+        return array_values(array_unique(array_filter([$clean, $camel])));
+    }
+
+    private static function bridgeSlashRuntime(string $namespace, string $method, array $args, array &$ctx): array {
+        $namespace = strtolower(trim($namespace));
+        $method = trim($method);
+
+        if ($method === '') {
+            return ['ok' => false, 'message' => 'Bridge-Methode fehlt.', 'ctx' => $ctx];
+        }
+
+        if (in_array($namespace, ['secondserver', 'srv'], true)) {
+            if (!class_exists('SecondServer') && is_file(dirname(__DIR__, 2) . '/core/SecondServer.php')) {
+                require_once dirname(__DIR__, 2) . '/core/SecondServer.php';
+            }
+
+            if (!class_exists('SecondServer')) {
+                return ['ok' => false, 'message' => 'SecondServer/SecondServer ist nicht verfügbar.', 'ctx' => $ctx];
+            }
+
+            if (strtolower($method) === 'test_connection') {
+                try {
+                    $res = SecondServer::driver();
+
+                    return ['ok' => true, 'message' => 'SecondServer-Verbindung getestet.', 'ctx' => $ctx, 'result' => $res];
+                } catch (Throwable $e) {
+                    return ['ok' => false, 'message' => 'SecondServer-Test fehlgeschlagen: ' . $e->getMessage(), 'ctx' => $ctx];
+                }
+
+            }
+
+            foreach (self::bridgeMethodCandidates($method) as $candidate) {
+                if (method_exists('SecondServer', $candidate)) {
+                    try {
+                        return ['ok' => true, 'message' => 'SecondServer/' . $candidate . ' ausgeführt.', 'ctx' => $ctx, 'result' => SecondServer::$candidate(...$args)];
+                    } catch (Throwable $e) {
+                        return ['ok' => false, 'message' => 'SecondServer/' . $candidate . ' fehlgeschlagen: ' . $e->getMessage(), 'ctx' => $ctx];
+                    }
+
+                }
+
+            }
+
+            return ['ok' => false, 'message' => 'SecondServer-Funktion nicht gefunden: ' . $method, 'ctx' => $ctx];
+        }
+
+        if (in_array($namespace, ['local_srv', 'localsrv'], true)) {
+            if (!class_exists('Srv') && is_file(dirname(__DIR__, 2) . '/SRV/Srv.php')) {
+                require_once dirname(__DIR__, 2) . '/SRV/Srv.php';
+            }
+
+            if (!class_exists('Srv')) {
+                return ['ok' => false, 'message' => 'Srv ist nicht verfügbar.', 'ctx' => $ctx];
+            }
+
+            if (strtolower($method) === 'test_connection') {
+                return ['ok' => true, 'message' => 'SRV ist verfügbar.', 'ctx' => $ctx, 'result' => ['ok' => true, 'class' => 'Srv']];
+            }
+
+            foreach (self::bridgeMethodCandidates($method) as $candidate) {
+                if (method_exists('Srv', $candidate)) {
+                    try {
+                        return ['ok' => true, 'message' => 'SRV/' . $candidate . ' ausgeführt.', 'ctx' => $ctx, 'result' => Srv::$candidate(...$args)];
+                    } catch (Throwable $e) {
+                        return ['ok' => false, 'message' => 'SRV/' . $candidate . ' fehlgeschlagen: ' . $e->getMessage(), 'ctx' => $ctx];
+                    }
+
+                }
+
+            }
+
+            return ['ok' => false, 'message' => 'SRV-Funktion nicht gefunden: ' . $method, 'ctx' => $ctx];
+        }
+
+        return ['ok' => false, 'message' => 'Unbekannte Bridge: ' . $namespace, 'ctx' => $ctx];
+    }
 
     /**
      * Ruft eine externe JSON-API aus GreenQL heraus auf.
@@ -445,6 +739,55 @@ trait GreenQL_RuntimeTrait {
      * @param array $headers Request-Header.
      * @return mixed Antwort als Array oder Rohtext.
      */
+
+    private static function loadPatternRuntime(string $name): array {
+        $name = self::cleanName($name);
+
+        if ($name === '' || !method_exists(self::db(), 'getPattern')) {
+            return ['ok' => false, 'error' => 'pattern_not_available', 'name' => $name];
+        }
+
+        $loaded = self::db()::getPattern($name);
+
+        if (!is_array($loaded) || empty($loaded['ok'])) {
+            return ['ok' => false, 'error' => (string)($loaded['error'] ?? 'pattern_not_found'), 'name' => $name];
+        }
+
+        $pattern = is_array($loaded['pattern'] ?? null) ? $loaded['pattern'] : [];
+        $pattern['_loaded'] = true;
+
+        return $pattern;
+    }
+
+    private static function execPatternRuntime(mixed $pattern, string $instance, array &$ctx): array {
+        $name = '';
+
+        if (is_array($pattern)) {
+            $name = self::cleanName((string)($pattern['name'] ?? $pattern['_file'] ?? ''));
+        } else {
+            $name = self::cleanName((string)$pattern);
+        }
+
+        $instance = self::cleanName($instance !== '' ? $instance : (string)($ctx['instance'] ?? self::$instance));
+
+        if ($name === '') return ['ok' => false, 'message' => 'Pattern-Name fehlt.', 'ctx' => $ctx];
+
+        if ($instance === '') return ['ok' => false, 'message' => 'Keine Instanz für Pattern-Ausführung aktiv.', 'ctx' => $ctx];
+
+        if (!method_exists(self::db(), 'installPattern')) return ['ok' => false, 'message' => 'Pattern-Installation ist im aktuellen Driver nicht verfügbar.', 'ctx' => $ctx];
+
+        $res = self::db()::installPattern($name, $instance, true);
+        $ok = is_array($res) && !empty($res['ok']);
+
+        return [
+            'ok' => $ok,
+            'message' => $ok ? 'Pattern ausgeführt: ' . $name . ' in ' . $instance : 'Pattern-Ausführung fehlgeschlagen: ' . $name,
+            'ctx' => $ctx,
+            'result' => $res,
+            'refresh' => $ok
+        ];
+    }
+
     private static function fetchApiRuntime(string $url, array $body = [], array $headers = []): mixed {
         $url = trim($url);
 
@@ -484,15 +827,6 @@ trait GreenQL_RuntimeTrait {
         return (string)$response;
     }
 
-
-    /**
-     * Wertet GreenQL-Laufzeitfunktionen und EXISTS-Ausdrücke aus.
-     * @param string $value Ausdruck.
-     * @param array $ctx Context.
-     * @param array $vars Variablen.
-     * @param array $params Parameter.
-     * @return mixed Wert.
-     */
     private static function evalRuntimeExpression(string $value, array &$ctx, array &$vars, array $params = []): mixed {
         $value = trim($value);
 
@@ -502,27 +836,42 @@ trait GreenQL_RuntimeTrait {
             $value = trim(substr($value, 1, -1));
         }
 
+        if (preg_match('/^(SecondServer|secondServer|secondserver|SRV|Srv|srv)\/([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/s', $value, $m)) {
+            $args = self::evalRuntimeArgs((string)$m[3], $ctx, $vars, $params);
+            $res = self::bridgeSlashRuntime((string)$m[1], (string)$m[2], $args, $ctx);
+
+            return $res['result'] ?? ($res['ok'] ?? false);
+        }
+
         if (preg_match('/^CALL\s+([a-zA-Z_][a-zA-Z0-9_]*)\/([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/is', $value, $m)) {
             $res = self::command('CLASS ' . $m[1] . '/' . $m[2] . '(' . $m[3] . ')', $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
         }
 
         if (preg_match('/^CALL\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/is', $value, $m)) {
             $res = self::command('CALL ' . $m[1] . '(' . $m[2] . ')', $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
         }
 
         if (preg_match('/^CLASS\s+([a-zA-Z_][a-zA-Z0-9_]*)\/([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/is', $value, $m)) {
             $res = self::command($value, $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
         }
 
         if (preg_match('/^CALL\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/is', $value, $m)) {
             $res = self::command($value, $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
         }
 
@@ -531,18 +880,25 @@ trait GreenQL_RuntimeTrait {
 
             if ($pos >= 0) {
                 $left = self::evalRuntimeExpression(substr($value, 0, $pos), $ctx, $vars, $params);
+
                 if ((bool)$left) return true;
+
                 return (bool)self::evalRuntimeExpression(substr($value, $pos + strlen($op)), $ctx, $vars, $params);
             }
+
         }
 
         foreach (['&&', 'AND'] as $op) {
             $pos = self::findTopLevel($value, $op);
+
             if ($pos >= 0) {
                 $left = self::evalRuntimeExpression(substr($value, 0, $pos), $ctx, $vars, $params);
+
                 if (!(bool)$left) return false;
+
                 return (bool)self::evalRuntimeExpression(substr($value, $pos + strlen($op)), $ctx, $vars, $params);
             }
+
         }
 
         if (preg_match('/^!\s*(.+)$/s', $value, $m)) {
@@ -566,6 +922,7 @@ trait GreenQL_RuntimeTrait {
                     default => false
                 };
             }
+
         }
 
         foreach (['+', '-', '*', '/', '%'] as $op) {
@@ -577,6 +934,7 @@ trait GreenQL_RuntimeTrait {
 
                 if (!is_numeric($left) || !is_numeric($right)) {
                     if ($op === '+') return (string)$left . (string)$right;
+
                     return 0;
                 }
 
@@ -589,6 +947,7 @@ trait GreenQL_RuntimeTrait {
                     default => 0
                 };
             }
+
         }
 
         $literal = self::parseRuntimeLiteral($value, $ctx, $vars, $params);
@@ -603,13 +962,17 @@ trait GreenQL_RuntimeTrait {
 
         if (preg_match('/^CALL\s+([a-zA-Z_][a-zA-Z0-9_]*)\/([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/is', $value, $m)) {
             $res = self::command('CLASS ' . $m[1] . '/' . $m[2] . '(' . $m[3] . ')', $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
         }
 
         if (preg_match('/^CLASS\s+([a-zA-Z_][a-zA-Z0-9_]*)\/([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)$/is', $value, $m)) {
             $res = self::command($value, $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
         }
 
@@ -637,12 +1000,41 @@ trait GreenQL_RuntimeTrait {
         }
 
         $fn = strtolower((string)$m[1]);
+
+        if ($fn === 'fusion') {
+            return self::fusionRuntime((string)$m[2], $ctx, $vars, $params);
+        }
+
         $args = self::evalRuntimeArgs((string)$m[2], $ctx, $vars, $params);
 
         if (isset($ctx['functions'][$fn]) && is_array($ctx['functions'][$fn])) {
             $res = self::command('CALL ' . $fn . '(' . (string)$m[2] . ')', $ctx, $vars, $params);
+
             if (!($res['ok'] ?? false)) return null;
+
             return $res['back'] ?? ($res['result'] ?? null);
+        }
+
+        if ($fn === 'now') {
+            return date('Y-m-d H:i:s');
+        }
+
+        if ($fn === 'hash_pass') {
+            return self::hashPassRuntime((string)($args[0] ?? ''));
+        }
+
+        if ($fn === 'random_int') {
+            return self::randomIntRuntime($args);
+        }
+
+        if (in_array($fn, ['loadpattern', 'load_pattern'], true)) {
+            return self::loadPatternRuntime((string)($args[0] ?? ''));
+        }
+
+        if (in_array($fn, ['exec_pattern', 'execpattern'], true)) {
+            $instance = isset($args[1]) ? (string)$args[1] : '';
+
+            return self::execPatternRuntime($args[0] ?? '', $instance, $ctx);
         }
 
         if (in_array($fn, ['uni_random', 'spark_id', 'fresh_id'], true)) {
@@ -667,6 +1059,7 @@ trait GreenQL_RuntimeTrait {
             $out = self::db()::listDBs();
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -677,6 +1070,7 @@ trait GreenQL_RuntimeTrait {
             $out = $base !== '' ? self::db()::listTables($base) : [];
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -686,6 +1080,7 @@ trait GreenQL_RuntimeTrait {
             $rows = ($db !== '' && $table !== '') ? self::filterRowsByObject(self::getRows($db, $table), $filter) : [];
 
             self::popInstance($old, $ctx);
+
             return empty($filter) ? $rows : ($rows[0] ?? null);
         }
 
@@ -695,6 +1090,7 @@ trait GreenQL_RuntimeTrait {
             $out = ($db !== '' && $table !== '') ? count(self::filterRowsByObject(self::getRows($db, $table), $filter)) : 0;
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -704,6 +1100,7 @@ trait GreenQL_RuntimeTrait {
             $rows = ($db !== '' && $table !== '') ? self::getRows($db, $table) : [];
 
             self::popInstance($old, $ctx);
+
             return empty($rows) ? null : $rows[count($rows) - 1];
         }
 
@@ -714,6 +1111,7 @@ trait GreenQL_RuntimeTrait {
             $id = (is_array($data) && $db !== '' && $table !== '') ? self::db()::insertData($db, $table, $data) : 0;
 
             self::popInstance($old, $ctx);
+
             return $id > 0;
         }
 
@@ -725,6 +1123,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $pair !== null && is_array($data) && !self::rowIsReadonly($db, $table, $filter) ? self::db()::editData($db, $table, $pair[0], $pair[1], $data) : false;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -735,6 +1134,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $pair !== null && !self::rowIsReadonly($db, $table, $filter) ? self::db()::deleteData($db, $table, $pair[0], $pair[1]) : false;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -748,6 +1148,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $db !== '' && $table !== '' && $column !== '' ? self::db()::addColumn($db, $table, $column, $default) : false;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -760,6 +1161,7 @@ trait GreenQL_RuntimeTrait {
             $ok = self::deleteColumnRuntime($db, $table, $column);
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -777,6 +1179,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $db !== '' ? self::db()::deleteDatabase($db) : false;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -788,18 +1191,35 @@ trait GreenQL_RuntimeTrait {
             $ok = $db !== '' && $table !== '' ? self::db()::deleteTable($db, $table) : false;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
         if (in_array($fn, ['rename_table'], true)) {
-            $instance = count($args) >= 4 ? self::cleanName((string)$args[0]) : self::cleanName((string)($ctx['instance'] ?? ''));
-            $db = count($args) >= 4 ? self::cleanName((string)$args[1]) : self::cleanName((string)($ctx['db'] ?? ''));
-            $oldName = count($args) >= 4 ? self::cleanName((string)$args[2]) : (isset($args[0]) ? self::cleanName((string)$args[0]) : '');
-            $newName = count($args) >= 4 ? self::cleanName((string)$args[3]) : (isset($args[1]) ? self::cleanName((string)$args[1]) : '');
+            $instance = self::cleanName((string)($ctx['instance'] ?? ''));
+            $db = self::cleanName((string)($ctx['db'] ?? ''));
+            $oldName = '';
+            $newName = '';
+
+            if (count($args) >= 4) {
+                $instance = self::cleanName((string)$args[0]);
+                $db = self::cleanName((string)$args[1]);
+                $oldName = self::cleanName((string)$args[2]);
+                $newName = self::cleanName((string)$args[3]);
+            } else if (count($args) >= 3) {
+                $db = self::cleanName((string)$args[0]);
+                $oldName = self::cleanName((string)$args[1]);
+                $newName = self::cleanName((string)$args[2]);
+            } else {
+                $oldName = isset($args[0]) ? self::cleanName((string)$args[0]) : '';
+                $newName = isset($args[1]) ? self::cleanName((string)$args[1]) : '';
+            }
+
             $old = self::pushInstance($instance, $ctx);
             $ok = self::copyTableRuntime($db, $oldName, $db, $newName, true);
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -814,10 +1234,12 @@ trait GreenQL_RuntimeTrait {
                 foreach (self::db()::listTables($oldBase) as $tbl) $ok = $ok && self::copyTableRuntime($oldBase, $tbl, $newBase, $tbl, false);
 
                 if ($ok) foreach (self::db()::listTables($oldBase) as $tbl) self::db()::deleteTable($oldBase, $tbl);
+
                 if ($ok) $ok = self::db()::deleteDatabase($oldBase);
             }
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -854,12 +1276,16 @@ trait GreenQL_RuntimeTrait {
                             unset($row['id']);
                             GBDB::insertData($base, $tbl, $row);
                         }
+
                     }
 
                     GBDB::setInstance($oldInst);
                 }
+
             }
+
             GBDB::setInstance($oldCurrent);
+
             return GBDB::deleteInstance($oldInst, true);
         }
 
@@ -871,6 +1297,7 @@ trait GreenQL_RuntimeTrait {
             $ok = self::copyTableRuntime((string)($from['base'] ?? ''), (string)($from['table'] ?? ''), (string)($to['base'] ?? ''), (string)($to['table'] ?? ''), $delete);
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -885,11 +1312,13 @@ trait GreenQL_RuntimeTrait {
             $ok = $pair !== null ? self::db()::editData($db, $table, $pair[0], $pair[1], ['_readonly' => $readonly ? 1 : 0]) : false;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
         if ($fn === 'instance_exists') {
             $name = self::cleanName((string)($args[0] ?? ''));
+
             return $name !== '' && class_exists('GBDB') && in_array($name, GBDB::listInstances(), true);
         }
 
@@ -900,6 +1329,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $base !== '' && in_array($base, self::db()::listDBs(), true);
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -911,6 +1341,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $base !== '' && $table !== '' && in_array($table, self::db()::listTables($base), true);
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -920,6 +1351,7 @@ trait GreenQL_RuntimeTrait {
             $ok = $db !== '' && $table !== '' && count(self::filterRowsByObject(self::getRows($db, $table), is_array($filter) ? $filter : [])) > 0;
 
             self::popInstance($old, $ctx);
+
             return $ok;
         }
 
@@ -932,6 +1364,7 @@ trait GreenQL_RuntimeTrait {
             if ($db !== '' && $table !== '') {
                 $out = method_exists(self::db(), 'monitor') ? self::db()::monitor($db, $table) : [];
                 self::popInstance($old, $ctx);
+
                 return $out;
             }
 
@@ -941,9 +1374,11 @@ trait GreenQL_RuntimeTrait {
                 foreach (self::db()::listTables($dbName) as $tableName) {
                     $out[] = method_exists(self::db(), 'monitor') ? self::db()::monitor($dbName, $tableName) : ['database' => $dbName, 'table' => $tableName];
                 }
+
             }
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -955,6 +1390,7 @@ trait GreenQL_RuntimeTrait {
             $out = $db !== '' && $table !== '' && method_exists(self::db(), 'recoverTable') ? self::db()::recoverTable($db, $table) : ['ok' => false, 'error' => 'target_missing'];
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -968,6 +1404,7 @@ trait GreenQL_RuntimeTrait {
             $out = $db !== '' && $table !== '' && method_exists(self::db(), 'page') ? self::db()::page($db, $table, $page, $size) : ['ok' => false, 'rows' => []];
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -981,6 +1418,7 @@ trait GreenQL_RuntimeTrait {
             $out = $db !== '' && $table !== '' && method_exists(self::db(), 'cursor') ? self::db()::cursor($db, $table, $size, $cursor !== '' ? $cursor : null) : ['ok' => false, 'rows' => []];
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
@@ -995,38 +1433,33 @@ trait GreenQL_RuntimeTrait {
             $out = $db !== '' && $table !== '' && method_exists(self::db(), 'fulltext_search') ? self::db()::fulltext_search($db, $table, $query, $columns, $limit) : [];
 
             self::popInstance($old, $ctx);
+
             return $out;
         }
 
         return self::evaluateExpression($value, $vars, $params);
     }
 
-    /**
-     * Prüft EXISTS-Ausdrücke.
-     * @param string $type Typ.
-     * @param string $raw Rohwert.
-     * @param array $ctx Context.
-     * @param array $vars Variablen.
-     * @param array $params Parameter.
-     * @return bool Ergebnis.
-     */
     private static function existsRuntime(string $type, string $raw, array &$ctx, array &$vars, array $params = []): bool {
         $type = strtoupper($type);
         $raw = trim($raw);
 
         if ($type === 'INSTANCE') {
             $name = self::cleanName((string)self::evaluateValue($raw, $vars, $params));
+
             return class_exists('GBDB') && in_array($name, GBDB::listInstances(), true);
         }
 
         if ($type === 'BASE') {
             $name = self::cleanName((string)self::evaluateValue($raw, $vars, $params));
+
             return in_array($name, self::db()::listDBs(), true);
         }
 
         if ($type === 'TABLE') {
             $name = self::cleanName((string)self::evaluateValue($raw, $vars, $params));
             $db = self::cleanName((string)($ctx['db'] ?? ''));
+
             return $db !== '' && in_array($name, self::db()::listTables($db), true);
         }
 
@@ -1043,9 +1476,11 @@ trait GreenQL_RuntimeTrait {
             }
 
             $db = self::cleanName((string)($ctx['db'] ?? ''));
+
             return $db !== '' && $table !== '' && count(self::filterRowsByObject(self::getRows($db, $table), $filter)) > 0;
         }
 
         return false;
     }
+
 }

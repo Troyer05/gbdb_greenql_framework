@@ -3,22 +3,25 @@
 class ReCaptcha {
 
     /**
-     * Verarbeitet die Funktion load js api.
-     * @return void Rückgabewert.
+     * loads reCaptcha official javascript
+     * @return void
      */
     public function loadJsApi(): void {
         echo '<script src="https://www.google.com/recaptcha/api.js" async defer></script>';
     }
 
     /**
-     * Name der POST Variable
+     * name of input-tag name
+     * @return string
      */
     public static function postName(): string {
         return "g-recaptcha-response";
     }
 
     /**
-     * Gibt das HTML-Element für reCAPTCHA aus
+     * provides the reCaptcha checkbox as html
+     * @param string $callbackJs
+     * @return string
      */
     public static function checkBox(string $callbackJs = ""): string {
         $wc = Vars::reCaptcha_website_key();
@@ -28,9 +31,9 @@ class ReCaptcha {
     }
 
     /**
-     * Verifiziert das reCAPTCHA Token
-     * @param string|null $token Das POST Token von Google
-     * @return bool TRUE wenn verifiziert
+     * verifys a recaptcha token
+     * @param mixed $token
+     * @return bool
      */
     public static function verify(?string $token): bool {
         if (empty($token)) {
@@ -50,6 +53,7 @@ class ReCaptcha {
 
         if ($response === false) {
             error_log("[ReCaptcha::verify] Fehler bei Anfrage an Google");
+
             return false;
         }
 
@@ -57,9 +61,11 @@ class ReCaptcha {
 
         if (!is_array($json)) {
             error_log("[ReCaptcha::verify] Ungültige Google Antwort: " . $response);
+
             return false;
         }
 
         return !empty($json["success"]);
     }
+
 }

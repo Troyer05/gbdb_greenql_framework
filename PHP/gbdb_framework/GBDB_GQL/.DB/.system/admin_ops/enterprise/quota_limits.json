@@ -1,0 +1,17 @@
+{
+    "max_rows_per_table": 100000,
+    "max_storage_per_instance": 1073741824,
+    "max_storage_per_tenant": 1073741824,
+    "max_query_time": 10,
+    "max_query_memory": 33554432,
+    "max_upload_size": 52428800,
+    "max_jobs": 10000,
+    "max_api_calls": 100000,
+    "max_users": 10000,
+    "max_tables": 1000,
+    "max_indexes": 2000,
+    "max_backups": 50,
+    "max_media_size": 104857600,
+    "warnings": true,
+    "enforce": true
+}

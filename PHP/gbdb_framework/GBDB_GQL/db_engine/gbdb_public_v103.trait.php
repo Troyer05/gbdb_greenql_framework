@@ -3,26 +3,27 @@
 declare(strict_types=1);
 
 trait GBDB_PublicV103Trait {
+
+    /**
+     * handles get actual instance.
+     *
+     * @return string result.
+     */
     public static function getActualInstance(): string {
         return self::getInstance();
     }
 
     /**
-     * Kurzer Alias für getData().
+     * handles get.
      *
-     * Ziel-Signatur:
-     * GBDB::get($base, $table, $search = false, $where = '', $is = '')
+     * @param string $base value.
+     * @param string $table value.
+     * @param mixed $search value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param array $options value.
      *
-     * Rückwärtskompatibel:
-     * GBDB::get($base, $table, $where, $is, $options)
-     *
-     * @param string $base Base/Datenbank.
-     * @param string $table Tabelle.
-     * @param mixed $search Bool für getData-Filter oder alte WHERE-Spalte.
-     * @param mixed $where WHERE-Spalte oder alter Suchwert.
-     * @param mixed $is Suchwert oder alte Options.
-     * @param array $options Optionale Sortierung/Paginierung.
-     * @return mixed Rückgabewert von getData().
+     * @return mixed result.
      */
     public static function get(string $base, string $table, mixed $search = false, mixed $where = '', mixed $is = '', array $options = []): mixed {
         $useGetDataSignature = is_bool($search);
@@ -66,12 +67,29 @@ trait GBDB_PublicV103Trait {
         return $data;
     }
 
+    /**
+     * handles exists instance.
+     *
+     * @param string $instance value.
+     *
+     * @return bool result.
+     */
     public static function existsInstance(string $instance): bool {
         $instance = Format::cleanString($instance);
 
         return $instance !== '' && in_array($instance, self::listInstances(true), true);
     }
 
+    /**
+     * handles create.
+     *
+     * @param string $base value.
+     * @param string $table value.
+     * @param bool $useDataTypes value.
+     * @param array|object $rows value.
+     *
+     * @return bool result.
+     */
     public static function create(string $base, string $table = '', bool $useDataTypes = false, array|object $rows = []): bool {
         $base = Format::cleanString($base);
         $table = Format::cleanString($table);
@@ -101,10 +119,12 @@ trait GBDB_PublicV103Trait {
 
                 if (is_array($row)) {
                     $cols = array_values(array_unique(array_merge($cols, array_keys($row))));
-                } elseif (is_string($row) && $row !== '') {
+                } else if (is_string($row) && $row !== '') {
                     $cols[] = $row;
                 }
+
             }
+
         }
 
         $cols = array_values(array_filter(
@@ -123,14 +143,34 @@ trait GBDB_PublicV103Trait {
         $ok = self::createTable($base, $table, $cols);
 
         if ($ok && $useDataTypes && self::isAssocArrayV103($rowData)) {
-            $schema = self::readSchema();
-            $schema[self::getInstance()][$base][$table]['types'] = $rowData;
-            self::writeSchema($schema);
+            self::enableSchemaTypes($base, $table, true);
+
+            foreach ($rowData as $column => $type) {
+                $column = Format::cleanString((string)$column);
+                $type = is_scalar($type) ? (string)$type : 'mixed';
+
+                if ($column === '' || $column === 'id') {
+                    continue;
+                }
+
+                self::setColumnType($base, $table, $column, $type);
+            }
+
         }
 
         return $ok;
     }
 
+    /**
+     * handles exists.
+     *
+     * @param string $base value.
+     * @param null|string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return bool result.
+     */
     public static function exists(string $base, ?string $table = null, mixed $where = '', mixed $is = ''): bool {
         $base = Format::cleanString($base);
         $table = $table === null ? null : Format::cleanString($table);
@@ -154,6 +194,18 @@ trait GBDB_PublicV103Trait {
         return self::elementExists($base, $table, $where, $is);
     }
 
+    /**
+     * handles edit.
+     *
+     * @param string $base value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param array|object $newDataAsObject value.
+     * @param bool $recursive value.
+     *
+     * @return bool result.
+     */
     public static function edit(string $base, string $table, mixed $where, mixed $is, array|object $newDataAsObject, bool $recursive = false): bool {
         return self::editData(
             $base,
@@ -164,6 +216,17 @@ trait GBDB_PublicV103Trait {
         );
     }
 
+    /**
+     * handles delete.
+     *
+     * @param string $base value.
+     * @param null|string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param bool $recursive value.
+     *
+     * @return bool result.
+     */
     public static function delete(string $base, ?string $table = null, mixed $where = '', mixed $is = '', bool $recursive = false): bool {
         $base = Format::cleanString($base);
         $table = $table === null ? null : Format::cleanString($table);
@@ -183,14 +246,40 @@ trait GBDB_PublicV103Trait {
         return self::deleteData($base, $table, $where, $is);
     }
 
+    /**
+     * handles get next id.
+     *
+     * @param string $base value.
+     * @param string $table value.
+     *
+     * @return int result.
+     */
     public static function getNextId(string $base, string $table): int {
         return self::nextID($base, $table);
     }
 
+    /**
+     * handles full text search.
+     *
+     * @param string $base value.
+     * @param string $table value.
+     * @param string $text value.
+     *
+     * @return array result.
+     */
     public static function fullTextSearch(string $base, string $table, string $text): array {
         return self::fulltext_search($base, $table, $text);
     }
 
+    /**
+     * handles rename table.
+     *
+     * @param string $base value.
+     * @param string $table value.
+     * @param string $newTableName value.
+     *
+     * @return bool result.
+     */
     public static function renameTable(string $base, string $table, string $newTableName): bool {
         $keys = self::getKeys($base, $table);
 
@@ -217,6 +306,14 @@ trait GBDB_PublicV103Trait {
         return self::deleteTable($base, $table);
     }
 
+    /**
+     * handles rename base.
+     *
+     * @param string $base value.
+     * @param string $newBaseName value.
+     *
+     * @return bool result.
+     */
     public static function renameBase(string $base, string $newBaseName): bool {
         if (!self::exists($base) || self::exists($newBaseName)) {
             return false;
@@ -240,11 +337,20 @@ trait GBDB_PublicV103Trait {
 
                 self::insertData($newBaseName, $table, $row);
             }
+
         }
 
         return self::deleteAll($base);
     }
 
+    /**
+     * handles rename instance.
+     *
+     * @param string $instance value.
+     * @param string $newInstanceName value.
+     *
+     * @return bool result.
+     */
     public static function renameInstance(string $instance, string $newInstanceName): bool {
         if (!self::existsInstance($instance) || self::existsInstance($newInstanceName)) {
             return false;
@@ -267,6 +373,15 @@ trait GBDB_PublicV103Trait {
         return self::deleteInstance($instance, true);
     }
 
+    /**
+     * handles move base.
+     *
+     * @param string $base value.
+     * @param string $fromInstance value.
+     * @param string $toInstance value.
+     *
+     * @return bool result.
+     */
     public static function moveBase(string $base, string $fromInstance, string $toInstance): bool {
         $old = self::getInstance();
 
@@ -284,6 +399,7 @@ trait GBDB_PublicV103Trait {
 
                 return false;
             }
+
         }
 
         self::deleteAll($base);
@@ -292,6 +408,17 @@ trait GBDB_PublicV103Trait {
         return true;
     }
 
+    /**
+     * handles move table.
+     *
+     * @param string $instance value.
+     * @param string $base value.
+     * @param string $table value.
+     * @param string $toInstance value.
+     * @param string $toBase value.
+     *
+     * @return bool result.
+     */
     public static function moveTable(string $instance, string $base, string $table, string $toInstance, string $toBase): bool {
         $old = self::getInstance();
 
@@ -340,10 +467,25 @@ trait GBDB_PublicV103Trait {
         return $ok;
     }
 
+    /**
+     * handles create backup.
+     *
+     * @param string $pathToBackupDir value.
+     *
+     * @return array result.
+     */
     public static function createBackup(string $pathToBackupDir = ''): array {
         return self::fullBackup($pathToBackupDir);
     }
 
+    /**
+     * handles run file.
+     *
+     * @param string $pathToFileWithFilename value.
+     * @param array|object $parametersAsObject value.
+     *
+     * @return array result.
+     */
     public static function runFile(string $pathToFileWithFilename, array|object $parametersAsObject = []): array {
         return self::runScript(
             $pathToFileWithFilename,
@@ -354,4 +496,5 @@ trait GBDB_PublicV103Trait {
     private static function isAssocArrayV103(array $array): bool {
         return $array !== [] && array_keys($array) !== range(0, count($array) - 1);
     }
+
 }

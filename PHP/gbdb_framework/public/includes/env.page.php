@@ -9,17 +9,17 @@ gbdbui_require_tool('env');
 $file = dirname(__DIR__, 2) . '/.config/.framework.env.php';
 $msg = '';
 $msgType = 'ok';
-$content = is_file($file) ? (string)file_get_contents($file) : '';
+$content = is_file($file) ? (string) file_get_contents($file) : '';
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'save') {
-    if (!GreenQLUIv2Helper::checkCsrf((string)($_POST['csrf'] ?? ''))) {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string) ($_POST['action'] ?? '') === 'save') {
+    if (!GreenQLUIv2Helper::checkCsrf((string) ($_POST['csrf'] ?? ''))) {
         $msg = 'Ungültiger CSRF Token.';
         $msgType = 'bad';
     } else {
-        $new = (string)($_POST['content'] ?? '');
+        $new = (string) ($_POST['content'] ?? '');
         $tmp = tempnam(sys_get_temp_dir(), 'envphp_');
         file_put_contents($tmp, $new);
-        $lint = trim((string)shell_exec('php -l ' . escapeshellarg($tmp) . ' 2>&1'));
+        $lint = trim((string) shell_exec('php -l ' . escapeshellarg($tmp) . ' 2>&1'));
         @unlink($tmp);
 
         if (str_contains($lint, 'No syntax errors')) {
@@ -30,17 +30,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
             $msg = 'Syntaxfehler, nicht gespeichert: ' . $lint;
             $msgType = 'bad';
         }
+
     }
+
 }
+
 ?>
 <!doctype html>
 <html lang="de">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GBDB ENV</title>
     <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
 </head>
+
 <body class="gbdbui-dashboard gbdbui-pro">
     <?php gbdbui_nav('env'); ?>
     <main class="gbdbui-wide">
@@ -50,7 +55,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
             <p>.framework.env.php ansehen und vorsichtig bearbeiten. Vor dem Speichern läuft ein PHP-Lint.</p>
         </section>
 
-        <?php if ($msg): ?><div class="gbdbui-flash <?= gbdbui_e($msgType) ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
+        <?php if ($msg): ?>
+            <div class="gbdbui-flash <?= gbdbui_e($msgType) ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
 
         <section class="gbdbui-panel" style="margin-top:18px">
             <div class="gbdbui-panel-head">
@@ -76,4 +82,5 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
     </main>
     <script src="gbdb_framework/public/js/gbdbui_highlight.js?v=2026.4"></script>
 </body>
+
 </html>

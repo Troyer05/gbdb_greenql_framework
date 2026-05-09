@@ -3,8 +3,8 @@
 class Session {
 
     /**
-     * Startet die Session sicher, falls sie nicht aktiv ist.
-     * Aktiviert sichere Cookie-Parameter.
+     * start session if not started already and sets cookie to safe-cookies
+     * @return void
      */
     public static function handler(): void {
 
@@ -12,9 +12,8 @@ class Session {
             return;
         }
 
-        // Sichere Cookie-Settings
         session_set_cookie_params([
-            "lifetime" => 360 * 24 * 60 * 60, // 360 Tage
+            "lifetime" => 360 * 24 * 60 * 60, // 360 days
             "path" => "/",
             "secure" => isset($_SERVER["HTTPS"]),
             "httponly" => true,
@@ -23,7 +22,6 @@ class Session {
 
         session_start();
 
-        // Wenn neue Session → Metadata setzen
         if (!isset($_SESSION["_created"])) {
             $_SESSION["_created"] = time();
             $_SESSION["_last_regen"] = time();
@@ -32,10 +30,6 @@ class Session {
         self::autoRegenerate();
     }
 
-
-    /**
-     * Regeneriert regelmäßig die Session-ID zum Schutz vor Hijacking.
-     */
     private static function autoRegenerate(): void {
         $interval = 60 * 30; // alle 30 Minuten regenerieren
 
@@ -43,56 +37,64 @@ class Session {
             session_regenerate_id(true);
             $_SESSION["_last_regen"] = time();
         }
+
     }
 
-
     /**
-     * Initialisiert alle Framework-Session-Werte aus Vars::init_session()
+     * initializes cookies defined in env
+     * @return void
      */
     public static function init(): void {
         foreach (Vars::init_session() as $entry) {
             $_SESSION[$entry["session_name"]] = $entry["session_value"];
         }
+
     }
 
-
     /**
-     * Holt den Wert einer Session-Variable
+     * get data from session
+     * @param string $name
+     * @return mixed
      */
     public static function get(string $name): mixed {
         return $_SESSION[$name] ?? null;
     }
 
-
     /**
-     * Setzt oder überschreibt eine Session-Variable
+     * adds or updates a session data
+     * @param string $name
+     * @param mixed $value
+     * @return void
      */
     public static function set(string $name, mixed $value): void {
         $_SESSION[$name] = $value;
     }
 
-
     /**
-     * Prüft ob Session-Variable existiert
+     * checks if session data exists
+     * @param string $name
+     * @return bool
      */
     public static function exists(string $name): bool {
         return array_key_exists($name, $_SESSION);
     }
 
-
     /**
-     * Löscht eine Session-Variable
+     * delete session data
+     * @param string $name
+     * @return void
      */
     public static function delete(string $name): void {
         unset($_SESSION[$name]);
     }
 
-
     /**
-     * Zerstört die ganze Session (Logout)
+     * terminate session
+     * @return void
      */
     public static function destroy(): void {
         session_unset();
         session_destroy();
     }
+
 }

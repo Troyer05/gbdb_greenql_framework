@@ -5,7 +5,6 @@ trait GBDB_LockingTrait {
     private static int $lockDefaultTimeoutMs = 5000;
     private static int $lockStaleAfter = 60;
 
-    /** Gibt den technischen Lock-Root zurück. */
     private static function lockRoot(): string {
         $dir = dirname(Vars::DB_PATH()) . '/.temp/locks';
 
@@ -16,14 +15,12 @@ trait GBDB_LockingTrait {
         return $dir;
     }
 
-    /** Gibt den Besitzer dieses PHP-Prozesses zurück. */
     private static function lockOwner(): string {
         $host = function_exists('gethostname') ? (string)gethostname() : 'host';
 
         return $host . ':' . getmypid();
     }
 
-    /** Normalisiert einen Lock-Key zu einem Dateinamen. */
     private static function lockKey(string $resource): string {
         $key = preg_replace('/[^a-zA-Z0-9_\-.]/', '_', $resource) ?: 'resource';
 
@@ -34,14 +31,26 @@ trait GBDB_LockingTrait {
         return $key;
     }
 
-    /** Setzt den Standard-Lock-Timeout in Millisekunden. */
+    /**
+     * handles lock timeout.
+     *
+     * @param int $milliseconds value.
+     *
+     * @return int result.
+     */
     public static function lockTimeout(int $milliseconds): int {
         self::$lockDefaultTimeoutMs = max(1, $milliseconds);
 
         return self::$lockDefaultTimeoutMs;
     }
 
-    /** Entfernt verwaiste Lock-Meta-Dateien. */
+    /**
+     * handles cleanup locks.
+     *
+     * @param int $olderThanSeconds value.
+     *
+     * @return array result.
+     */
     public static function cleanupLocks(int $olderThanSeconds = 0): array {
         $olderThanSeconds = $olderThanSeconds > 0 ? $olderThanSeconds : self::$lockStaleAfter;
         $dir = self::lockRoot();
@@ -55,6 +64,7 @@ trait GBDB_LockingTrait {
                 @unlink($file);
                 $removed++;
             }
+
         }
 
         return [
@@ -64,7 +74,6 @@ trait GBDB_LockingTrait {
         ];
     }
 
-    /** Schreibt einen wartenden Lock in die Queue. */
     private static function enqueueLock(string $key, string $type): void {
         $file = self::lockRoot() . '/' . $key . '.queue';
 
@@ -75,7 +84,15 @@ trait GBDB_LockingTrait {
         ], JSON_UNESCAPED_UNICODE) . "\n");
     }
 
-    /** Erwirbt einen Read-/Write-Lock. Viele Leser sind erlaubt, Writer exklusiv. */
+    /**
+     * handles acquire lock.
+     *
+     * @param string $resource value.
+     * @param string $type value.
+     * @param int $timeoutMs value.
+     *
+     * @return string|false result.
+     */
     public static function acquireLock(string $resource, string $type = 'write', int $timeoutMs = 0): string|false {
         $type = strtolower($type) === 'read' ? 'read' : 'write';
         $timeoutMs = $timeoutMs > 0 ? $timeoutMs : self::$lockDefaultTimeoutMs;
@@ -134,7 +151,13 @@ trait GBDB_LockingTrait {
         return $id;
     }
 
-    /** Gibt einen Lock frei. */
+    /**
+     * handles release lock.
+     *
+     * @param string $lockId value.
+     *
+     * @return bool result.
+     */
     public static function releaseLock(string $lockId): bool {
         if (!isset(self::$lockHandles[$lockId])) {
             return false;
@@ -152,7 +175,6 @@ trait GBDB_LockingTrait {
         return true;
     }
 
-    /** Führt eine Aktion unter einem Read-Lock aus. */
     private static function withReadLock(string $resource, callable $fn, int $timeoutMs = 0): mixed {
         $lock = self::acquireLock($resource, 'read', $timeoutMs);
 
@@ -165,9 +187,9 @@ trait GBDB_LockingTrait {
         } finally {
             self::releaseLock($lock);
         }
+
     }
 
-    /** Führt eine Aktion unter einem Write-Lock aus. */
     private static function withWriteLock(string $resource, callable $fn, int $timeoutMs = 0): mixed {
         $lock = self::acquireLock($resource, 'write', $timeoutMs);
 
@@ -180,9 +202,19 @@ trait GBDB_LockingTrait {
         } finally {
             self::releaseLock($lock);
         }
+
     }
 
-    /** Table-Level Lock Wrapper. */
+    /**
+     * handles lock table.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $type value.
+     * @param int $timeoutMs value.
+     *
+     * @return string|false result.
+     */
     public static function lockTable(string $database, string $table, string $type = 'write', int $timeoutMs = 0): string|false {
         return self::acquireLock(
             'table:' . self::getInstance() . ':' . Format::cleanString($database) . ':' . Format::cleanString($table),
@@ -191,7 +223,17 @@ trait GBDB_LockingTrait {
         );
     }
 
-    /** Segment-/Chunk-Level Lock Wrapper. */
+    /**
+     * handles lock chunk.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string|int $chunk value.
+     * @param string $type value.
+     * @param int $timeoutMs value.
+     *
+     * @return string|false result.
+     */
     public static function lockChunk(string $database, string $table, string|int $chunk, string $type = 'write', int $timeoutMs = 0): string|false {
         return self::acquireLock(
             'chunk:' . self::getInstance() . ':' . Format::cleanString($database) . ':' . Format::cleanString($table) . ':' . self::lockKey((string)$chunk),
@@ -200,7 +242,17 @@ trait GBDB_LockingTrait {
         );
     }
 
-    /** Row-Level Lock Vorbereitung. */
+    /**
+     * handles lock row.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $rowId value.
+     * @param string $type value.
+     * @param int $timeoutMs value.
+     *
+     * @return string|false result.
+     */
     public static function lockRow(string $database, string $table, int $rowId, string $type = 'write', int $timeoutMs = 0): string|false {
         return self::acquireLock(
             'row:' . self::getInstance() . ':' . Format::cleanString($database) . ':' . Format::cleanString($table) . ':' . max(0, $rowId),
@@ -209,7 +261,17 @@ trait GBDB_LockingTrait {
         );
     }
 
-    /** Page-Level Lock Vorbereitung. */
+    /**
+     * handles lock page.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string|int $page value.
+     * @param string $type value.
+     * @param int $timeoutMs value.
+     *
+     * @return string|false result.
+     */
     public static function lockPage(string $database, string $table, string|int $page, string $type = 'write', int $timeoutMs = 0): string|false {
         return self::acquireLock(
             'page:' . self::getInstance() . ':' . Format::cleanString($database) . ':' . Format::cleanString($table) . ':' . self::lockKey((string)$page),
@@ -218,7 +280,11 @@ trait GBDB_LockingTrait {
         );
     }
 
-    /** Gibt aktive und wartende Locks zurück. */
+    /**
+     * handles lock monitor.
+     *
+     * @return array result.
+     */
     public static function lockMonitor(): array {
         self::cleanupLocks();
 
@@ -232,6 +298,7 @@ trait GBDB_LockingTrait {
             if (is_array($data)) {
                 $active[] = $data;
             }
+
         }
 
         foreach (glob($dir . '/*.queue') ?: [] as $file) {
@@ -247,7 +314,11 @@ trait GBDB_LockingTrait {
         ];
     }
 
-    /** Gibt Lock-Statistiken zurück. */
+    /**
+     * handles lock stats.
+     *
+     * @return array result.
+     */
     public static function lockStats(): array {
         $monitor = self::lockMonitor();
         $byType = [
@@ -268,7 +339,13 @@ trait GBDB_LockingTrait {
         ];
     }
 
-    /** Einfache Deadlock-Erkennung über wartende Queue-Dateien und zu alte Writer. */
+    /**
+     * handles detect deadlocks.
+     *
+     * @param int $olderThanSeconds value.
+     *
+     * @return array result.
+     */
     public static function detectDeadlocks(int $olderThanSeconds = 15): array {
         $monitor = self::lockMonitor();
         $suspects = [];
@@ -279,6 +356,7 @@ trait GBDB_LockingTrait {
             if ($age >= $olderThanSeconds && ($item['type'] ?? '') === 'write') {
                 $suspects[] = $item;
             }
+
         }
 
         return [
@@ -288,7 +366,13 @@ trait GBDB_LockingTrait {
         ];
     }
 
-    /** Deadlock-Resolution: verwaiste Meta/Queue-Daten entfernen, OS-flock bleibt Prozess-sicher. */
+    /**
+     * handles resolve deadlocks.
+     *
+     * @param int $olderThanSeconds value.
+     *
+     * @return array result.
+     */
     public static function resolveDeadlocks(int $olderThanSeconds = 15): array {
         $dead = self::detectDeadlocks($olderThanSeconds);
         $cleanup = self::cleanupLocks($olderThanSeconds);
@@ -300,7 +384,15 @@ trait GBDB_LockingTrait {
         ];
     }
 
-    /** Retry-Strategie bei Lock-Kollisionen. */
+    /**
+     * handles retry on lock collision.
+     *
+     * @param callable $fn value.
+     * @param int $tries value.
+     * @param int $sleepMs value.
+     *
+     * @return mixed result.
+     */
     public static function retryOnLockCollision(callable $fn, int $tries = 3, int $sleepMs = 50): mixed {
         $tries = max(1, $tries);
 
@@ -318,7 +410,15 @@ trait GBDB_LockingTrait {
         return false;
     }
 
-    /** Lock-Escalation Vorbereitung: eskaliert Row/Chunk/Page zu Table-Lock, wenn viele Einzel-Locks offen sind. */
+    /**
+     * handles maybe escalate lock.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $threshold value.
+     *
+     * @return string|false result.
+     */
     public static function maybeEscalateLock(string $database, string $table, int $threshold = 32): string|false {
         $count = 0;
         $prefix = ':' . self::getInstance() . ':' . Format::cleanString($database) . ':' . Format::cleanString($table) . ':';
@@ -327,6 +427,7 @@ trait GBDB_LockingTrait {
             if (str_contains((string)($item['resource'] ?? ''), $prefix)) {
                 $count++;
             }
+
         }
 
         if ($count < $threshold) {
@@ -335,4 +436,5 @@ trait GBDB_LockingTrait {
 
         return self::lockTable($database, $table, 'write');
     }
+
 }

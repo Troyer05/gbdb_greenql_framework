@@ -1,10 +1,13 @@
 <?php
+/**
+ * This is a collection of tools, i couldn't really put into own categorys/classes
+ */
 
 class Tools {
     /**
-     * Generiert ein (kryptografisch) sicheres Passwort
-     *
-     * @param int $length Länge des Passworts
+     * generates a password
+     * @param int $length
+     * @return string
      */
     public static function generatePassword(int $length): string {
         if ($length <= 0) {
@@ -24,9 +27,9 @@ class Tools {
     }
 
     /**
-     * Testet eine Passwortstärke
-     *
-     * @return string Beschreibung, was ggf. noch fehlt
+     * tests the strength of a password
+     * @param string $password
+     * @return string
      */
     public static function testPasswordStrength(string $password): string {
         if (strlen($password) < 8) {
@@ -49,9 +52,9 @@ class Tools {
     }
 
     /**
-     * Sicheres WHOIS für eine Domain (shell_exec mit Sanitizing)
-     *
-     * @return string JSON mit success|error
+     * get domain info by whois-request
+     * @param string $domain
+     * @return bool|string
      */
     public static function getDomainInfo(string $domain): mixed {
         $domain = trim(strtolower($domain));
@@ -78,7 +81,8 @@ class Tools {
     }
 
     /**
-     * Generiert eine inkrementelle ID (filebasiert, mit Locking)
+     * generates an id
+     * @return int
      */
     public static function generateId(): int {
         $tmpFile = self::getFrameworkTempFile('_id.txt');
@@ -88,18 +92,15 @@ class Tools {
         $fp = @fopen($tmpFile, 'c+');
 
         if (!$fp) {
-            // Fallback: zufällige ID
             return random_int(1, PHP_INT_MAX);
         }
 
-        // Exklusiver Lock
         flock($fp, LOCK_EX);
 
         $contents = trim(stream_get_contents($fp));
         $lastId = ($contents !== '') ? (int)$contents : 0;
         $newId = $lastId + 1;
 
-        // Datei zurücksetzen und neue ID schreiben
         ftruncate($fp, 0);
         rewind($fp);
         fwrite($fp, (string)$newId);
@@ -111,27 +112,20 @@ class Tools {
     }
 
     /**
-     * Generiert einen Token (Dateibasierter Duplicate-Schutz)
-     *
-     * @param string $delimiter Trennzeichen zwischen Fragmenten
-     * @param int $many Anzahl Tokens
-     * @param int $fragments Anzahl an Fragmenten pro Token
-     * @return array Generierte Tokens
+     * generates a token
+     * @param string $delimiter
+     * @param int $many
+     * @param int $fragments
+     * @return array
      */
     public static function generateToken(string $delimiter = "-", int $many = 1, int $fragments = 4): array {
         return self::generateTokenInternal($delimiter, $many, $fragments);
     }
 
     /**
-     * Erweiterte Token-Variante (gleiche Logik, anderer historischer Pfad)
-     */
-    public static function generateTokenExt(string $delimiter = "-", int $many = 1, int $fragments = 4): array {
-        // Für Kompatibilität gleiche Logik, gleicher Speicherort
-        return self::generateTokenInternal($delimiter, $many, $fragments);
-    }
-
-    /**
-     * IP → Land (nutzt Http::get statt rohem cURL)
+     * gets country to an ip
+     * @param string $ip
+     * @return string
      */
     public static function getIpCountry(string $ip): string {
         if (!filter_var($ip, FILTER_VALIDATE_IP)) {
@@ -156,7 +150,9 @@ class Tools {
     }
 
     /**
-     * IPv4-Ping (sicher, OS-aware)
+     * ipv4 ping
+     * @param string $ip
+     * @return string
      */
     public static function ping4(string $ip): string {
         if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
@@ -179,7 +175,9 @@ class Tools {
     }
 
     /**
-     * IPv6-Ping (sicher, OS-aware)
+     * ipv6 ping
+     * @param string $ip
+     * @return string
      */
     public static function ping6(string $ip): string {
         if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
@@ -191,7 +189,6 @@ class Tools {
         if (PHP_OS_FAMILY === 'Windows') {
             $cmd = "ping -n 1 -6 $escapedIp";
         } else {
-            // Viele Systeme: ping -6, manche ping6 – wir versuchen ping -6
             $cmd = "ping -c 1 -6 $escapedIp 2>/dev/null";
         }
 
@@ -205,7 +202,11 @@ class Tools {
     }
 
     /**
-     * Erstellt einen QR Code (iframe Wrapper)
+     * creates a qr-code in an iframe
+     * @param string $value
+     * @param int $width
+     * @param int $height
+     * @return string
      */
     public static function qr(string $value, int $width, int $height): string {
         $width  = max(1, $width);
@@ -219,7 +220,11 @@ class Tools {
     }
 
     /**
-     * Erstellt einen BAR Code (iframe Wrapper)
+     * creates bar-code in an iframe
+     * @param string $value
+     * @param int $width
+     * @param int $height
+     * @return string
      */
     public static function bar(string $value, int $width, int $height = 175): string  {
         $width  = max(1, $width);
@@ -231,13 +236,6 @@ class Tools {
         return '<iframe style="' . htmlspecialchars($style, ENT_QUOTES) . '" src="assets/tool_apis/barcode.api.php' . $params . '"></iframe>';
     }
 
-    // =====================================================
-    //  INTERNAL HELPER
-    // =====================================================
-
-    /**
-     * Gemeinsame Token-Generierung (cryptographically secure)
-     */
     private static function generateTokenInternal(string $delimiter, int $many, int $fragments): array {
         $tmpFile = self::getFrameworkTempFile('_tokens.txt');
 
@@ -246,7 +244,6 @@ class Tools {
         $tokens = [];
         $existing = [];
 
-        // Bestehende Tokens laden (für Duplicate-Schutz)
         if (file_exists($tmpFile)) {
             $existing = file($tmpFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
         }
@@ -254,7 +251,6 @@ class Tools {
         $fp = @fopen($tmpFile, 'a+');
 
         if (!$fp) {
-            // Fallback: trotzdem Tokens liefern, aber nicht persistieren
             for ($i = 0; $i < $many; $i++) {
                 $tokens[] = self::buildToken($delimiter, $fragments);
             }
@@ -282,44 +278,27 @@ class Tools {
         return $tokens;
     }
 
-    /**
-     * Baut ein einzelnes Token aus n Fragmenten
-     */
     private static function buildToken(string $delimiter, int $fragments): string {
         $parts = [];
 
         for ($j = 0; $j < $fragments; $j++) {
-            // 8 Hex-Zeichen pro Fragment (32-bit)
             $parts[] = bin2hex(random_bytes(4));
         }
 
         return implode($delimiter, $parts);
     }
 
-    /**
-     * Liefert den Pfad zum framework_temp-Verzeichnis (mit Legacy-Unterstützung)
-     */
     private static function getFrameworkTempFile(string $filename): string {
-        // Neuer, sauberer Pfad
         $base = rtrim(Vars::json_path(), '/\\') . '/framework_temp/';
-
-        // Legacy Pfad (wie früher in deiner Klasse)
-        $legacyBase = "../../" . rtrim(Vars::json_path(), '/\\') . '/framework_temp/';
-
-        // Wenn Legacy-Verzeichnis existiert und neuer noch nicht → Legacy weiter verwenden
-        if (!is_dir($base) && is_dir($legacyBase)) {
-            return $legacyBase . $filename;
-        }
 
         return $base . $filename;
     }
 
-    /**
-     * Stellt sicher, dass ein Verzeichnis existiert
-     */
     private static function ensureDir(string $dir): void {
         if (!is_dir($dir)) {
             @mkdir($dir, 0777, true);
         }
+
     }
+
 }

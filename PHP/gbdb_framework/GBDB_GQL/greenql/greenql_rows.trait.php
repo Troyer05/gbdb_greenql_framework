@@ -3,10 +3,13 @@
 trait GreenQL_RowsTrait {
 
     /**
-     * Prüft, ob eine Zeile zur WHERE-Bedingung passt.
-     * @param array $row Übergabewert.
-     * @param ?array $where Übergabewert.
-     * @return bool Rückgabewert.
+     * handles row match.
+     *
+     * @param array $row value.
+     * @param null|array $where value.
+     * @param null|callable $comparator value.
+     *
+     * @return bool result.
      */
     public static function rowMatch(array $row, ?array $where, ?callable $comparator = null): bool {
         if ($where === null) return true;
@@ -14,8 +17,11 @@ trait GreenQL_RowsTrait {
         $type = (string)($where['type'] ?? 'condition');
 
         if ($type === 'invalid') return false;
+
         if ($type === 'and') return self::rowMatch($row, $where['left'] ?? null, $comparator) && self::rowMatch($row, $where['right'] ?? null, $comparator);
+
         if ($type === 'or') return self::rowMatch($row, $where['left'] ?? null, $comparator) || self::rowMatch($row, $where['right'] ?? null, $comparator);
+
         if ($type === 'not') return !self::rowMatch($row, $where['expr'] ?? null, $comparator);
 
         $field = (string)($where['field'] ?? '');
@@ -24,11 +30,16 @@ trait GreenQL_RowsTrait {
         $left = $field !== '' && array_key_exists($field, $row) ? $row[$field] : null;
 
         if ($op === 'IN') return is_array($value) && in_array($left, $value, false);
+
         if ($op === 'BETWEEN') return is_array($value) && count($value) >= 2 && $left >= $value[0] && $left <= $value[1];
+
         if ($op === 'IS NULL') return $left === null || $left === '';
+
         if ($op === 'IS NOT NULL') return !($left === null || $left === '');
+
         if ($op === 'LIKE') {
             $pattern = '/^' . str_replace(['%', '_'], ['.*', '.'], preg_quote((string)$value, '/')) . '$/iu';
+
             return preg_match($pattern, (string)$left) === 1;
         }
 
@@ -39,37 +50,46 @@ trait GreenQL_RowsTrait {
         switch ($op) {
             case "=":
             case "==":
+
                 return $left == $value;
 
             case "!=":
+
                 return $left != $value;
 
             case ">":
+
                 return $left > $value;
 
             case "<":
+
                 return $left < $value;
 
             case ">=":
+
                 return $left >= $value;
 
             case "<=":
+
                 return $left <= $value;
 
             case "~=":
+
                 return mb_stripos((string)$left, (string)$value) !== false;
         }
 
         return false;
     }
 
-
     /**
-     * Sortiert Zeilen.
-     * @param array $rows Übergabewert.
-     * @param ?string $field Übergabewert.
-     * @param string $dir Übergabewert.
-     * @return void Rückgabewert.
+     * handles sort rows.
+     *
+     * @param array $rows value.
+     * @param null|string $field value.
+     * @param string $dir value.
+     * @param null|callable $sorter value.
+     *
+     * @return void result.
      */
     public static function sortRows(array &$rows, ?string $field, string $dir = "ASC", ?callable $sorter = null): void {
         if ($field === null || $field === "") {
@@ -78,6 +98,7 @@ trait GreenQL_RowsTrait {
 
         if ($sorter !== null) {
             $sorter($rows, $field, $dir);
+
             return;
         }
 
@@ -95,12 +116,13 @@ trait GreenQL_RowsTrait {
         });
     }
 
-
     /**
-     * Holt Tabellenzeilen aus dem aktiven Treiber.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @return array Rückgabewert.
+     * handles get rows.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function getRows(string $db, string $table): array {
         $driver = self::db();
@@ -109,12 +131,13 @@ trait GreenQL_RowsTrait {
         return is_array($rows) ? $rows : [];
     }
 
-
     /**
-     * Holt Tabellenfelder aus dem aktiven Treiber.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @return array Rückgabewert.
+     * handles get table keys.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function getTableKeys(string $db, string $table): array {
         $driver = self::db();
@@ -133,17 +156,19 @@ trait GreenQL_RowsTrait {
         return [];
     }
 
-
     /**
-     * Selektiert Tabellenzeilen.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $columns Übergabewert.
-     * @param ?array $where Übergabewert.
-     * @param ?string $sortField Übergabewert.
-     * @param string $sortDir Übergabewert.
-     * @param ?int $limit Übergabewert.
-     * @return array Rückgabewert.
+     * handles select rows.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param array $columns value.
+     * @param null|array $where value.
+     * @param null|string $sortField value.
+     * @param string $sortDir value.
+     * @param null|int $limit value.
+     * @param int $offset value.
+     *
+     * @return array result.
      */
     public static function selectRows(
         string $db,
@@ -178,6 +203,7 @@ trait GreenQL_RowsTrait {
         self::sortRows($rows, $sortField, $sortDir, $sorter);
 
         $offset = max(0, $offset);
+
         if ($offset > 0 || ($limit !== null && $limit >= 0)) {
             $rows = array_slice($rows, $offset, $limit !== null && $limit >= 0 ? $limit : null);
         }
@@ -187,7 +213,9 @@ trait GreenQL_RowsTrait {
         if ($columns !== ["*"]) {
             $rows = array_map(function ($row) use ($columns) {
                 $tmp = [];
+
                 foreach ($columns as $col) $tmp[$col] = $row[$col] ?? "";
+
                 return $tmp;
             }, $rows);
             $keys = $columns;
@@ -204,14 +232,16 @@ trait GreenQL_RowsTrait {
     }
 
     /**
-     * Fuehrt Aggregationen fuer GreenQL aus.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $fn Funktion.
-     * @param string $column Spalte.
-     * @param ?string $groupBy Gruppenspalte.
-     * @param ?array $having Having-Bedingung.
-     * @return array Ergebnis.
+     * handles aggregate rows.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param string $fn value.
+     * @param string $column value.
+     * @param null|string $groupBy value.
+     * @param null|array $having value.
+     *
+     * @return array result.
      */
     public static function aggregateRows(string $db, string $table, string $fn, string $column = '*', ?string $groupBy = null, ?array $having = null): array {
         $driver = self::db();
@@ -219,6 +249,7 @@ trait GreenQL_RowsTrait {
         if (method_exists($driver, 'aggregate')) {
             $rows = $driver::aggregate($db, $table, $fn, $column, $groupBy, $having);
             $keys = isset($rows[0]) && is_array($rows[0]) ? array_keys($rows[0]) : ['group', strtolower($fn)];
+
             return ['keys' => $keys, 'rows' => $rows];
         }
 
@@ -226,11 +257,13 @@ trait GreenQL_RowsTrait {
     }
 
     /**
-     * Fuehrt DISTINCT fuer GreenQL aus.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $column Spalte.
-     * @return array Ergebnis.
+     * handles distinct rows.
+     *
+     * @param string $db value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return array result.
      */
     public static function distinctRows(string $db, string $table, string $column): array {
         $driver = self::db();
@@ -240,11 +273,12 @@ trait GreenQL_RowsTrait {
         return ['keys' => [$column], 'rows' => $rows];
     }
 
-
     /**
-     * Gibt Statistiken zu einer Base zurück.
-     * @param string $db Übergabewert.
-     * @return array Rückgabewert.
+     * handles stats.
+     *
+     * @param string $db value.
+     *
+     * @return array result.
      */
     public static function stats(string $db): array {
         $driver = self::db();
@@ -257,6 +291,7 @@ trait GreenQL_RowsTrait {
             if (is_array($data)) {
                 $rows += count($data);
             }
+
         }
 
         return [
@@ -264,4 +299,5 @@ trait GreenQL_RowsTrait {
             "rows" => $rows
         ];
     }
+
 }

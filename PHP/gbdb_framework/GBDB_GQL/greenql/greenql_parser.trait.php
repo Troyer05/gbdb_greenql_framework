@@ -3,9 +3,11 @@
 trait GreenQL_ParserTrait {
 
     /**
-     * Entfernt Quotes und wandelt einfache Werte um.
-     * @param string $value Übergabewert.
-     * @return mixed Rückgabewert.
+     * handles unquote.
+     *
+     * @param string $value value.
+     *
+     * @return mixed result.
      */
     public static function unquote(string $value): mixed {
         $value = trim($value);
@@ -17,23 +19,28 @@ trait GreenQL_ParserTrait {
             if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
                 return stripcslashes(substr($value, 1, -1));
             }
+
         }
 
         $low = strtolower($value);
 
         if ($low === "true") return 1;
+
         if ($low === "false") return 0;
+
         if ($low === "null") return null;
+
         if (is_numeric($value)) return $value + 0;
 
         return $value;
     }
 
-
     /**
-     * Entfernt Kommentare aus einem Script.
-     * @param string $script Übergabewert.
-     * @return string Rückgabewert.
+     * handles strip comments.
+     *
+     * @param string $script value.
+     *
+     * @return string result.
      */
     public static function stripComments(string $script): string {
         $lines = preg_split('/\r\n|\r|\n/', $script);
@@ -90,11 +97,12 @@ trait GreenQL_ParserTrait {
         return trim(implode("\n", $out));
     }
 
-
     /**
-     * Trennt ein Script in einzelne Befehle.
-     * @param string $script Übergabewert.
-     * @return array Rückgabewert.
+     * handles split commands.
+     *
+     * @param string $script value.
+     *
+     * @return array result.
      */
     public static function splitCommands(string $script): array {
         $script = self::stripComments($script);
@@ -177,6 +185,7 @@ trait GreenQL_ParserTrait {
                         $commands[] = $trim;
                         $buffer = '';
                     }
+
                 }
 
                 continue;
@@ -205,13 +214,14 @@ trait GreenQL_ParserTrait {
         return $commands;
     }
 
-
     /**
-     * Wertet einen Wert aus.
-     * @param string $value Übergabewert.
-     * @param array $vars Übergabewert.
-     * @param array $params Übergabewert.
-     * @return mixed Rückgabewert.
+     * handles evaluate value.
+     *
+     * @param string $value value.
+     * @param array $vars value.
+     * @param array $params value.
+     *
+     * @return mixed result.
      */
     public static function evaluateValue(string $value, array $vars = [], array $params = []): mixed {
         $value = trim($value);
@@ -222,12 +232,33 @@ trait GreenQL_ParserTrait {
 
         if (preg_match('/^param\(("(?:\\.|[^"])*"|\'(?:\\.|[^\'])*\')\)$/i', $value, $m)) {
             $key = (string)self::unquote((string)$m[1]);
+
             return $params[$key] ?? null;
         }
 
         if (preg_match('/^ENV\(("(?:\\.|[^"])*"|\'(?:\\.|[^\'])*\')\)$/i', $value, $m)) {
             $key = (string)self::unquote((string)$m[1]);
+
             return self::readEnvValue($key);
+        }
+
+        if (preg_match('/^fusion\((.*)\)$/is', $value, $m)) {
+            $out = '';
+
+            foreach (self::splitArguments((string)$m[1]) as $arg) {
+                $evaluated = self::evaluateExpression($arg, $vars, $params);
+                $raw = strtolower(trim($arg));
+
+                if ($raw === 'true') $out .= 'true';
+                else if ($raw === 'false') $out .= 'false';
+                else if ($raw === 'null') $out .= 'null';
+                else if (is_bool($evaluated)) $out .= $evaluated ? 'true' : 'false';
+                else if ($evaluated === null) $out .= 'null';
+                else if (is_array($evaluated) || is_object($evaluated)) $out .= json_encode($evaluated, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+                else $out .= (string)$evaluated;
+            }
+
+            return $out;
         }
 
         $literal = self::parseLiteral($value, $vars, $params);
@@ -236,7 +267,7 @@ trait GreenQL_ParserTrait {
             return $literal;
         }
 
-        if (preg_match('/^(hash_sha256|hash_sha512|hash_md5|hash_adler32|hash_crc32|hash|len|ENV)\(/i', $value)) {
+        if (preg_match('/^(fusion|hash_sha256|hash_sha512|hash_md5|hash_adler32|hash_crc32|hash_pass|random_int|hash|len|ENV)\(/i', $value)) {
             return self::evaluateExpression($value, $vars, $params);
         }
 
@@ -259,11 +290,12 @@ trait GreenQL_ParserTrait {
         return self::unquote($value);
     }
 
-
     /**
-     * Trennt Werte quotesicher und berücksichtigt Klammer-Verschachtelungen.
-     * @param string $raw Übergabewert.
-     * @return array Rückgabewert.
+     * handles split nested.
+     *
+     * @param string $raw value.
+     *
+     * @return array result.
      */
     public static function splitNested(string $raw): array {
         $out = [];
@@ -300,10 +332,15 @@ trait GreenQL_ParserTrait {
             }
 
             if ($ch === '(') $round++;
+
             if ($ch === ')') $round = max(0, $round - 1);
+
             if ($ch === '[') $square++;
+
             if ($ch === ']') $square = max(0, $square - 1);
+
             if ($ch === '{') $curly++;
+
             if ($ch === '}') $curly = max(0, $curly - 1);
 
             if ($ch === ',' && $round === 0 && $square === 0 && $curly === 0) {
@@ -326,13 +363,6 @@ trait GreenQL_ParserTrait {
         return $out;
     }
 
-
-    /**
-     * Findet einen Operator auf oberster Ebene.
-     * @param string $raw Übergabewert.
-     * @param string $needle Übergabewert.
-     * @return int Rückgabewert.
-     */
     private static function findTopLevel(string $raw, string $needle): int {
         $quote = '';
         $round = 0;
@@ -363,27 +393,34 @@ trait GreenQL_ParserTrait {
             }
 
             if ($ch === '(') $round++;
+
             if ($ch === ')') $round = max(0, $round - 1);
+
             if ($ch === '[') $square++;
+
             if ($ch === ']') $square = max(0, $square - 1);
+
             if ($ch === '{') $curly++;
+
             if ($ch === '}') $curly = max(0, $curly - 1);
 
             if ($round === 0 && $square === 0 && $curly === 0 && substr($raw, $i, $nlen) === $needle) {
                 return $i;
             }
+
         }
 
         return -1;
     }
 
-
     /**
-     * Parst Array- und Objekt-Literale.
-     * @param string $value Übergabewert.
-     * @param array $vars Übergabewert.
-     * @param array $params Übergabewert.
-     * @return mixed Rückgabewert.
+     * handles parse literal.
+     *
+     * @param string $value value.
+     * @param array $vars value.
+     * @param array $params value.
+     *
+     * @return mixed result.
      */
     public static function parseLiteral(string $value, array $vars = [], array $params = []): mixed {
         $value = trim($value);
@@ -414,6 +451,7 @@ trait GreenQL_ParserTrait {
                 } else {
                     $out[] = self::evaluateValue($part, $vars, $params);
                 }
+
             }
 
             return $out;
@@ -436,6 +474,7 @@ trait GreenQL_ParserTrait {
                     $allBracketObjects = false;
                     break;
                 }
+
             }
 
             if ($allBracketObjects) {
@@ -449,6 +488,7 @@ trait GreenQL_ParserTrait {
             }
 
             $out = [];
+
             foreach ($parts as $part) {
                 $pos = self::findTopLevel($part, ':');
 
@@ -465,13 +505,14 @@ trait GreenQL_ParserTrait {
         return null;
     }
 
-
     /**
-     * Liest verschachtelte Variablen wie _array[_i] oder _object["name"].
-     * @param string $value Übergabewert.
-     * @param array $vars Übergabewert.
-     * @param array $params Übergabewert.
-     * @return mixed Rückgabewert.
+     * handles resolve variable path.
+     *
+     * @param string $value value.
+     * @param array $vars value.
+     * @param array $params value.
+     *
+     * @return mixed result.
      */
     public static function resolveVariablePath(string $value, array $vars = [], array $params = []): mixed {
         $value = trim($value);
@@ -508,13 +549,14 @@ trait GreenQL_ParserTrait {
         return $current;
     }
 
-
     /**
-     * Wertet einfache Ausdrücke und Helper-Funktionen aus.
-     * @param string $value Übergabewert.
-     * @param array $vars Übergabewert.
-     * @param array $params Übergabewert.
-     * @return mixed Rückgabewert.
+     * handles evaluate expression.
+     *
+     * @param string $value value.
+     * @param array $vars value.
+     * @param array $params value.
+     *
+     * @return mixed result.
      */
     public static function evaluateExpression(string $value, array $vars = [], array $params = []): mixed {
         $value = trim($value);
@@ -534,6 +576,7 @@ trait GreenQL_ParserTrait {
 
                 if (!is_numeric($left) || !is_numeric($right)) {
                     if ($op === '+') return (string)$left . (string)$right;
+
                     return 0;
                 }
 
@@ -546,6 +589,7 @@ trait GreenQL_ParserTrait {
                     default => 0
                 };
             }
+
         }
 
         if (preg_match('/^!\s*(.+)$/s', $value, $m)) {
@@ -569,11 +613,69 @@ trait GreenQL_ParserTrait {
                     default => false
                 };
             }
+
         }
 
         if (preg_match('/^ENV\(("(?:\\.|[^"])*"|\'(?:\\.|[^\'])*\')\)$/i', $value, $m)) {
             $key = (string)self::unquote((string)$m[1]);
+
             return self::readEnvValue($key);
+        }
+
+        if (preg_match('/^now\(\s*\)$/i', $value)) {
+            return date('Y-m-d H:i:s');
+        }
+
+        if (preg_match('/^hash_pass\((.*)\)$/is', $value, $m)) {
+            $password = (string)self::evaluateValue((string)$m[1], $vars, $params);
+
+            if (class_exists('Auth') && method_exists('Auth', 'hashPass')) {
+                return Auth::hashPass($password);
+            }
+
+            return hash('sha256', hash('adler32', hash('md5', hash('sha512', $password))));
+        }
+
+        if (preg_match('/^random_int\((.*)\)$/is', $value, $m)) {
+            $args = self::evalArgs((string)$m[1], $vars, $params);
+
+            if (count($args) >= 2) {
+                $min = (int)$args[0];
+                $max = (int)$args[1];
+
+                if ($max < $min) [$min, $max] = [$max, $min];
+
+                try {
+                    return random_int($min, $max);
+                } catch (Throwable $e) {
+                    return mt_rand($min, $max);
+                }
+
+            }
+
+            $length = max(1, (int)($args[0] ?? 1));
+
+            if ($length === 1) {
+                try {
+                    return random_int(0, 9);
+                } catch (Throwable $e) {
+                    return mt_rand(0, 9);
+                }
+
+            }
+
+            $out = '';
+
+            for ($i = 0; $i < $length; $i++) {
+                try {
+                    $out .= (string)random_int(0, 9);
+                } catch (Throwable $e) {
+                    $out .= (string)mt_rand(0, 9);
+                }
+
+            }
+
+            return $out;
         }
 
         if (preg_match('/^(uni_random|spark_id|fresh_id)\(\s*\)$/i', $value)) {
@@ -582,6 +684,7 @@ trait GreenQL_ParserTrait {
             } catch (Throwable $e) {
                 return sha1(uniqid('', true) . mt_rand());
             }
+
         }
 
         if (preg_match('/^uuid\(\s*\)$/i', $value)) {
@@ -594,6 +697,7 @@ trait GreenQL_ParserTrait {
             } catch (Throwable $e) {
                 return sha1(uniqid('', true) . mt_rand());
             }
+
         }
 
         if (preg_match('/^hash_(sha256|sha512|md5|adler32|crc32)\((.*)\)$/is', $value, $m)) {
@@ -616,19 +720,13 @@ trait GreenQL_ParserTrait {
 
         if (preg_match('/^len\((.*)\)$/is', $value, $m)) {
             $tmp = self::evaluateValue((string)$m[1], $vars, $params);
+
             return is_array($tmp) || $tmp instanceof Countable ? count($tmp) : strlen((string)$tmp);
         }
 
         return self::evaluateValue($value, $vars, $params);
     }
 
-
-    /**
-     * Findet einen mathematischen Operator auf oberster Ebene.
-     * @param string $raw Ausdruck.
-     * @param string $needle Operator.
-     * @return int Position oder -1.
-     */
     private static function findMathOperator(string $raw, string $needle): int {
         $quote = '';
         $round = 0;
@@ -650,13 +748,21 @@ trait GreenQL_ParserTrait {
             }
 
             if ($ch === ')') $round++;
+
             if ($ch === '(') $round = max(0, $round - 1);
+
             if ($ch === ']') $square++;
+
             if ($ch === '[') $square = max(0, $square - 1);
+
             if ($ch === '}') $curly++;
+
             if ($ch === '{') $curly = max(0, $curly - 1);
+
             if ($round !== 0 || $square !== 0 || $curly !== 0) continue;
+
             if ($ch !== $needle) continue;
+
             if (($needle === '+' || $needle === '-') && ($i === 0 || preg_match('/[+\-*\/%%(<>=!,]/', $raw[$i - 1]))) continue;
 
             return $i;
@@ -665,14 +771,6 @@ trait GreenQL_ParserTrait {
         return -1;
     }
 
-
-    /**
-     * Parst Parameterblöcke für FILE.RUN.
-     * @param string $raw Rohdaten.
-     * @param array $vars Variablen.
-     * @param array $params Parameter.
-     * @return array Parameter.
-     */
     private static function parseParamObject(string $raw, array $vars = [], array $params = []): array {
         $raw = trim($raw);
 
@@ -681,15 +779,17 @@ trait GreenQL_ParserTrait {
         }
 
         $data = self::parseLiteral($raw, $vars, $params);
+
         return is_array($data) ? $data : [];
     }
 
-
     /**
-     * Parst eine kommagetrennte Liste.
-     * @param string $raw Übergabewert.
-     * @param array $vars Übergabewert.
-     * @return array Rückgabewert.
+     * handles parse list.
+     *
+     * @param string $raw value.
+     * @param array $vars value.
+     *
+     * @return array result.
      */
     public static function parseList(string $raw, array $vars = []): array {
         $parts = preg_split('/\s*,\s*/', trim($raw));
@@ -708,11 +808,12 @@ trait GreenQL_ParserTrait {
         return array_values(array_filter($out));
     }
 
-
     /**
-     * Trennt Funktionsargumente quotesicher.
-     * @param string $raw Übergabewert.
-     * @return array Rückgabewert.
+     * handles split arguments.
+     *
+     * @param string $raw value.
+     *
+     * @return array result.
      */
     public static function splitArguments(string $raw): array {
         $raw = trim($raw);
@@ -756,15 +857,15 @@ trait GreenQL_ParserTrait {
 
             if ($ch === "(") {
                 $depth++;
-            } elseif ($ch === ")") {
+            } else if ($ch === ")") {
                 $depth = max(0, $depth - 1);
-            } elseif ($ch === "[") {
+            } else if ($ch === "[") {
                 $squareDepth++;
-            } elseif ($ch === "]") {
+            } else if ($ch === "]") {
                 $squareDepth = max(0, $squareDepth - 1);
-            } elseif ($ch === "{") {
+            } else if ($ch === "{") {
                 $curlyDepth++;
-            } elseif ($ch === "}") {
+            } else if ($ch === "}") {
                 $curlyDepth = max(0, $curlyDepth - 1);
             }
 
@@ -787,13 +888,14 @@ trait GreenQL_ParserTrait {
         return $out;
     }
 
-
     /**
-     * Parst Zuweisungen.
-     * @param string $raw Übergabewert.
-     * @param array $vars Übergabewert.
-     * @param array $params Übergabewert.
-     * @return array Rückgabewert.
+     * handles parse assignments.
+     *
+     * @param string $raw value.
+     * @param array $vars value.
+     * @param array $params value.
+     *
+     * @return array result.
      */
     public static function parseAssignments(string $raw, array $vars = [], array $params = []): array {
         $raw = trim($raw);
@@ -817,7 +919,6 @@ trait GreenQL_ParserTrait {
         return $out;
     }
 
-
     /**
      * Parst WHERE-Bedingungen.
      * @param string $raw Übergabewert.
@@ -826,19 +927,11 @@ trait GreenQL_ParserTrait {
      * @return ?array Rückgabewert.
      */
 
-
-    /**
-     * Parst eine GreenQL-Tabellenspalte inklusive optionalem Datentyp.
-     * Unterstützt: name, name:type, name TYPE, REQUIRED, UNIQUE, NULLABLE, NOT NULL, DEFAULT ...
-     * @param string $raw Rohdefinition.
-     * @param array $vars Variablen.
-     * @param array $params Runtime-Parameter.
-     * @return array|null Normalisierte Spaltendefinition oder null.
-     */
     private static function parseColumnDefinition(string $raw, array $vars = [], array $params = []): ?array {
         $raw = trim($raw);
 
         if ($raw === '') return null;
+
         if (!preg_match('/^([a-zA-Z_][a-zA-Z0-9_\-]*)(.*)$/s', $raw, $m)) return null;
 
         $name = trim((string)$m[1]);
@@ -862,8 +955,10 @@ trait GreenQL_ParserTrait {
                     $typed = true;
                     $rest = trim((string)$tm[2]);
                 }
+
             }
-        } elseif ($rest !== '' && preg_match('/^([a-zA-Z_][a-zA-Z0-9_\-]*)(.*)$/s', $rest, $tm)) {
+
+        } else if ($rest !== '' && preg_match('/^([a-zA-Z_][a-zA-Z0-9_\-]*)(.*)$/s', $rest, $tm)) {
             $candidate = strtolower((string)$tm[1]);
 
             if (in_array($candidate, $knownTypes, true)) {
@@ -871,6 +966,7 @@ trait GreenQL_ParserTrait {
                 $typed = true;
                 $rest = trim((string)$tm[2]);
             }
+
         }
 
         if ($rest !== '' && preg_match('/\bDEFAULT\b\s+(.+)$/is', $rest, $dm, PREG_OFFSET_CAPTURE)) {
@@ -888,6 +984,7 @@ trait GreenQL_ParserTrait {
         }
 
         if (preg_match('/\bUNIQUE\b/i', $rest)) $options['unique'] = true;
+
         if (preg_match('/\bAUTO_INCREMENT\b|\bAUTOINCREMENT\b/i', $rest)) $options['auto_increment'] = true;
 
         if (preg_match('/\bNULLABLE\b|\bNULL\b/i', $rest) && !preg_match('/\bNOT\s+NULL\b/i', $rest)) {
@@ -898,13 +995,6 @@ trait GreenQL_ParserTrait {
         return ['name' => $name, 'type' => $type, 'typed' => $typed, 'options' => $options];
     }
 
-    /**
-     * Parst eine Spaltenliste für GROW TABLE.
-     * @param string $raw Rohspalten.
-     * @param array $vars Variablen.
-     * @param array $params Runtime-Parameter.
-     * @return array Struktur mit cols/schema/typed.
-     */
     private static function parseTableDefinitions(string $raw, array $vars = [], array $params = []): array {
         $items = self::splitNested($raw);
         $cols = [];
@@ -928,11 +1018,6 @@ trait GreenQL_ParserTrait {
         return ['cols' => $cols, 'schema' => $schema, 'typed' => $typed];
     }
 
-    /**
-     * Normalisiert GreenQL-Typ-Aliase.
-     * @param string $type Datentyp.
-     * @return string Normalisierter Typ.
-     */
     private static function normalizeGreenQLType(string $type): string {
         $type = strtolower(trim($type));
 
@@ -946,11 +1031,6 @@ trait GreenQL_ParserTrait {
         };
     }
 
-    /**
-     * Gibt einen sinnvollen Default-Wert für einen Datentyp zurück.
-     * @param string $type Datentyp.
-     * @return mixed Default.
-     */
     private static function defaultForGreenQLType(string $type): mixed {
         return match (self::normalizeGreenQLType($type)) {
             'int', 'timestamp' => 0,
@@ -961,12 +1041,6 @@ trait GreenQL_ParserTrait {
         };
     }
 
-
-    /**
-     * Tokenisiert eine WHERE-Expression. Strings, Klammern und Listen bleiben stabil.
-     * @param string $raw WHERE-Ausdruck ohne fuehrendes WHERE.
-     * @return array Token-Liste.
-     */
     private static function tokenizeWhereExpression(string $raw): array {
         $tokens = [];
         $len = strlen($raw);
@@ -996,7 +1070,7 @@ trait GreenQL_ParserTrait {
                     if ($c === '\\' && $i + 1 < $len) {
                         $i++;
                         $buf .= $raw[$i];
-                    } elseif ($c === $quote) {
+                    } else if ($c === $quote) {
                         $i++;
                         break;
                     }
@@ -1028,6 +1102,7 @@ trait GreenQL_ParserTrait {
                 $c = $raw[$i];
 
                 if (ctype_space($c) || in_array($c, ['(', ')', '[', ']', ','], true)) break;
+
                 if (in_array(substr($raw, $i, 2), ['==', '!=', '>=', '<=', '~='], true) || in_array($c, ['=', '>', '<'], true)) break;
 
                 $buf .= $c;
@@ -1049,13 +1124,12 @@ trait GreenQL_ParserTrait {
         return $tokens;
     }
 
-    /** Gibt true zurueck, wenn das aktuelle WHERE-Token dem Keyword entspricht. */
     private static function whereTokenIs(array $tokens, int $pos, string $keyword): bool {
         if (!isset($tokens[$pos])) return false;
+
         return strtoupper((string)$tokens[$pos]['value']) === strtoupper($keyword);
     }
 
-    /** Liest einen skalaren WHERE-Wert. */
     private static function readWhereValue(array $tokens, int &$pos, array $vars, array $params): mixed {
         if (!isset($tokens[$pos])) return null;
 
@@ -1065,7 +1139,6 @@ trait GreenQL_ParserTrait {
         return self::evaluateValue($value, $vars, $params);
     }
 
-    /** Liest eine WHERE-Werteliste in eckigen Klammern. */
     private static function readWhereList(array $tokens, int &$pos, array $vars, array $params): array {
         $values = [];
 
@@ -1083,7 +1156,6 @@ trait GreenQL_ParserTrait {
         return $values;
     }
 
-    /** Parst OR mit niedriger Prioritaet. */
     private static function parseWhereOr(array $tokens, int &$pos, array $vars, array $params): ?array {
         $left = self::parseWhereAnd($tokens, $pos, $vars, $params);
 
@@ -1099,7 +1171,6 @@ trait GreenQL_ParserTrait {
         return $left;
     }
 
-    /** Parst AND mit mittlerer Prioritaet. */
     private static function parseWhereAnd(array $tokens, int &$pos, array $vars, array $params): ?array {
         $left = self::parseWhereNot($tokens, $pos, $vars, $params);
 
@@ -1115,18 +1186,17 @@ trait GreenQL_ParserTrait {
         return $left;
     }
 
-    /** Parst NOT. */
     private static function parseWhereNot(array $tokens, int &$pos, array $vars, array $params): ?array {
         if (self::whereTokenIs($tokens, $pos, 'NOT')) {
             $pos++;
             $expr = self::parseWherePrimary($tokens, $pos, $vars, $params);
+
             return $expr === null ? ['type' => 'invalid'] : ['type' => 'not', 'expr' => $expr];
         }
 
         return self::parseWherePrimary($tokens, $pos, $vars, $params);
     }
 
-    /** Parst Klammern oder eine Feld-Bedingung. */
     private static function parseWherePrimary(array $tokens, int &$pos, array $vars, array $params): ?array {
         if (!isset($tokens[$pos])) return null;
 
@@ -1154,6 +1224,7 @@ trait GreenQL_ParserTrait {
             $not = false;
 
             if (self::whereTokenIs($tokens, $pos, 'NOT')) { $not = true; $pos++; }
+
             if (!self::whereTokenIs($tokens, $pos, 'NULL')) return ['type' => 'invalid'];
 
             $pos++;
@@ -1163,6 +1234,7 @@ trait GreenQL_ParserTrait {
 
         if (self::whereTokenIs($tokens, $pos, 'IN')) {
             $pos++;
+
             return ['type' => 'condition', 'field' => $field, 'op' => 'IN', 'value' => self::readWhereList($tokens, $pos, $vars, $params)];
         }
 
@@ -1180,6 +1252,7 @@ trait GreenQL_ParserTrait {
 
         if (self::whereTokenIs($tokens, $pos, 'LIKE')) {
             $pos++;
+
             return ['type' => 'condition', 'field' => $field, 'op' => 'LIKE', 'value' => self::readWhereValue($tokens, $pos, $vars, $params)];
         }
 
@@ -1194,12 +1267,13 @@ trait GreenQL_ParserTrait {
     }
 
     /**
-     * Parst GreenQL-WHERE in einen AST. Rueckwaertskompatibel bleiben field/op/value erhalten,
-     * wenn der Ausdruck nur aus einer einfachen Bedingung besteht.
-     * @param string $raw WHERE-Ausdruck.
-     * @param array $vars Variablen.
-     * @param array $params Runtime-Parameter.
-     * @return array|null AST oder null bei leerem Ausdruck.
+     * handles parse where.
+     *
+     * @param string $raw value.
+     * @param array $vars value.
+     * @param array $params value.
+     *
+     * @return ?array result.
      */
     public static function parseWhere(string $raw, array $vars = [], array $params = []): ?array {
         $raw = trim($raw);
@@ -1216,10 +1290,13 @@ trait GreenQL_ParserTrait {
 
         if (($ast['type'] ?? '') === 'condition') {
             $ast['raw'] = $raw;
+
             return $ast;
         }
 
         $ast['raw'] = $raw;
+
         return $ast;
     }
+
 }

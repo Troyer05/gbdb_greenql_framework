@@ -1,1234 +1,414 @@
 <?php
 
-/**
- * @author Markus Müller
- *
- * Public API Core
- */
+require_once __DIR__ . "/module_helper.php";
 
-class PAPI {
+class PublicAPI {
+    private const MODULES_DIR = __DIR__ . "/public_api_modules";
+    private const INSTANCE = "__greenql_ui_v2_system";
+    private const KEY_BASE = "papi";
+    private const KEY_TABLE = "keys";
+    private const LOG_BASE = "plog";
+    private const LOG_FETCH_TABLE = "fetches";
+    private const LOG_KEY_TABLE = "key_log";
+    private const LOG_DEFAULT_TABLE = "api_log";
+
     private static array $body = [];
-
-    private const ACTION_FUNCTIONS = [
-        "ping" => "apiPing",
-        "version" => "version",
-
-        // GBDB v1
-        "gbdb_databases" => "gbdb_databases",
-        "gbdb_create_database" => "gbdb_create_database",
-        "gbdb_delete_database" => "gbdb_delete_database",
-        "gbdb_delete_all" => "gbdb_delete_all",
-        "gbdb_tables" => "gbdb_tables",
-        "gbdb_create_table" => "gbdb_create_table",
-        "gbdb_delete_table" => "gbdb_delete_table",
-        "gbdb_add_column" => "gbdb_add_column",
-        "gbdb_schema" => "gbdb_schema",
-        "gbdb_keys" => "gbdb_schema",
-        "gbdb_data" => "gbdb_data",
-        "gbdb_row" => "gbdb_row",
-        "gbdb_exists" => "gbdb_exists",
-        "gbdb_insert" => "gbdb_insert",
-        "gbdb_update" => "gbdb_update",
-        "gbdb_delete" => "gbdb_delete",
-        "gbdb_next_id" => "gbdb_next_id",
-        "gbdb_compact" => "gbdb_compact",
-        "gbdb_query" => "gbdb_query",
-        "gbdb_run_script" => "gbdb_run_script",
-        "greenql" => "gbdb_query",
-        "get_gbdb_databases" => "gbdb_databases",
-        "get_gbdb_tables" => "gbdb_tables",
-        "get_gbdb_data" => "gbdb_data",
-
-        // GBDB v4 short API / Woche 102
-        "gbdb_get" => "gbdb_short_get",
-        "gbdb_create" => "gbdb_short_create",
-        "gbdb_full_text_search" => "gbdb_short_full_text_search",
-        "gbdb_rename_table" => "gbdb_short_rename_table",
-        "gbdb_rename_base" => "gbdb_short_rename_base",
-        "gbdb_move_table" => "gbdb_short_move_table",
-        "gbdb_backup" => "gbdb_short_backup",
-        "gbdb_run_file" => "gbdb_short_run_file",
-
-        // GBDB v2
-        "gbdbv2_instance" => "gbdbv2_instance",
-        "gbdbv2_instances" => "gbdbv2_instances",
-        "gbdbv2_create_instance" => "gbdbv2_create_instance",
-        "gbdbv2_delete_instance" => "gbdbv2_delete_instance",
-        "gbdbv2_databases" => "gbdbv2_databases",
-        "gbdbv2_create_database" => "gbdbv2_create_database",
-        "gbdbv2_delete_database" => "gbdbv2_delete_database",
-        "gbdbv2_delete_all" => "gbdbv2_delete_all",
-        "gbdbv2_tables" => "gbdbv2_tables",
-        "gbdbv2_create_table" => "gbdbv2_create_table",
-        "gbdbv2_delete_table" => "gbdbv2_delete_table",
-        "gbdbv2_add_column" => "gbdbv2_add_column",
-        "gbdbv2_schema" => "gbdbv2_schema",
-        "gbdbv2_keys" => "gbdbv2_schema",
-        "gbdbv2_data" => "gbdbv2_data",
-        "gbdbv2_row" => "gbdbv2_row",
-        "gbdbv2_exists" => "gbdbv2_exists",
-        "gbdbv2_insert" => "gbdbv2_insert",
-        "gbdbv2_update" => "gbdbv2_update",
-        "gbdbv2_delete" => "gbdbv2_delete",
-        "gbdbv2_next_id" => "gbdbv2_next_id",
-        "gbdbv2_compact" => "gbdbv2_compact",
-        "gbdbv2_query" => "gbdbv2_query",
-        "gbdbv2_run_script" => "gbdbv2_run_script",
-        "greenql" => "gbdbv2_query"
-    ];
+    private static array $keyData = [];
+    private static array $modules = [];
+    private static string $module = "";
+    private static string $action = "";
+    private static string $logTable = self::LOG_DEFAULT_TABLE;
 
     /**
-     * Initialisiert die Public API.
+     * initializes public api request handling
      *
      * @return void
      */
     public static function init(): void {
-        self::setBody(self::getBody());
+        self::readBody();
+        self::parseAction();
+        self::loadModules();
         self::auth();
-        self::core();
+
+        self::log(self::$module . "." . self::$action, [
+            "log" => "fetch",
+            "key" => (string) (self::$keyData["key"] ?? ""),
+            "ip" => (string) ($_SERVER["REMOTE_ADDR"] ?? "")
+        ]);
+
+        self::dispatch();
     }
 
     /**
-     * Liest den JSON-Request-Body ein.
+     * sets custom public api log table
      *
-     * @return array
-     */
-    public static function getBody(): array {
-        $inp = file_get_contents("php://input");
-
-        if ($inp === false || trim($inp) === "") {
-            return [];
-        }
-
-        $json = json_decode($inp, true);
-
-        if (!is_array($json)) {
-            self::resp(400, "Error: Invalid JSON body.", false);
-        }
-
-        return $json;
-    }
-
-    /**
-     * Speichert den Request-Body intern.
-     *
-     * @param array $body Request-Body.
+     * @param string $table
      * @return void
      */
-    public static function setBody(array $body): void {
-        self::$body = $body;
+    public static function setLogTable(string $table): void {
+        $table = Format::cleanString($table);
+
+        if ($table == "") {
+            return;
+        }
+
+        self::$logTable = $table;
+
+        self::withSystemInstance(function () use ($table): void {
+            if (!GBDB::exists(self::LOG_BASE, $table)) {
+                GBDB::createTable(self::LOG_BASE, $table, [
+                    "datetime",
+                    "log"
+                ]);
+            }
+        });
     }
 
     /**
-     * Gibt den kompletten Body zurück.
+     * writes public api log entry
      *
-     * @return array
-     */
-    public static function body(): array {
-        return self::$body;
-    }
-
-    /**
-     * Gibt einen Wert aus dem Body zurück.
-     *
-     * @param string $key Schlüssel.
-     * @param mixed $default Standardwert.
-     * @return mixed
-     */
-    public static function val(string $key, mixed $default = null): mixed {
-        return self::$body[$key] ?? $default;
-    }
-
-    /**
-     * Prüft, ob ein Body-Key existiert.
-     *
-     * @param string $key Schlüssel.
-     * @return bool
-     */
-    public static function has(string $key): bool {
-        return array_key_exists($key, self::$body);
-    }
-
-    /**
-     * Gibt eine JSON-Antwort aus und beendet das Script.
-     *
-     * @param int $responseStatus HTTP-Statuscode.
-     * @param mixed $data Antwortdaten.
-     * @param bool|null $ok Erfolgsstatus.
+     * @param string $log
+     * @param array $sys
      * @return void
      */
-    public static function resp(int $responseStatus, mixed $data, ?bool $ok = null): void {
-        http_response_code($responseStatus);
+    public static function log(string $log, array $sys = []): void {
+        self::withSystemInstance(function () use ($log, $sys): void {
+            if (empty($sys)) {
+                if (self::$logTable == "") {
+                    self::$logTable = self::LOG_DEFAULT_TABLE;
+                }
+
+                if (!GBDB::exists(self::LOG_BASE, self::$logTable)) {
+                    GBDB::createTable(self::LOG_BASE, self::$logTable, [
+                        "datetime",
+                        "log"
+                    ]);
+                }
+
+                GBDB::insertData(self::LOG_BASE, self::$logTable, [
+                    "datetime" => date("Y-m-d H:i:s"),
+                    "log" => $log
+                ]);
+
+                return;
+            }
+
+            if (($sys["log"] ?? "") == "fetch") {
+                GBDB::insertData(self::LOG_BASE, self::LOG_FETCH_TABLE, [
+                    "key" => (string) ($sys["key"] ?? ""),
+                    "ip" => (string) ($sys["ip"] ?? ""),
+                    "datetime" => date("Y-m-d H:i:s"),
+                    "action" => $log
+                ]);
+
+                return;
+            }
+
+            GBDB::insertData(self::LOG_BASE, self::LOG_KEY_TABLE, [
+                "key" => (string) ($sys["key"] ?? ""),
+                "user" => (string) ($sys["uid"] ?? ""),
+                "datetime" => date("Y-m-d H:i:s"),
+                "action" => $log
+            ]);
+        });
+    }
+
+    /**
+     * sends public api json response
+     *
+     * @param int $status
+     * @param mixed $data
+     * @return never
+     */
+    public static function respond(int $status, mixed $data): never {
+        http_response_code($status);
+
         header("Content-Type: application/json; charset=utf-8");
 
-        if ($ok === null) {
-            $ok = ($responseStatus >= 200 && $responseStatus < 300);
-        }
-
         echo json_encode([
-            "ok" => $ok,
-            "status" => $responseStatus,
+            "ok" => $status >= 200 && $status < 300,
+            "status" => $status,
             "data" => $data
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         exit;
     }
 
-    /**
-     * Gibt eine erfolgreiche Antwort aus.
-     *
-     * @param mixed $data Antwortdaten.
-     * @param int $status HTTP-Statuscode.
-     * @return void
-     */
-    public static function success(mixed $data = [], int $status = 200): void {
-        self::resp($status, $data, true);
-    }
+    private static function readBody(): void {
+        $raw = file_get_contents("php://input");
+        $body = json_decode($raw ?: "{}", true);
 
-    /**
-     * Gibt eine Fehlerantwort aus.
-     *
-     * @param string $msg Fehlermeldung.
-     * @param int $status HTTP-Statuscode.
-     * @param mixed|null $details Details.
-     * @return void
-     */
-    public static function error(string $msg, int $status = 400, mixed $details = null): void {
-        $data = [
-            "msg" => $msg
-        ];
-
-        if ($details !== null) {
-            $data["details"] = $details;
+        if (!is_array($body)) {
+            self::respond(400, "invalid json body");
         }
 
-        self::resp($status, $data, false);
+        self::$body = $body;
     }
 
-    /**
-     * Prüft Pflichtparameter.
-     *
-     * @param array $params Parameter.
-     * @return void
-     */
-    public static function test_params(array $params): void {
-        for ($i = 0; $i < count($params); $i++) {
-            $param = $params[$i];
+    private static function parseAction(): void {
+        $do = Format::cleanString((string) (self::$body["do"] ?? ""));
 
-            if (!array_key_exists($param, self::$body)) {
-                self::error("Parameter \"" . $param . "\" not provided.", 403);
-            }
+        if ($do == "") {
+            self::$module = Format::cleanString((string) (self::$body["module"] ?? ""));
+            self::$action = Format::cleanString((string) (self::$body["action"] ?? ""));
+        } else {
+            $parts = explode(".", $do, 2);
 
-            if (is_string(self::$body[$param]) && trim(self::$body[$param]) === "") {
-                self::error("Parameter \"" . $param . "\" is empty.", 403);
-            }
+            self::$module = Format::cleanString((string) ($parts[0] ?? ""));
+            self::$action = Format::cleanString((string) ($parts[1] ?? ""));
+        }
+
+        if (self::$module == "") {
+            self::respond(400, "missing module");
+        }
+
+        if (self::$action == "") {
+            self::respond(400, "missing action");
         }
     }
 
-    /**
-     * Prüft die Authentifizierung.
-     *
-     * @return void
-     */
-    public static function auth(): void {
-        if (!Vars::pApi_need_auth()) {
+    private static function loadModules(): void {
+        if (!is_dir(self::MODULES_DIR)) {
+            self::respond(500, "public api modules directory not found");
+        }
+
+        $coreModule = __DIR__ . "/gbdb.php";
+
+        if (is_file($coreModule)) {
+            self::loadModuleFile($coreModule);
+        }
+
+        $files = scandir(self::MODULES_DIR);
+
+        if (!is_array($files)) {
+            self::respond(500, "could not read public api modules directory");
+        }
+
+        foreach ($files as $file) {
+            if ($file == "." || $file == "..") {
+                continue;
+            }
+
+            if (!str_ends_with($file, ".php")) {
+                continue;
+            }
+
+            self::loadModuleFile(self::MODULES_DIR . "/" . $file);
+        }
+    }
+
+    private static function loadModuleFile(string $file): void {
+        $before = get_declared_classes();
+
+        require_once $file;
+
+        $after = get_declared_classes();
+        $classes = array_diff($after, $before);
+
+        foreach ($classes as $class) {
+            if (!str_starts_with($class, "PublicAPI_")) {
+                continue;
+            }
+
+            if (!method_exists($class, "name")) {
+                continue;
+            }
+
+            if (!method_exists($class, "requiresRights")) {
+                continue;
+            }
+
+            if (!method_exists($class, "handle")) {
+                continue;
+            }
+
+            $name = Format::cleanString((string) $class::name());
+
+            if ($name == "") {
+                continue;
+            }
+
+            self::$modules[$name] = $class;
+        }
+    }
+
+    private static function auth(): void {
+        $key = (string) (self::$body["key"] ?? "");
+
+        if ($key == "") {
+            self::respond(401, "missing api key");
+        }
+
+        $rows = self::withSystemInstance(function () use ($key): array {
+            return GBDB::getData(self::KEY_BASE, self::KEY_TABLE, true, "key", $key);
+        });
+
+        if (empty($rows) || !isset($rows[0])) {
+            self::respond(401, "invalid api key");
+        }
+
+        $data = $rows[0];
+
+        if ((string) ($data["active"] ?? "0") != "1") {
+            self::respond(403, "api key inactive");
+        }
+
+        if (!empty($data["exp"]) && strtotime((string) $data["exp"]) < time()) {
+            self::respond(403, "api key expired");
+        }
+
+        self::$keyData = $data;
+    }
+
+    private static function dispatch(): void {
+        if (!isset(self::$modules[self::$module])) {
+            self::respond(404, "module not found");
+        }
+
+        $class = self::$modules[self::$module];
+
+        self::checkRights($class);
+
+        $result = $class::handle(self::$action, self::$body, self::$keyData);
+
+        if (is_array($result) && isset($result["status"])) {
+            self::respond((int) $result["status"], $result["data"] ?? null);
+        }
+
+        self::respond(200, $result);
+    }
+
+    private static function checkRights(string $class): void {
+        $required = self::moduleRights($class);
+
+        if (empty($required)) {
             return;
         }
 
-        self::test_params(["auth_key"]);
+        $rights = self::keyRights();
 
-        $keys = Vars::pApi_auth_keys();
-
-        if (!is_array($keys) || count($keys) === 0) {
-            self::error("Authentication failed. No auth keys configured.", 403);
+        if (self::hasRight($rights, "*")) {
+            return;
         }
 
-        $auth_key = (string)self::$body["auth_key"];
-        $ok = false;
+        foreach ($required as $right) {
+            $right = trim((string) $right);
 
-        for ($i = 0; $i < count($keys); $i++) {
-            if (hash_equals((string)$keys[$i], $auth_key)) {
-                $ok = true;
-                break;
+            if ($right == "") {
+                continue;
+            }
+
+            if (self::hasRight($rights, $right)) {
+                continue;
+            }
+
+            self::log("missing right: " . $right, [
+                "log" => "key",
+                "key" => (string) (self::$keyData["key"] ?? ""),
+                "uid" => (string) (self::$keyData["created_by"] ?? "")
+            ]);
+
+            self::respond(403, "missing api right: " . $right);
+        }
+    }
+
+    private static function moduleRights(string $class): array {
+        $method = new ReflectionMethod($class, "requiresRights");
+        $count = $method->getNumberOfParameters();
+
+        if ($count <= 0) {
+            $rights = $class::requiresRights();
+        } else {
+            $rights = $class::requiresRights(self::$action);
+        }
+
+        if (!is_array($rights)) {
+            self::respond(500, "module requiresRights must return array");
+        }
+
+        return $rights;
+    }
+
+    private static function keyRights(): array {
+        $raw = self::$keyData["rights"] ?? [];
+
+        if (is_array($raw)) {
+            return $raw;
+        }
+
+        $raw = trim((string) $raw);
+
+        if ($raw == "") {
+            return [];
+        }
+
+        $json = json_decode($raw, true);
+
+        if (is_array($json)) {
+            return $json;
+        }
+
+        $parts = explode(",", $raw);
+        $rights = [];
+
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+
+            if ($part != "") {
+                $rights[] = $part;
             }
         }
 
-        if (!$ok) {
-            self::error("Authentication failed. Wrong auth_key.", 403);
-        }
+        return $rights;
     }
 
-    /**
-     * Verarbeitet die zentrale API-Aktion.
-     *
-     * @return void
-     */
-    public static function core(): void {
-        self::test_params(["do"]);
-
-        $do = trim((string)self::$body["do"]);
-
-        if ($do === "") {
-            self::error("Parameter \"do\" is empty.", 403);
+    private static function hasRight(array $rights, string $right): bool {
+        if (isset($rights["admin"]) && $rights["admin"] === true) {
+            return true;
         }
 
-        if (!isset(self::ACTION_FUNCTIONS[$do])) {
-            self::error("Unknown API action: " . $do, 404);
+        if (isset($rights["rights"]) && is_array($rights["rights"])) {
+            return self::hasRight($rights["rights"], $right);
         }
 
-        $fn = self::ACTION_FUNCTIONS[$do];
+        foreach ($rights as $item) {
+            if (!is_scalar($item)) {
+                continue;
+            }
 
-        if (!method_exists(__CLASS__, $fn)) {
-            self::error("API action handler not found: " . $fn, 500);
+            $item = trim((string) $item);
+
+            if ($item == "*") {
+                return true;
+            }
+
+            if ($item == $right) {
+                return true;
+            }
+
+            if (str_ends_with($item, ".*")) {
+                $prefix = substr($item, 0, -2);
+
+                if (str_starts_with($right, $prefix . ".")) {
+                    return true;
+                }
+            }
         }
 
-        self::{$fn}();
+        return false;
     }
 
-    /**
-     * Prüft GBDB-Lesezugriff.
-     *
-     * @return void
-     */
-    private static function requireGbdbAccess(): void {
-        if (method_exists("Vars", "pApi_access_gbdb") && !Vars::pApi_access_gbdb()) {
-            self::error("GBDB access on public API is denied. To change that, edit the .framework.env.php", 403);
+    private static function withSystemInstance(callable $callback): mixed {
+        $oldInstance = GBDB::getInstance();
+
+        GBDB::setInstance(self::INSTANCE);
+
+        try {
+            return $callback();
+        } finally {
+            if ($oldInstance != "") {
+                GBDB::setInstance($oldInstance);
+            }
         }
-    }
-
-    /**
-     * Prüft GBDB-Schreibzugriff.
-     *
-     * @return void
-     */
-    private static function requireGbdbWriteAccess(): void {
-        self::requireGbdbAccess();
-
-        if (method_exists("Vars", "pApi_write_gbdb") && !Vars::pApi_write_gbdb()) {
-            self::error("GBDB write access on public API is denied. To change that, edit the .framework.env.php", 403);
-        }
-    }
-
-    /**
-     * Prüft GreenQL-Zugriff.
-     *
-     * @return void
-     */
-    private static function requireGreenqlAccess(): void {
-        self::requireGbdbAccess();
-
-        if (method_exists("Vars", "pApi_greenql") && !Vars::pApi_greenql()) {
-            self::error("GreenQL access on public API is denied. To change that, edit the .framework.env.php", 403);
-        }
-    }
-
-    /**
-     * Prüft GBDBv1.
-     *
-     * @return void
-     */
-    private static function requireGbdb(): void {
-        if (!class_exists("GBDB")) {
-            self::error("Required class \"GBDB\" not found.", 500);
-        }
-    }
-
-    /**
-     * Prüft GBDB.
-     *
-     * @return void
-     */
-    private static function requireGbdbv2(): void {
-        if (!class_exists("GBDB")) {
-            self::error("Required class \"GBDB\" not found.", 500);
-        }
-    }
-
-    /**
-     * Holt einen String-Parameter.
-     *
-     * @param string $key Schlüssel.
-     * @return string
-     */
-    private static function strParam(string $key): string {
-        self::test_params([$key]);
-
-        return trim((string)self::$body[$key]);
-    }
-
-    /**
-     * Holt einen Array-Parameter.
-     *
-     * @param string $key Schlüssel.
-     * @return array
-     */
-    private static function arrParam(string $key): array {
-        self::test_params([$key]);
-
-        if (!is_array(self::$body[$key])) {
-            self::error("Parameter \"" . $key . "\" must be an array.", 403);
-        }
-
-        return self::$body[$key];
-    }
-
-    /**
-     * Holt einen Boolean-Parameter.
-     *
-     * @param string $key Schlüssel.
-     * @param bool $default Standardwert.
-     * @return bool
-     */
-    private static function boolParam(string $key, bool $default = false): bool {
-        if (!array_key_exists($key, self::$body)) {
-            return $default;
-        }
-
-        return filter_var(self::$body[$key], FILTER_VALIDATE_BOOL);
-    }
-
-    /**
-     * Holt where/is Parameter.
-     *
-     * @return array
-     */
-    private static function whereParams(): array {
-        $where = trim((string)self::val("where", "id"));
-        $is = self::val("is", self::val("id", null));
-
-        if ($where === "") {
-            self::error("Parameter \"where\" is empty.", 403);
-        }
-
-        if ($is === null || trim((string)$is) === "") {
-            self::error("Parameter \"id\" or \"is\" not provided.", 403);
-        }
-
-        return [$where, $is];
-    }
-
-    /**
-     * Setzt optional die GBDB-Instanz.
-     *
-     * @return void
-     */
-    private static function applyGbdbv2Instance(): void {
-        if (isset(self::$body["instance"])) {
-            GBDB::setInstance((string)self::$body["instance"]);
-        }
-    }
-
-    // ######################################
-    // # BASIC ACTIONS                      #
-    // ######################################
-
-    /**
-     * Verarbeitet den API-Ping.
-     *
-     * @return void
-     */
-    private static function apiPing(): void {
-        self::success([
-            "pong" => true,
-            "time" => time()
-        ]);
-    }
-
-    /**
-     * Gibt Versionsinformationen zurück.
-     *
-     * @return void
-     */
-    private static function version(): void {
-        self::success([
-            "framework_version" => method_exists("Vars", "framework_version") ? Vars::framework_version() : null,
-            "app_version" => method_exists("Vars", "app_version") ? Vars::app_version() : null,
-            "public_api_version" => "4.0",
-            "gbdb_api" => ["legacy" => ["v1", "v2"], "current" => "v4", "compatibility" => true]
-        ]);
-    }
-
-    // ######################################
-    // # GBDB v1 ACTIONS                    #
-    // ######################################
-
-    /**
-     * Gibt alle GBDB-Datenbanken zurück.
-     *
-     * @return void
-     */
-    private static function gbdb_databases(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        self::success(GBDB::listDBs());
-    }
-
-    /**
-     * Erstellt eine GBDB-Datenbank.
-     *
-     * @return void
-     */
-    private static function gbdb_create_database(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-
-        self::success([
-            "created" => GBDB::createDatabase($database)
-        ]);
-    }
-
-    /**
-     * Löscht eine leere GBDB-Datenbank.
-     *
-     * @return void
-     */
-    private static function gbdb_delete_database(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-
-        self::success([
-            "deleted" => GBDB::deleteDatabase($database)
-        ]);
-    }
-
-    /**
-     * Löscht eine komplette GBDB-Datenbank.
-     *
-     * @return void
-     */
-    private static function gbdb_delete_all(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-
-        self::success([
-            "deleted" => GBDB::deleteAll($database)
-        ]);
-    }
-
-    /**
-     * Gibt alle Tabellen einer GBDB-Datenbank zurück.
-     *
-     * @return void
-     */
-    private static function gbdb_tables(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $descending = self::boolParam("descending", false);
-
-        self::success(GBDB::listTables($database, $descending));
-    }
-
-    /**
-     * Erstellt eine GBDB-Tabelle.
-     *
-     * @return void
-     */
-    private static function gbdb_create_table(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $cols = self::arrParam("cols");
-
-        self::success([
-            "created" => GBDB::createTable($database, $table, $cols)
-        ]);
-    }
-
-    /**
-     * Löscht eine GBDB-Tabelle.
-     *
-     * @return void
-     */
-    private static function gbdb_delete_table(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success([
-            "deleted" => GBDB::deleteTable($database, $table)
-        ]);
-    }
-
-    /**
-     * Fügt einer GBDB-Tabelle eine Spalte hinzu.
-     *
-     * @return void
-     */
-    private static function gbdb_add_column(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $column = self::strParam("column");
-        $default = self::val("default", "");
-
-        self::success([
-            "added" => GBDB::addColumn($database, $table, $column, $default)
-        ]);
-    }
-
-    /**
-     * Gibt die Keys einer GBDB-Tabelle zurück.
-     *
-     * @return void
-     */
-    private static function gbdb_schema(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success(GBDB::getKeys($database, $table));
-    }
-
-    /**
-     * Gibt Daten aus einer GBDB-Tabelle zurück.
-     *
-     * @return void
-     */
-    private static function gbdb_data(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $filter = self::boolParam("filter", false);
-
-        if ($filter) {
-            [$where, $is] = self::whereParams();
-            self::success(GBDB::getData($database, $table, true, $where, $is));
-        }
-
-        self::success(GBDB::getData($database, $table));
-    }
-
-    /**
-     * Gibt eine einzelne GBDB-Zeile zurück.
-     *
-     * @return void
-     */
-    private static function gbdb_row(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        [$where, $is] = self::whereParams();
-
-        self::success(GBDB::getData($database, $table, true, $where, $is));
-    }
-
-    /**
-     * Prüft, ob ein GBDB-Element existiert.
-     *
-     * @return void
-     */
-    private static function gbdb_exists(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        [$where, $is] = self::whereParams();
-
-        self::success([
-            "exists" => GBDB::elementExists($database, $table, $where, $is)
-        ]);
-    }
-
-    /**
-     * Fügt GBDB-Daten ein.
-     *
-     * @return void
-     */
-    private static function gbdb_insert(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $data = self::arrParam("data");
-
-        $id = GBDB::insertData($database, $table, $data);
-
-        self::success([
-            "inserted" => $id > 0,
-            "id" => $id
-        ]);
-    }
-
-    /**
-     * Bearbeitet GBDB-Daten.
-     *
-     * @return void
-     */
-    private static function gbdb_update(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $data = self::arrParam("data");
-
-        [$where, $is] = self::whereParams();
-
-        self::success([
-            "updated" => GBDB::editData($database, $table, $where, $is, $data)
-        ]);
-    }
-
-    /**
-     * Löscht GBDB-Daten.
-     *
-     * @return void
-     */
-    private static function gbdb_delete(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        [$where, $is] = self::whereParams();
-
-        self::success([
-            "deleted" => GBDB::deleteData($database, $table, $where, $is)
-        ]);
-    }
-
-    /**
-     * Gibt die nächste GBDB-ID zurück.
-     *
-     * @return void
-     */
-    private static function gbdb_next_id(): void {
-        self::requireGbdbAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success([
-            "next_id" => GBDB::nextID($database, $table)
-        ]);
-    }
-
-    /**
-     * Komprimiert eine GBDB-Tabelle.
-     *
-     * @return void
-     */
-    private static function gbdb_compact(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdb();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success([
-            "compacted" => GBDB::compactTable($database, $table)
-        ]);
-    }
-
-    /**
-     * Führt eine GreenQL-Abfrage aus.
-     *
-     * @return void
-     */
-    private static function gbdb_query(): void {
-        self::requireGreenqlAccess();
-        self::requireGbdb();
-
-        $query = self::strParam("query");
-        $ctx = self::val("ctx", []);
-        $params = self::val("params", []);
-
-        if (!is_array($ctx)) {
-            self::error("Parameter \"ctx\" must be an array.", 403);
-        }
-
-        if (!is_array($params)) {
-            self::error("Parameter \"params\" must be an array.", 403);
-        }
-
-        self::success(GBDB::query($query, $ctx, $params));
-    }
-
-    /**
-     * Führt ein GreenQL-Script aus.
-     *
-     * @return void
-     */
-    private static function gbdb_run_script(): void {
-        self::requireGreenqlAccess();
-        self::requireGbdb();
-
-        $path = self::strParam("path");
-        $ctx = self::val("ctx", []);
-        $params = self::val("params", []);
-
-        if (!is_array($ctx)) {
-            self::error("Parameter \"ctx\" must be an array.", 403);
-        }
-
-        if (!is_array($params)) {
-            self::error("Parameter \"params\" must be an array.", 403);
-        }
-
-        self::success(GBDB::runScript($path, $params, $ctx));
-    }
-
-    private static function gbdb_short_get(): void { self::requireGbdbAccess(); self::requireGbdb(); $options = self::val("options", []); if (!is_array($options)) $options = []; self::success(GBDB::get(self::strParam("base"), self::strParam("table"), self::val("where", ""), self::val("is", ""), $options)); }
-    private static function gbdb_short_create(): void { self::requireGbdbWriteAccess(); self::requireGbdb(); $rows = self::val("rows", []); if (!is_array($rows) && !is_object($rows)) $rows = []; self::success(["created" => GBDB::create(self::strParam("base"), (string)self::val("table", ""), self::boolParam("use_data_types", false), $rows)]); }
-    private static function gbdb_short_full_text_search(): void { self::requireGbdbAccess(); self::requireGbdb(); self::success(GBDB::fullTextSearch(self::strParam("base"), self::strParam("table"), self::strParam("text"))); }
-    private static function gbdb_short_rename_table(): void { self::requireGbdbWriteAccess(); self::requireGbdb(); self::success(["renamed" => GBDB::renameTable(self::strParam("base"), self::strParam("table"), self::strParam("new_table"))]); }
-    private static function gbdb_short_rename_base(): void { self::requireGbdbWriteAccess(); self::requireGbdb(); self::success(["renamed" => GBDB::renameBase(self::strParam("base"), self::strParam("new_base"))]); }
-    private static function gbdb_short_move_table(): void { self::requireGbdbWriteAccess(); self::requireGbdb(); self::success(["moved" => GBDB::moveTable(self::strParam("instance"), self::strParam("base"), self::strParam("table"), self::strParam("to_instance"), self::strParam("to_base"))]); }
-    private static function gbdb_short_backup(): void { self::requireGbdbWriteAccess(); self::requireGbdb(); self::success(GBDB::createBackup((string)self::val("path", ""))); }
-    private static function gbdb_short_run_file(): void { self::requireGreenqlAccess(); self::requireGbdb(); $params = self::val("params", []); if (!is_array($params) && !is_object($params)) $params = []; self::success(GBDB::runFile(self::strParam("path"), $params)); }
-
-    // ######################################
-    // # GBDB v2 ACTIONS                    #
-    // ######################################
-
-    /**
-     * Gibt die aktive GBDB-Instanz zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_instance(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        self::success([
-            "instance" => GBDB::getInstance()
-        ]);
-    }
-
-    /**
-     * Gibt alle GBDB-Instanzen zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_instances(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-
-        self::success(GBDB::listInstances());
-    }
-
-    /**
-     * Erstellt eine GBDB-Instanz.
-     *
-     * @return void
-     */
-    private static function gbdbv2_create_instance(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-
-        $name = self::strParam("name");
-
-        self::success([
-            "created" => GBDB::createInstance($name)
-        ]);
-    }
-
-    /**
-     * Löscht eine GBDB-Instanz.
-     *
-     * @return void
-     */
-    private static function gbdbv2_delete_instance(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-
-        $name = self::strParam("name");
-        $force = self::boolParam("force", false);
-
-        self::success([
-            "deleted" => GBDB::deleteInstance($name, $force)
-        ]);
-    }
-
-    /**
-     * Gibt alle GBDB-Datenbanken zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_databases(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        self::success(GBDB::listDBs());
-    }
-
-    /**
-     * Erstellt eine GBDB-Datenbank.
-     *
-     * @return void
-     */
-    private static function gbdbv2_create_database(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-
-        self::success([
-            "created" => GBDB::createDatabase($database)
-        ]);
-    }
-
-    /**
-     * Löscht eine leere GBDB-Datenbank.
-     *
-     * @return void
-     */
-    private static function gbdbv2_delete_database(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-
-        self::success([
-            "deleted" => GBDB::deleteDatabase($database)
-        ]);
-    }
-
-    /**
-     * Löscht eine komplette GBDB-Datenbank.
-     *
-     * @return void
-     */
-    private static function gbdbv2_delete_all(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-
-        self::success([
-            "deleted" => GBDB::deleteAll($database)
-        ]);
-    }
-
-    /**
-     * Gibt alle Tabellen einer GBDB-Datenbank zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_tables(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $descending = self::boolParam("descending", false);
-
-        self::success(GBDB::listTables($database, $descending));
-    }
-
-    /**
-     * Erstellt eine GBDB-Tabelle.
-     *
-     * @return void
-     */
-    private static function gbdbv2_create_table(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $cols = self::arrParam("cols");
-
-        self::success([
-            "created" => GBDB::createTable($database, $table, $cols)
-        ]);
-    }
-
-    /**
-     * Löscht eine GBDB-Tabelle.
-     *
-     * @return void
-     */
-    private static function gbdbv2_delete_table(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success([
-            "deleted" => GBDB::deleteTable($database, $table)
-        ]);
-    }
-
-    /**
-     * Fügt einer GBDB-Tabelle eine Spalte hinzu.
-     *
-     * @return void
-     */
-    private static function gbdbv2_add_column(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $column = self::strParam("column");
-        $default = self::val("default", "");
-
-        self::success([
-            "added" => GBDB::addColumn($database, $table, $column, $default)
-        ]);
-    }
-
-    /**
-     * Gibt die Keys einer GBDB-Tabelle zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_schema(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success(GBDB::getKeys($database, $table));
-    }
-
-    /**
-     * Gibt Daten aus einer GBDB-Tabelle zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_data(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $filter = self::boolParam("filter", false);
-
-        if ($filter) {
-            [$where, $is] = self::whereParams();
-            self::success(GBDB::getData($database, $table, true, $where, $is));
-        }
-
-        self::success(GBDB::getData($database, $table));
-    }
-
-    /**
-     * Gibt eine einzelne GBDB-Zeile zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_row(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        [$where, $is] = self::whereParams();
-
-        self::success(GBDB::getData($database, $table, true, $where, $is));
-    }
-
-    /**
-     * Prüft, ob ein GBDB-Element existiert.
-     *
-     * @return void
-     */
-    private static function gbdbv2_exists(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        [$where, $is] = self::whereParams();
-
-        self::success([
-            "exists" => GBDB::elementExists($database, $table, $where, $is)
-        ]);
-    }
-
-    /**
-     * Fügt GBDB-Daten ein.
-     *
-     * @return void
-     */
-    private static function gbdbv2_insert(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $data = self::arrParam("data");
-
-        $id = GBDB::insertData($database, $table, $data);
-
-        self::success([
-            "inserted" => $id > 0,
-            "id" => $id
-        ]);
-    }
-
-    /**
-     * Bearbeitet GBDB-Daten.
-     *
-     * @return void
-     */
-    private static function gbdbv2_update(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-        $data = self::arrParam("data");
-
-        [$where, $is] = self::whereParams();
-
-        self::success([
-            "updated" => GBDB::editData($database, $table, $where, $is, $data)
-        ]);
-    }
-
-    /**
-     * Löscht GBDB-Daten.
-     *
-     * @return void
-     */
-    private static function gbdbv2_delete(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        [$where, $is] = self::whereParams();
-
-        self::success([
-            "deleted" => GBDB::deleteData($database, $table, $where, $is)
-        ]);
-    }
-
-    /**
-     * Gibt die nächste GBDB-ID zurück.
-     *
-     * @return void
-     */
-    private static function gbdbv2_next_id(): void {
-        self::requireGbdbAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success([
-            "next_id" => GBDB::nextID($database, $table)
-        ]);
-    }
-
-    /**
-     * Komprimiert eine GBDB-Tabelle.
-     *
-     * @return void
-     */
-    private static function gbdbv2_compact(): void {
-        self::requireGbdbWriteAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $database = self::strParam("database");
-        $table = self::strParam("table");
-
-        self::success([
-            "compacted" => GBDB::compactTable($database, $table)
-        ]);
-    }
-
-    /**
-     * Führt eine GreenQL-Abfrage aus.
-     *
-     * @return void
-     */
-    private static function gbdbv2_query(): void {
-        self::requireGreenqlAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $query = self::strParam("query");
-        $ctx = self::val("ctx", []);
-        $params = self::val("params", []);
-
-        if (!is_array($ctx)) {
-            self::error("Parameter \"ctx\" must be an array.", 403);
-        }
-
-        if (!is_array($params)) {
-            self::error("Parameter \"params\" must be an array.", 403);
-        }
-
-        self::success(GBDB::query($query, $ctx, $params));
-    }
-
-    /**
-     * Führt ein GreenQL-Script aus.
-     *
-     * @return void
-     */
-    private static function gbdbv2_run_script(): void {
-        self::requireGreenqlAccess();
-        self::requireGbdbv2();
-        self::applyGbdbv2Instance();
-
-        $path = self::strParam("path");
-        $ctx = self::val("ctx", []);
-        $params = self::val("params", []);
-
-        if (!is_array($ctx)) {
-            self::error("Parameter \"ctx\" must be an array.", 403);
-        }
-
-        if (!is_array($params)) {
-            self::error("Parameter \"params\" must be an array.", 403);
-        }
-
-        self::success(GBDB::runScript($path, $params, $ctx));
     }
 }
-
-?>

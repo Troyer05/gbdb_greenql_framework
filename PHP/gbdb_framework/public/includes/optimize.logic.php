@@ -1,38 +1,50 @@
 <?php
-function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
-function name_token(string $plain, string $ns='g'): string {
-    $key  = (string)Vars::cryptKey();
-    $data = $ns . '|' . (string)$plain;
-    $raw  = hash_hmac('sha256', $data, $key, true);
-    $b64  = base64_encode($raw);
+function h($s) {
+    return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+}
+
+function name_token(string $plain, string $ns = 'g'): string {
+    $key = (string) Vars::cryptKey();
+    $data = $ns . '|' . (string) $plain;
+    $raw = hash_hmac('sha256', $data, $key, true);
+    $b64 = base64_encode($raw);
     $safe = rtrim(strtr($b64, '+/', '-_'), '=');
 
     return 'gb_' . $safe;
 }
 
 function read_table_any(string $file): array {
-    if (!is_file($file)) return [];
+    if (!is_file($file))
+
+        return [];
     $raw = @file_get_contents($file);
 
-    if ($raw === false) return [];
+    if ($raw === false)
+
+        return [];
     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
     if ($ext === 'db') {
         $decoded = Crypt::decode($raw);
 
-        if ($decoded === null) return [];
+        if ($decoded === null)
+
+            return [];
         $arr = json_decode($decoded, true);
 
         return is_array($arr) ? $arr : [];
     }
 
     $arr = json_decode($raw, true);
+
     return is_array($arr) ? $arr : [];
 }
 
 function parse_index_table(array $table): array {
-    if (empty($table) || !isset($table[0]) || !is_array($table[0])) return [];
+    if (empty($table) || !isset($table[0]) || !is_array($table[0]))
+
+        return [];
 
     unset($table[0]);
 
@@ -40,32 +52,44 @@ function parse_index_table(array $table): array {
     $map = [];
 
     foreach ($table as $r) {
-        if (!is_array($r)) continue;
-        if (!isset($r['plain'], $r['token'])) continue;
+        if (!is_array($r))
+            continue;
 
-        $p = (string)$r['plain'];
-        $t = (string)$r['token'];
+        if (!isset($r['plain'], $r['token']))
+            continue;
 
-        if ($p !== '' && $t !== '') $map[$p] = $t;
+        $p = (string) $r['plain'];
+        $t = (string) $r['token'];
+
+        if ($p !== '' && $t !== '')
+            $map[$p] = $t;
     }
 
     return $map;
 }
 
 function count_lines(string $file): int {
-    if (!is_file($file)) return 0;
+    if (!is_file($file))
+
+        return 0;
     $fh = @fopen($file, 'r');
 
-    if (!$fh) return 0;
+    if (!$fh)
+
+        return 0;
     $n = 0;
 
     try {
         while (!feof($fh)) {
             $line = fgets($fh);
 
-            if ($line === false) break;
-            if (trim($line) !== '') $n++;
+            if ($line === false)
+                break;
+
+            if (trim($line) !== '')
+                $n++;
         }
+
     } finally {
         @fclose($fh);
     }
@@ -99,13 +123,13 @@ function table_index_file(string $dbDir, string $ext): string {
 
 function resolve_paths_for_table(string $dbPlain, string $tablePlain): array {
     $root = rtrim(Vars::DB_PATH(), "/") . "/";
-    $ext  = Vars::data_extension();
+    $ext = Vars::data_extension();
 
     if (!Vars::crypt_data()) {
         $dbDir = $root . $dbPlain . "/";
-        $base  = $dbDir . $tablePlain . $ext;
-        $meta  = meta_file_plain($dbDir, $tablePlain, $ext);
-        $app   = append_file_plain($dbDir, $tablePlain, $ext);
+        $base = $dbDir . $tablePlain . $ext;
+        $meta = meta_file_plain($dbDir, $tablePlain, $ext);
+        $app = append_file_plain($dbDir, $tablePlain, $ext);
 
         return [
             "mode" => "plain",
@@ -125,19 +149,19 @@ function resolve_paths_for_table(string $dbPlain, string $tablePlain): array {
     }
 
     $dbToken = $dbMap[$dbPlain];
-    $dbDir   = $root . $dbToken . "/";
-    $tblIdx  = table_index_file($dbDir, $ext);
+    $dbDir = $root . $dbToken . "/";
+    $tblIdx = table_index_file($dbDir, $ext);
     $tblIdxTable = read_table_any($tblIdx);
-    $tblMap  = parse_index_table($tblIdxTable);
+    $tblMap = parse_index_table($tblIdxTable);
 
     if (!isset($tblMap[$tablePlain])) {
         return ["mode" => "crypt", "error" => "Tabelle nicht im table_index gefunden."];
     }
 
     $tblToken = $tblMap[$tablePlain];
-    $base  = $dbDir . $tblToken . $ext;
-    $meta  = meta_file_crypt($dbDir, $tblToken, $ext);
-    $app   = append_file_crypt($dbDir, $tblToken, $ext);
+    $base = $dbDir . $tblToken . $ext;
+    $meta = meta_file_crypt($dbDir, $tblToken, $ext);
+    $app = append_file_crypt($dbDir, $tblToken, $ext);
 
     return [
         "mode" => "crypt",
@@ -151,7 +175,9 @@ function resolve_paths_for_table(string $dbPlain, string $tablePlain): array {
 function tableStats(string $db, string $table): array {
     $p = resolve_paths_for_table($db, $table);
 
-    if (isset($p["error"])) return $p;
+    if (isset($p["error"]))
+
+        return $p;
 
     $metaArr = read_table_any($p["meta"]);
     $meta = (isset($metaArr[0]) && is_array($metaArr[0])) ? $metaArr[0] : [];
@@ -165,15 +191,15 @@ function tableStats(string $db, string $table): array {
         "meta_size" => is_file($p["meta"]) ? filesize($p["meta"]) : 0,
         "append_size" => is_file($p["append"]) ? filesize($p["append"]) : 0,
         "append_lines" => count_lines($p["append"]),
-        "rows" => (int)($meta["rows"] ?? 0),
-        "last_id" => (int)($meta["last_id"] ?? 0),
-        "append_ops" => (int)($meta["append_ops"] ?? 0),
+        "rows" => (int) ($meta["rows"] ?? 0),
+        "last_id" => (int) ($meta["last_id"] ?? 0),
+        "append_ops" => (int) ($meta["append_ops"] ?? 0),
         "paths" => $p,
     ];
 }
 
 $dbs = GBDB::listDBs();
-$selDb    = isset($_GET['db']) ? Format::cleanString($_GET['db']) : '';
+$selDb = isset($_GET['db']) ? Format::cleanString($_GET['db']) : '';
 $selTable = isset($_GET['table']) ? Format::cleanString($_GET['table']) : '';
 $tables = $selDb !== '' ? GBDB::listTables($selDb) : [];
 $action = $_POST['action'] ?? '';
@@ -190,6 +216,7 @@ if ($action === 'compact_one') {
         $selTable = $tb;
         $tables = GBDB::listTables($selDb);
     }
+
 }
 
 if ($action === 'compact_all') {
@@ -206,13 +233,16 @@ if ($action === 'compact_all') {
             } else {
                 $msgs[] = "✅ Compact OK: {$db} / {$tb}";
             }
+
         }
 
-        if ($okAll) $msgs[] = "✅ Alle Tabellen in {$db} wurden kompaktiert.";
+        if ($okAll)
+            $msgs[] = "✅ Alle Tabellen in {$db} wurden kompaktiert.";
 
         $selDb = $db;
         $tables = GBDB::listTables($selDb);
     }
+
 }
 
 $stats = [];
@@ -220,4 +250,5 @@ $stats = [];
 if ($selDb !== '' && $selTable !== '') {
     $stats = tableStats($selDb, $selTable);
 }
+
 ?>

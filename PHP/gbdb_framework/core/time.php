@@ -3,20 +3,21 @@
 class Time {
 
     /**
-     * Gibt wieder, wie lange ein Datum her ist (deutsche Ausgabe)
+     * how long is the date in the past?
+     * @param mixed $timestamp
+     * @return string
      */
     public static function timeAgo(mixed $timestamp): string {
-        // Timestamp validieren
         $uploadedTime = strtotime((string)$timestamp);
 
         if ($uploadedTime === false) {
-            return "Ungültiges Datum";
+            return "invalid date";
         }
 
         $diff = time() - $uploadedTime;
 
         if ($diff < 0) {
-            return "in der Zukunft";
+            return "In future";
         }
 
         $seconds = $diff;
@@ -27,49 +28,45 @@ class Time {
         $months  = floor($seconds / 2629440);
         $years   = floor($seconds / 31553280);
 
-        // Sekunden
         if ($seconds < 60) {
-            return "vor $seconds Sekunden";
+            return "$seconds seconds ago";
         }
 
         // Minuten
+
         if ($minutes < 60) {
             return $minutes === 1
-                ? "vor einer Minute"
-                : "vor $minutes Minuten";
+                ? "1 minute ago"
+                : "$minutes minutes ago";
         }
 
-        // Stunden
         if ($hours < 24) {
             return $hours === 1
-                ? "vor einer Stunde"
-                : "vor $hours Stunden";
+                ? "1 second ago"
+                : "$hours hours ago";
         }
 
-        // Tage
         if ($days < 7) {
             return $days === 1
-                ? "vor einem Tag"
-                : "vor $days Tagen";
+                ? "1 day ago"
+                : "$days days ago";
         }
 
-        // Wochen
         if ($weeks < 5) {
             return $weeks === 1
-                ? "vor einer Woche"
-                : "vor $weeks Wochen";
+                ? "1 week ago"
+                : "$weeks weeks ago";
         }
 
-        // Monate
         if ($months < 12) {
             return $months === 1
-                ? "vor einem Monat"
-                : "vor $months Monaten";
+                ? "1 month ago"
+                : "$months months ago";
         }
 
-        // Jahre
         return $years === 1
-            ? "vor einem Jahr"
-            : "vor $years Jahren";
+            ? "1 year ago"
+            : "$years years ago";
     }
+
 }

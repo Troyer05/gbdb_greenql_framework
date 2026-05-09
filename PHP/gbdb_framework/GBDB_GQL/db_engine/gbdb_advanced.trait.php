@@ -3,42 +3,39 @@
 trait GBDB_AdvancedTrait {
     private static array $runtimeCacheV2 = [];
 
-    /**
-     * Erzeugt einen stabilen Cache-Key für Tabellenoperationen.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param array $extra Zusatzdaten.
-     * @return string Cache-Key.
-     */
     private static function cacheKey(string $database, string $table, array $extra = []): string {
         return hash('sha256', json_encode([$database, $table, $extra], JSON_UNESCAPED_UNICODE) ?: '');
     }
 
     /**
-     * Entfernt Runtime-Cache für eine Tabelle oder komplett.
-     * @param string|null $database Datenbankname oder null.
-     * @param string|null $table Tabellenname oder null.
-     * @return void
+     * handles clear runtime cache.
+     *
+     * @param null|string $database value.
+     * @param null|string $table value.
+     *
+     * @return void result.
      */
     public static function clearRuntimeCache(?string $database = null, ?string $table = null): void {
         if ($database === null || $table === null) {
             self::$runtimeCacheV2 = [];
+
             return;
         }
 
-        // Tabellenfeinheit ist bewusst konservativ: Runtime-Cache ist klein und wird pro Request/Prozess gehalten.
         self::$runtimeCacheV2 = [];
     }
 
     /**
-     * Liest Daten mit einfachem Runtime-Cache.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param bool $filter Filter aktiv.
-     * @param mixed $where Spalte.
-     * @param mixed $is Suchwert.
-     * @param int $ttl Sekunden bis Cache abläuft.
-     * @return mixed Daten.
+     * handles get cached data.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param bool $filter value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param int $ttl value.
+     *
+     * @return mixed result.
      */
     public static function getCachedData(string $database, string $table, bool $filter = false, mixed $where = '', mixed $is = '', int $ttl = 5): mixed {
         $key = hash('sha256', json_encode([$database, $table, $filter, $where, $is], JSON_UNESCAPED_UNICODE) ?: '');
@@ -56,12 +53,14 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Fügt viele Datensätze in einem Schritt ein.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param array $rows Datensätze.
-     * @param bool $transactional true für Transaktion.
-     * @return array Status mit eingefügten IDs.
+     * handles bulk insert.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $rows value.
+     * @param bool $transactional value.
+     *
+     * @return array result.
      */
     public static function bulkInsert(string $database, string $table, array $rows, bool $transactional = true): array {
         $ids = [];
@@ -91,10 +90,12 @@ trait GBDB_AdvancedTrait {
         if ($startedTx) {
             if (!empty($errors)) {
                 self::rollback();
+
                 return ['ok' => false, 'ids' => [], 'errors' => $errors];
             }
 
             $ok = self::commit();
+
             return ['ok' => $ok, 'ids' => $ok ? $ids : [], 'errors' => $ok ? [] : [['error' => 'commit_failed']]];
         }
 
@@ -102,12 +103,14 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Streamt Datensätze seitenweise an einen Callback.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param callable $callback Callback pro Zeile.
-     * @param int $chunkSize Chunk-Größe.
-     * @return array Statistik.
+     * handles stream rows.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param callable $callback value.
+     * @param int $chunkSize value.
+     *
+     * @return array result.
      */
     public static function streamRows(string $database, string $table, callable $callback, int $chunkSize = 500): array {
         $rows = self::getData($database, $table);
@@ -120,18 +123,21 @@ trait GBDB_AdvancedTrait {
                 $callback($row, $count);
                 $count++;
             }
+
         }
 
         return ['ok' => true, 'rows' => $count, 'chunk_size' => $chunkSize];
     }
 
     /**
-     * Gibt eine Seite aus einer Tabelle zurück.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param int $page Seite ab 1.
-     * @param int $perPage Datensätze pro Seite.
-     * @return array Page-Ergebnis.
+     * handles page.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $page value.
+     * @param int $perPage value.
+     *
+     * @return array result.
      */
     public static function page(string $database, string $table, int $page = 1, int $perPage = 50): array {
         $page = max(1, $page);
@@ -152,12 +158,14 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Öffnet einen cursor-artigen Slice über eine Tabelle.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param int $limit Anzahl Datensätze.
-     * @param string|null $cursor Cursor-Token.
-     * @return array Cursor-Ergebnis.
+     * handles cursor.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $limit value.
+     * @param null|string $cursor value.
+     *
+     * @return array result.
      */
     public static function cursor(string $database, string $table, int $limit = 100, ?string $cursor = null): array {
         $limit = max(1, min(1000, $limit));
@@ -170,6 +178,7 @@ trait GBDB_AdvancedTrait {
             if (is_array($json) && isset($json['offset'])) {
                 $offset = max(0, (int)$json['offset']);
             }
+
         }
 
         $rows = self::getData($database, $table);
@@ -185,13 +194,15 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Sucht Volltext über eine oder mehrere Spalten.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $query Suchtext.
-     * @param array $columns Spalten, leer = alle Textspalten.
-     * @param int $limit Maximale Treffer.
-     * @return array Treffer mit Score.
+     * handles fulltext search.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $query value.
+     * @param array $columns value.
+     * @param int $limit value.
+     *
+     * @return array result.
      */
     public static function fulltext_search(string $database, string $table, string $query, array $columns = [], int $limit = 50): array {
         $queryTokens = self::tokenizeText($query);
@@ -208,6 +219,7 @@ trait GBDB_AdvancedTrait {
 
             if (!empty($columns)) {
                 $defCols = (array)($definition['columns'] ?? []);
+
                 if (array_values($columns) !== array_values(array_intersect($columns, $defCols))) continue;
             }
 
@@ -220,6 +232,7 @@ trait GBDB_AdvancedTrait {
 
         foreach (is_array($rows) ? $rows : [] as $row) {
             if (!is_array($row)) continue;
+
             if (!empty($candidateIds) && !in_array((int)($row['id'] ?? 0), $candidateIds, true)) continue;
 
             $haystack = '';
@@ -227,6 +240,7 @@ trait GBDB_AdvancedTrait {
 
             foreach ($useColumns as $column) {
                 if ($column === 'id') continue;
+
                 if (isset($row[$column]) && (is_scalar($row[$column]) || $row[$column] === null)) $haystack .= ' ' . (string)$row[$column];
             }
 
@@ -234,55 +248,61 @@ trait GBDB_AdvancedTrait {
             $score = 0;
 
             foreach ($queryTokens as $token) $score += (int)($tokens[$token] ?? 0);
+
             if ($score > 0) $hits[] = ['score' => $score, 'row' => $row];
         }
 
         usort($hits, fn($a, $b) => ($b['score'] <=> $a['score']));
+
         return array_slice($hits, 0, max(1, $limit));
     }
 
     /**
-     * Abwärtskompatibler Alias für fulltext_search().
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $query Suchtext.
-     * @param array $columns Spalten, leer = alle Textspalten.
-     * @param int $limit Maximale Treffer.
-     * @return array Treffer mit Score.
+     * handles fulltext search.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $query value.
+     * @param array $columns value.
+     * @param int $limit value.
+     *
+     * @return array result.
      */
     public static function fulltextSearch(string $database, string $table, string $query, array $columns = [], int $limit = 50): array {
         return self::fulltext_search($database, $table, $query, $columns, $limit);
     }
 
     /**
-     * Kurzer Legacy-Alias für fulltext_search().
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $query Suchtext.
-     * @param array $columns Spalten, leer = alle Textspalten.
-     * @param int $limit Maximale Treffer.
-     * @return array Treffer mit Score.
+     * handles fulltext.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $query value.
+     * @param array $columns value.
+     * @param int $limit value.
+     *
+     * @return array result.
      */
     public static function fulltext(string $database, string $table, string $query, array $columns = [], int $limit = 50): array {
         return self::fulltext_search($database, $table, $query, $columns, $limit);
     }
 
-    /**
-     * Zerlegt Text in Such-Tokens.
-     * @param string $text Text.
-     * @return array Tokens.
-     */
     private static function tokenizeText(string $text): array {
         return GBDBStorage::tokenizeFulltext($text);
     }
 
     /**
-     * Liefert einen einfachen Query-Plan für getData/PICK-artige Zugriffe.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $where Spalte.
-     * @param mixed $is Wert.
-     * @return array Query-Plan.
+     * handles query plan.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $where value.
+     * @param mixed $is value.
+     * @param null|string $sortField value.
+     * @param null|int $limit value.
+     * @param int $offset value.
+     *
+     * @return array result.
      */
     public static function queryPlan(string $database, string $table, string $where = '', mixed $is = '', ?string $sortField = null, ?int $limit = null, int $offset = 0): array {
         $meta = self::meta($database, $table);
@@ -301,11 +321,13 @@ trait GBDB_AdvancedTrait {
 
                 break;
             }
+
             if ($sortField !== null && in_array((string)$sortField, $cols, true) && !empty($definition['sorted'])) {
                 $best = (string)$name;
                 $strategy = 'sorted_index_scan';
                 $cost = max(1, (int)ceil($cost * 0.35));
             }
+
         }
 
         $warning = $strategy === 'full_table_scan' && (int)($meta['rows'] ?? 0) > 1000 ? 'full_table_scan' : '';
@@ -332,56 +354,54 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Vergibt eine ACL-Berechtigung auf Tabellenebene.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $role Rolle.
-     * @param string $permission Berechtigung.
-     * @return bool true bei Erfolg.
+     * handles grant acl.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $role value.
+     * @param string $permission value.
+     *
+     * @return bool result.
      */
     public static function grantAcl(string $database, string $table, string $role, string $permission): bool {
         return self::changeAcl($database, $table, $role, $permission, true);
     }
 
     /**
-     * Entfernt eine ACL-Berechtigung auf Tabellenebene.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $role Rolle.
-     * @param string $permission Berechtigung.
-     * @return bool true bei Erfolg.
+     * handles revoke acl.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $role value.
+     * @param string $permission value.
+     *
+     * @return bool result.
      */
     public static function revokeAcl(string $database, string $table, string $role, string $permission): bool {
         return self::changeAcl($database, $table, $role, $permission, false);
     }
 
     /**
-     * Prüft eine Tabellen-ACL.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $role Rolle.
-     * @param string $permission Berechtigung.
-     * @return bool true wenn erlaubt.
+     * handles check acl.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $role value.
+     * @param string $permission value.
+     *
+     * @return bool result.
      */
     public static function checkAcl(string $database, string $table, string $role, string $permission): bool {
         $meta = self::meta($database, $table);
         $acl = $meta['acl'] ?? [];
 
         if (($acl['*'][$permission] ?? false) === true) return true;
+
         if (($acl[$role]['*'] ?? false) === true) return true;
 
         return ($acl[$role][$permission] ?? false) === true;
     }
 
-    /**
-     * Ändert eine ACL-Berechtigung.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $role Rolle.
-     * @param string $permission Berechtigung.
-     * @param bool $allow true zum Erlauben.
-     * @return bool true bei Erfolg.
-     */
     private static function changeAcl(string $database, string $table, string $role, string $permission, bool $allow): bool {
         $role = trim($role);
         $permission = trim($permission);
@@ -395,12 +415,14 @@ trait GBDB_AdvancedTrait {
             $meta = self::readMeta($metaFile);
 
             if (!isset($meta['acl']) || !is_array($meta['acl'])) $meta['acl'] = [];
+
             if (!isset($meta['acl'][$role]) || !is_array($meta['acl'][$role])) $meta['acl'][$role] = [];
 
             if ($allow) {
                 $meta['acl'][$role][$permission] = true;
             } else {
                 unset($meta['acl'][$role][$permission]);
+
                 if (empty($meta['acl'][$role])) unset($meta['acl'][$role]);
             }
 
@@ -409,11 +431,13 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Schreibt einen Audit-Eintrag in eine Systemtabelle.
-     * @param string $action Aktion.
-     * @param array $payload Nutzdaten.
-     * @param string $actor Akteur.
-     * @return int Audit-ID.
+     * handles audit.
+     *
+     * @param string $action value.
+     * @param array $payload value.
+     * @param string $actor value.
+     *
+     * @return int result.
      */
     public static function audit(string $action, array $payload = [], string $actor = 'system'): int {
         $db = '_gbdb_audit';
@@ -436,12 +460,14 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Exportiert alle Datensätze, die zu einem DSGVO-Identifier gehören.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $column Spalte.
-     * @param mixed $value Wert.
-     * @return array Exportdaten.
+     * handles gdpr export.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param mixed $value value.
+     *
+     * @return array result.
      */
     public static function gdprExport(string $database, string $table, string $column, mixed $value): array {
         $rows = self::getData($database, $table);
@@ -451,21 +477,25 @@ trait GBDB_AdvancedTrait {
             if (is_array($row) && array_key_exists($column, $row) && $row[$column] == $value) {
                 $out[] = $row;
             }
+
         }
 
         self::audit('gdpr_export', compact('database', 'table', 'column'));
+
         return $out;
     }
 
     /**
-     * Pseudonymisiert Felder für DSGVO-Auskunft/Löschung light.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $where Spalte.
-     * @param mixed $is Wert.
-     * @param array $columns Spalten zum Redacten.
-     * @param string $replacement Ersatzwert.
-     * @return bool true bei Erfolg.
+     * handles gdpr redact.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $where value.
+     * @param mixed $is value.
+     * @param array $columns value.
+     * @param string $replacement value.
+     *
+     * @return bool result.
      */
     public static function gdprRedact(string $database, string $table, string $where, mixed $is, array $columns, string $replacement = '[redacted]'): bool {
         $set = [];
@@ -484,12 +514,14 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Wendet eine Migration genau einmal pro Tabellen-Version an.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $migrationId Migration-ID.
-     * @param callable $callback Callback erhält database, table.
-     * @return array Migrationsstatus.
+     * handles migrate.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $migrationId value.
+     * @param callable $callback value.
+     *
+     * @return array result.
      */
     public static function migrate(string $database, string $table, string $migrationId, callable $callback): array {
         $metaFile = self::metaFileForTable($database, $table);
@@ -526,115 +558,139 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Erstellt eine Partitionstabellen-Bezeichnung.
-     * @param string $table Basistabelle.
-     * @param string $partition Partition.
-     * @return string Tabellenname.
+     * handles partition table name.
+     *
+     * @param string $table value.
+     * @param string $partition value.
+     *
+     * @return string result.
      */
     public static function partitionTableName(string $table, string $partition): string {
         return Format::cleanString($table) . '__p_' . Format::cleanString($partition);
     }
 
     /**
-     * Fügt Daten in eine Partition ein.
-     * @param string $database Datenbankname.
-     * @param string $table Basistabelle.
-     * @param string $partition Partition.
-     * @param array $data Datensatz.
-     * @return int ID.
+     * handles insert partitioned.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $partition value.
+     * @param array $data value.
+     *
+     * @return int result.
      */
     public static function insertPartitioned(string $database, string $table, string $partition, array $data): int {
         $pTable = self::partitionTableName($table, $partition);
 
         if (!in_array($database, self::listDBs(), true)) self::createDatabase($database);
+
         if (!in_array($pTable, self::listTables($database), true)) self::createTable($database, $pTable, array_keys($data));
 
         return self::insertData($database, $pTable, $data);
     }
 
     /**
-     * Liest Daten aus einer Partition.
-     * @param string $database Datenbankname.
-     * @param string $table Basistabelle.
-     * @param string $partition Partition.
-     * @return array Daten.
+     * handles get partition.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $partition value.
+     *
+     * @return array result.
      */
     public static function getPartition(string $database, string $table, string $partition): array {
         $rows = self::getData($database, self::partitionTableName($table, $partition));
+
         return is_array($rows) ? $rows : [];
     }
 
     /**
-     * Liefert den Shard-Tabellennamen für einen Key.
-     * @param string $table Basistabelle.
-     * @param mixed $key Shard-Key.
-     * @param int $shards Shard-Anzahl.
-     * @return string Shard-Tabelle.
+     * handles shard table name.
+     *
+     * @param string $table value.
+     * @param mixed $key value.
+     * @param int $shards value.
+     *
+     * @return string result.
      */
     public static function shardTableName(string $table, mixed $key, int $shards = 16): string {
         $shards = max(1, $shards);
         $slot = hexdec(substr(hash('crc32b', (string)$key), 0, 6)) % $shards;
+
         return Format::cleanString($table) . '__s_' . $slot;
     }
 
     /**
-     * Fügt Daten anhand eines Shard-Keys in eine Shard-Tabelle ein.
-     * @param string $database Datenbankname.
-     * @param string $table Basistabelle.
-     * @param mixed $key Shard-Key.
-     * @param array $data Datensatz.
-     * @param int $shards Shard-Anzahl.
-     * @return int ID.
+     * handles insert sharded.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $key value.
+     * @param array $data value.
+     * @param int $shards value.
+     *
+     * @return int result.
      */
     public static function insertSharded(string $database, string $table, mixed $key, array $data, int $shards = 16): int {
         $sTable = self::shardTableName($table, $key, $shards);
 
         if (!in_array($database, self::listDBs(), true)) self::createDatabase($database);
+
         if (!in_array($sTable, self::listTables($database), true)) self::createTable($database, $sTable, array_keys($data));
 
         return self::insertData($database, $sTable, $data);
     }
 
     /**
-     * Liest Daten aus dem passenden Shard.
-     * @param string $database Datenbankname.
-     * @param string $table Basistabelle.
-     * @param mixed $key Shard-Key.
-     * @param int $shards Shard-Anzahl.
-     * @return array Daten.
+     * handles get shard.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $key value.
+     * @param int $shards value.
+     *
+     * @return array result.
      */
     public static function getShard(string $database, string $table, mixed $key, int $shards = 16): array {
         $rows = self::getData($database, self::shardTableName($table, $key, $shards));
+
         return is_array($rows) ? $rows : [];
     }
 
     /**
-     * Führt WAL-Recovery für eine Tabelle aus.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @return array Recovery-Status.
+     * handles recover wal only.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function recoverWalOnly(string $database, string $table): array {
         return GBDBStorage::recoverWal(self::appendFileForTable($database, $table));
     }
 
     /**
-     * Liefert Append-Log-Informationen einer Tabelle.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param int $limit Maximale Anzahl.
-     * @return array Append-Log.
+     * handles append log.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $limit value.
+     *
+     * @return array result.
      */
     public static function appendLog(string $database, string $table, int $limit = 100): array {
         $ops = self::readAppendOps(self::appendFileForTable($database, $table));
+
         return array_slice($ops, max(0, count($ops) - max(1, $limit)));
     }
 
     /**
-     * Liefert Monitoring-Daten für eine Tabelle.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @return array Monitoring-Daten.
+     * handles monitor.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function monitor(string $database, string $table): array {
         $file = self::makePath($database, $table);
@@ -658,15 +714,15 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Kurzer, moderner Alias für getData().
-     * Ohne WHERE werden alle Rows gelesen; mit WHERE wird ein einzelner Treffer geliefert.
-     * Optional: ['limit'=>int,'offset'=>int,'sort'=>'field','dir'=>'ASC|DESC'].
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param mixed $where Spalte oder leer.
-     * @param mixed $is Suchwert.
-     * @param array $options Zusatzoptionen.
-     * @return mixed Daten oder Row.
+     * handles get.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param array $options value.
+     *
+     * @return mixed result.
      */
     public static function get(string $database, string $table, mixed $where = '', mixed $is = '', array $options = []): mixed {
         $filtered = $where !== '' && $where !== null;
@@ -705,11 +761,13 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Fügt einen Datensatz ein und legt Base/Tabelle bei Bedarf automatisch an.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param array $data Datensatz.
-     * @return int Neue ID oder -1.
+     * handles insert.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $data value.
+     *
+     * @return int result.
      */
     public static function insert(string $database, string $table, array $data): int {
         if ($database === '' || $table === '' || empty($data)) return -1;
@@ -726,56 +784,65 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Bearbeitet Datensätze über den kurzen Alias.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param mixed $where Suchspalte.
-     * @param mixed $is Suchwert.
-     * @param array $data Neue Werte.
-     * @return bool true bei Erfolg.
+     * handles edit.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param array $data value.
+     *
+     * @return bool result.
      */
     public static function edit(string $database, string $table, mixed $where, mixed $is, array $data): bool {
         return self::editData($database, $table, $where, $is, $data);
     }
 
     /**
-     * Löscht Datensätze über den kurzen Alias.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param mixed $where Suchspalte.
-     * @param mixed $is Suchwert.
-     * @return bool true bei Erfolg.
+     * handles delete.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return bool result.
      */
     public static function delete(string $database, string $table, mixed $where, mixed $is): bool {
         return self::deleteData($database, $table, $where, $is);
     }
 
     /**
-     * Prüft, ob ein Datensatz existiert.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param mixed $where Suchspalte.
-     * @param mixed $is Suchwert.
-     * @return bool true wenn vorhanden.
+     * handles exists.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     *
+     * @return bool result.
      */
     public static function exists(string $database, string $table, mixed $where, mixed $is): bool {
         return self::elementExists($database, $table, $where, $is);
     }
 
     /**
-     * Insert oder Update anhand einer eindeutigen Suchspalte.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param mixed $where Suchspalte.
-     * @param mixed $is Suchwert.
-     * @param array $data Daten.
-     * @return array Ergebnis mit action und id/ok.
+     * handles upsert.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param mixed $where value.
+     * @param mixed $is value.
+     * @param array $data value.
+     *
+     * @return array result.
      */
     public static function upsert(string $database, string $table, mixed $where, mixed $is, array $data): array {
         $row = self::get($database, $table, $where, $is);
 
         if (is_array($row) && !empty($row)) {
             $ok = self::edit($database, $table, $where, $is, $data);
+
             return ['ok' => $ok, 'action' => 'update', 'id' => (int)($row['id'] ?? 0)];
         }
 
@@ -786,10 +853,12 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Liefert Tabellenstatistiken für Monitoring, Planner und UI.
-     * @param string $database Datenbankname.
-     * @param string|null $table Tabellenname oder null für alle Tabellen.
-     * @return array Statistikdaten.
+     * handles stats.
+     *
+     * @param string $database value.
+     * @param null|string $table value.
+     *
+     * @return array result.
      */
     public static function stats(string $database, ?string $table = null): array {
         if ($table !== null && $table !== '') {
@@ -821,11 +890,13 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Analysiert eine Tabelle und erstellt einfache Index-Vorschläge.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param int $sampleSize Anzahl Rows für Analyse.
-     * @return array Analysebericht.
+     * handles analyze.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $sampleSize value.
+     *
+     * @return array result.
      */
     public static function analyze(string $database, string $table, int $sampleSize = 1000): array {
         $rows = self::get($database, $table, '', '', ['limit' => max(1, $sampleSize)]);
@@ -847,6 +918,7 @@ trait GBDB_AdvancedTrait {
                 $value = $row[$key];
 
                 if ($value !== '' && $value !== null) $filled++;
+
                 if (is_numeric($value)) $numeric++;
 
                 $values[(string)$value] = true;
@@ -871,6 +943,7 @@ trait GBDB_AdvancedTrait {
                     'distinct_ratio' => round($ratio, 4)
                 ];
             }
+
         }
 
         return [
@@ -885,11 +958,13 @@ trait GBDB_AdvancedTrait {
     }
 
     /**
-     * Erstellt automatisch sinnvolle Single-Column-Indexe.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param array $columns Spalten; leer nutzt analyze()-Vorschläge.
-     * @return array Ergebnisbericht.
+     * handles auto index.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $columns value.
+     *
+     * @return array result.
      */
     public static function autoIndex(string $database, string $table, array $columns = []): array {
         if (empty($columns)) {
@@ -898,6 +973,7 @@ trait GBDB_AdvancedTrait {
             foreach ($analysis['suggested_indexes'] ?? [] as $suggestion) {
                 if (isset($suggestion['column'])) $columns[] = (string)$suggestion['column'];
             }
+
         }
 
         $created = [];
@@ -913,40 +989,63 @@ trait GBDB_AdvancedTrait {
             } else {
                 $failed[] = $column;
             }
+
         }
 
         return ['ok' => empty($failed), 'database' => $database, 'table' => $table, 'created' => $created, 'failed' => $failed];
     }
 
     /**
-     * Alias für queryPlan(), passend zu GreenQL EXPLAIN.
-     * @param string $database Datenbankname.
-     * @param string $table Tabellenname.
-     * @param string $where Spalte.
-     * @param mixed $is Suchwert.
-     * @return array Plan.
+     * handles explain.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $where value.
+     * @param mixed $is value.
+     *
+     * @return array result.
      */
     public static function explain(string $database, string $table, string $where = '', mixed $is = ''): array {
         return self::queryPlan($database, $table, $where, $is);
     }
 
-
-    /** Erzeugt eine Query-ID fuer Monitoring/Debugging. */
+    /**
+     * handles new query id.
+     *
+     * @return string result.
+     */
     public static function newQueryId(): string {
         return 'q_' . date('YmdHis') . '_' . bin2hex(random_bytes(4));
     }
 
-    /** Liefert aktive Queries. Aktuell prozesslokal vorbereitet. */
+    /**
+     * handles active queries.
+     *
+     * @return array result.
+     */
     public static function activeQueries(): array {
         return [];
     }
 
-    /** Bereitet das Abbrechen einer Query vor. */
+    /**
+     * handles kill query.
+     *
+     * @param string $queryId value.
+     *
+     * @return array result.
+     */
     public static function killQuery(string $queryId): array {
         return ['ok' => false, 'query_id' => $queryId, 'message' => 'Kill Query ist vorbereitet; echte laufende Worker folgen in spaeteren Transaction/Lock-Wochen.'];
     }
 
-    /** Schreibt einen Slow-Query-Logeintrag. */
+    /**
+     * handles slow query log.
+     *
+     * @param array $plan value.
+     * @param float $seconds value.
+     *
+     * @return void result.
+     */
     public static function slowQueryLog(array $plan, float $seconds): void {
         if ($seconds < 0.25 && ($plan['warning'] ?? '') === '') return;
 
@@ -959,7 +1058,15 @@ trait GBDB_AdvancedTrait {
         @file_put_contents($dir . '/slow_queries.log', json_encode($entry, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
     }
 
-    /** Liest mit Query-Engine-Optionen. */
+    /**
+     * handles select.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function select(string $database, string $table, array $options = []): array {
         $start = microtime(true);
         $where = (string)($options['where'] ?? '');
@@ -976,6 +1083,7 @@ trait GBDB_AdvancedTrait {
             usort($rows, function ($a, $b) use ($sort, $dir) {
                 $av = $a[$sort] ?? null; $bv = $b[$sort] ?? null;
                 $cmp = is_numeric($av) && is_numeric($bv) ? ((float)$av <=> (float)$bv) : strnatcasecmp((string)$av, (string)$bv);
+
                 return $dir === 'DESC' ? -$cmp : $cmp;
             });
         }
@@ -987,15 +1095,35 @@ trait GBDB_AdvancedTrait {
         return ['ok' => true, 'query_id' => $plan['query_id'], 'plan' => $plan, 'rows' => $rows, 'keys' => isset($rows[0]) ? array_keys($rows[0]) : self::getKeys($database, $table)];
     }
 
-    /** DISTINCT ueber eine Spalte. */
+    /**
+     * handles distinct.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return array result.
+     */
     public static function distinct(string $database, string $table, string $column): array {
         $seen = [];
 
         foreach (self::getData($database, $table) as $row) if (is_array($row) && array_key_exists($column, $row)) $seen[(string)$row[$column]] = $row[$column];
+
         return array_values($seen);
     }
 
-    /** Aggregiert Tabellenwerte. */
+    /**
+     * handles aggregate.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $fn value.
+     * @param string $column value.
+     * @param null|string $groupBy value.
+     * @param null|array $having value.
+     *
+     * @return array result.
+     */
     public static function aggregate(string $database, string $table, string $fn, string $column = '*', ?string $groupBy = null, ?array $having = null): array {
         $fn = strtoupper($fn);
         $rows = self::getData($database, $table);
@@ -1003,10 +1131,12 @@ trait GBDB_AdvancedTrait {
 
         if ($groupBy !== null && $groupBy !== '') {
             $groups = [];
+
             foreach ($rows as $row) if (is_array($row)) $groups[(string)($row[$groupBy] ?? '')][] = $row;
         } else {
             $groups['__all__'] = is_array($rows) ? $rows : [];
         }
+
         $out = [];
 
         foreach ($groups as $key => $items) {
@@ -1029,6 +1159,7 @@ trait GBDB_AdvancedTrait {
             if ($having !== null) {
                 $left = $value; $op = (string)($having['op'] ?? '='); $right = $having['value'] ?? null;
                 $pass = match ($op) { '>' => $left > $right, '<' => $left < $right, '>=' => $left >= $right, '<=' => $left <= $right, '!=', '<>' => $left != $right, default => $left == $right };
+
                 if (!$pass) continue;
             }
 

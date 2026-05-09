@@ -1,21 +1,19 @@
 <?php
 
 class FileTool {
-    /** Prüft, ob eine Datei existiert */
     /**
-     * Verarbeitet die Funktion exists.
-     * @param string $path Übergabewert.
-     * @return bool Rückgabewert.
+     * does the file exists?
+     * @param string $path
+     * @return bool
      */
     public static function exists(string $path): bool {
         return is_file($path);
     }
 
-    /** Liest den Inhalt einer Datei (UTF-8, mit Locking) */
     /**
-     * Verarbeitet die Funktion read.
-     * @param string $path Übergabewert.
-     * @return string Rückgabewert.
+     * read file contents
+     * @param string $path
+     * @return bool|string
      */
     public static function read(string $path): string {
         if (!is_file($path)) {
@@ -28,9 +26,10 @@ class FileTool {
     }
 
     /**
-     * Sicheres Schreiben (atomic write + locking)
-     * - schreibt zuerst in temp-file
-     * - dann rename() → atomarer System-Call
+     * save write data to a file with atomic write
+     * @param string $path
+     * @param string $content
+     * @return bool
      */
     public static function write(string $path, string $content): bool {
         self::ensureDir(dirname($path));
@@ -38,12 +37,15 @@ class FileTool {
         $tmp = $path . '.' . uniqid('tmp_', true);
 
         // temp write
+
         if (@file_put_contents($tmp, $content, LOCK_EX) === false) {
             error_log("[FileTool] Failed to write temp file: {$tmp}");
+
             return false;
         }
 
         // atomarer replace
+
         if (!@rename($tmp, $path)) {
             @unlink($tmp);
             error_log("[FileTool] Failed to rename {$tmp} → {$path}");
@@ -54,11 +56,10 @@ class FileTool {
         return true;
     }
 
-    /** Liest JSON und gibt Array zurück */
     /**
-     * Verarbeitet die Funktion read json.
-     * @param string $path Übergabewert.
-     * @return array Rückgabewert.
+     * reads json file
+     * @param string $path
+     * @return array
      */
     public static function readJson(string $path): array {
         if (!is_file($path)) {
@@ -70,18 +71,18 @@ class FileTool {
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             error_log("[FileTool] JSON decode error in {$path}: " . json_last_error_msg());
+
             return [];
         }
 
         return is_array($data) ? $data : [];
     }
 
-    /** Sicheres JSON-Schreiben (atomic) */
     /**
-     * Verarbeitet die Funktion write json.
-     * @param string $path Übergabewert.
-     * @param array $data Übergabewert.
-     * @return bool Rückgabewert.
+     * atomic json writing into a file
+     * @param string $path
+     * @param array $data
+     * @return bool
      */
     public static function writeJson(string $path, array $data): bool {
         self::ensureDir(dirname($path));
@@ -93,28 +94,27 @@ class FileTool {
 
         if ($json === false) {
             error_log("[FileTool] JSON encode failed for {$path}");
+
             return false;
         }
 
         return self::write($path, $json);
     }
 
-    /** Löscht Datei */
     /**
-     * Löscht Daten aus der angegebenen Quelle.
-     * @param string $path Übergabewert.
-     * @return bool Rückgabewert.
+     * deletes file
+     * @param string $path
+     * @return bool
      */
     public static function delete(string $path): bool {
         return is_file($path) ? @unlink($path) : false;
     }
 
-    /** Kopiert ein ganzes Verzeichnis rekursiv */
     /**
-     * Verarbeitet die Funktion copy dir.
-     * @param string $src Übergabewert.
-     * @param string $dest Übergabewert.
-     * @return void Rückgabewert.
+     * copys a dir recursively
+     * @param string $src
+     * @param string $dest
+     * @return void
      */
     public static function copyDir(string $src, string $dest): void {
         if (!is_dir($src)) {
@@ -137,16 +137,18 @@ class FileTool {
                 if (!copy($srcPath, $destPath)) {
                     error_log("[FileTool] Failed copying file {$srcPath}");
                 }
+
             }
+
         }
+
     }
 
-    /** Löscht Dateien älter als X Tage */
     /**
-     * Verarbeitet die Funktion delete old files.
-     * @param string $dir Übergabewert.
-     * @param int $days Übergabewert.
-     * @return void Rückgabewert.
+     * deletes data older than x days
+     * @param string $dir
+     * @param int $days
+     * @return void
      */
     public static function deleteOldFiles(string $dir, int $days): void {
         if (!is_dir($dir)) {
@@ -159,14 +161,15 @@ class FileTool {
             if (is_file($file) && filemtime($file) < $limit) {
                 @unlink($file);
             }
+
         }
+
     }
 
-    /** Berechnet Gesamtgröße eines Verzeichnisses in MB */
     /**
-     * Verarbeitet die Funktion dir size.
-     * @param string $dir Übergabewert.
-     * @return float Rückgabewert.
+     * reads size of a dir in MB
+     * @param string $dir
+     * @return float
      */
     public static function dirSize(string $dir): float {
         if (!is_dir($dir)) {
@@ -179,17 +182,17 @@ class FileTool {
             if ($file->isFile()) {
                 $size += $file->getSize();
             }
+
         }
 
         return round($size / 1048576, 2);
     }
 
-    /** Listet Dateien nach Endung */
     /**
-     * Verarbeitet die Funktion list files.
-     * @param string $dir Übergabewert.
-     * @param string $ext Übergabewert.
-     * @return array Rückgabewert.
+     * lists files by their extension-ending
+     * @param string $dir
+     * @param string $ext
+     * @return array
      */
     public static function listFiles(string $dir, string $ext = ''): array {
         if (!is_dir($dir)) {
@@ -208,6 +211,7 @@ class FileTool {
             if ($ext === '' || str_ends_with($f, $ext)) {
                 $result[] = $f;
             }
+
         }
 
         sort($result); // deterministisch
@@ -215,12 +219,11 @@ class FileTool {
         return $result;
     }
 
-    /** Backup eines gesamten Verzeichnisses */
     /**
-     * Verarbeitet die Funktion backup dir.
-     * @param string $src Übergabewert.
-     * @param string $dest Übergabewert.
-     * @return bool Rückgabewert.
+     * backup of a dir
+     * @param string $src
+     * @param string $dest
+     * @return bool
      */
     public static function backupDir(string $src, string $dest): bool {
         if (!is_dir($src)) {
@@ -232,25 +235,26 @@ class FileTool {
         return true;
     }
 
-    /** Verzeichnis sicher erstellen */
     /**
-     * Verarbeitet die Funktion ensure dir.
-     * @param string $dir Übergabewert.
-     * @return void Rückgabewert.
+     * creates a dir safely
+     * @param string $dir
+     * @return void
      */
+
     private static function ensureDir(string $dir): void {
         if (!is_dir($dir)) {
             if (!@mkdir($dir, 0777, true)) {
                 error_log("[FileTool] Failed to create directory: {$dir}");
             }
+
         }
+
     }
 
-    /** Alle Unterordner auflisten */
     /**
-     * Verarbeitet die Funktion list dirs.
-     * @param string $path Übergabewert.
-     * @return array Rückgabewert.
+     * list of all dirs in a dir
+     * @param string $path
+     * @return string[]
      */
     public static function listDirs(string $path): array {
         if (!is_dir($path)) {
@@ -261,4 +265,5 @@ class FileTool {
 
         return array_map("basename", $dirs ?: []);
     }
+
 }

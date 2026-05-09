@@ -3,7 +3,6 @@
 trait GBDB_RecoveryTrait {
     private static bool $booted = false;
 
-    /** Pfad zum Recovery-Systemordner. */
     private static function recoveryRoot(): string {
         $dir = dirname(Vars::DB_PATH()) . '/.system/recovery';
 
@@ -14,7 +13,11 @@ trait GBDB_RecoveryTrait {
         return $dir;
     }
 
-    /** Engine-Boot: erkennt Dirty Shutdowns und startet Recovery. */
+    /**
+     * handles boot.
+     *
+     * @return array result.
+     */
     public static function boot(): array {
         if (self::$booted) {
             return [
@@ -32,7 +35,11 @@ trait GBDB_RecoveryTrait {
         return $report;
     }
 
-    /** Markiert einen sauberen Shutdown. Kann man optional am Request-Ende aufrufen. */
+    /**
+     * handles shutdown.
+     *
+     * @return void result.
+     */
     public static function shutdown(): void {
         $file = self::recoveryRoot() . '/dirty.json';
 
@@ -44,7 +51,6 @@ trait GBDB_RecoveryTrait {
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
     }
 
-    /** Schreibt den Dirty-Marker für Crash-Erkennung. */
     private static function writeDirtyMarker(): void {
         GBDBStorage::atomicWrite(self::recoveryRoot() . '/dirty.json', json_encode([
             'started_at' => time(),
@@ -54,12 +60,22 @@ trait GBDB_RecoveryTrait {
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
     }
 
-    /** Prüft ob der letzte Lauf unsauber beendet wurde. */
+    /**
+     * handles dirty shutdown detected.
+     *
+     * @return bool result.
+     */
     public static function dirtyShutdownDetected(): bool {
         return is_file(self::recoveryRoot() . '/dirty.json');
     }
 
-    /** Führt Journal/WAL-Recovery über alle Tabellen aus. */
+    /**
+     * handles recover.
+     *
+     * @param bool $auto value.
+     *
+     * @return array result.
+     */
     public static function recover(bool $auto = false): array {
         $dirty = self::dirtyShutdownDetected();
         $report = [
@@ -96,8 +112,11 @@ trait GBDB_RecoveryTrait {
                     if (!($tableReport['ok'] ?? false)) {
                         $report['ok'] = false;
                     }
+
                 }
+
             }
+
         }
 
         self::setInstance($oldInstance);
@@ -112,7 +131,14 @@ trait GBDB_RecoveryTrait {
         return $report;
     }
 
-    /** Führt Recovery für eine Tabelle aus. */
+    /**
+     * handles recover table.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function recoverTable(string $database, string $table): array {
         $file = self::makePath($database, $table);
         $appendFile = self::appendFileForTable($database, $table);
@@ -180,7 +206,6 @@ trait GBDB_RecoveryTrait {
         ];
     }
 
-    /** Entfernt halb geschriebene Append-Zeilen am Dateiende. */
     private static function detectHalfWrittenAppendOps(string $appendFile): array {
         if (!is_file($appendFile)) {
             return [
@@ -227,11 +252,16 @@ trait GBDB_RecoveryTrait {
         ];
     }
 
-    /** Gibt den letzten Recovery-Bericht zurück. */
+    /**
+     * handles recovery report.
+     *
+     * @return array result.
+     */
     public static function recoveryReport(): array {
         $file = self::recoveryRoot() . '/last_report.json';
         $data = is_file($file) ? json_decode((string)@file_get_contents($file), true) : [];
 
         return is_array($data) ? $data : [];
     }
+
 }

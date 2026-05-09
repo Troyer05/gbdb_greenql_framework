@@ -14,25 +14,31 @@
       "include": "#comments"
     },
     {
-      "include": "#metaBlock"
-    },
-    {
       "include": "#strings"
     },
     {
-      "include": "#fileCommands"
+      "include": "#jsonKeys"
     },
     {
       "include": "#definitions"
     },
     {
-      "include": "#qualifiedCalls"
+      "include": "#declarations"
     },
     {
-      "include": "#runtimeFunctions"
+      "include": "#slashBridge"
     },
     {
-      "include": "#danger"
+      "include": "#optionalParams"
+    },
+    {
+      "include": "#qualified"
+    },
+    {
+      "include": "#builtins"
+    },
+    {
+      "include": "#variables"
     },
     {
       "include": "#keywords"
@@ -41,13 +47,10 @@
       "include": "#types"
     },
     {
-      "include": "#clauses"
+      "include": "#functions"
     },
     {
-      "include": "#variables"
-    },
-    {
-      "include": "#numbersOperatorsPunctuation"
+      "include": "#numbersOps"
     },
     {
       "include": "#identifiers"
@@ -56,6 +59,10 @@
   "repository": {
     "comments": {
       "patterns": [
+        {
+          "name": "comment.line.divider.greenql",
+          "match": "^\\s*#\\s*[=\\-]{8,}.*$"
+        },
         {
           "name": "comment.line.number-sign.greenql",
           "match": "#.*$"
@@ -112,39 +119,16 @@
         }
       ]
     },
-    "metaBlock": {
+    "jsonKeys": {
       "patterns": [
         {
-          "match": "(?i)\\b(META)\\b",
+          "match": "(\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\")\\s*(:)",
           "captures": {
             "1": {
-              "name": "keyword.other.meta.greenql"
-            }
-          }
-        },
-        {
-          "name": "meta.object.key.quoted.greenql",
-          "match": "(?<=\")([A-Za-z_][A-Za-z0-9_\\-]*)(?=\"\\s*:)"
-        },
-        {
-          "name": "meta.object.key.bare.greenql",
-          "match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*(?=\\s*:)"
-        }
-      ]
-    },
-    "fileCommands": {
-      "patterns": [
-        {
-          "match": "(?i)\\b(FILE)\\s*(\\.)\\s*(INCLUDE|RUN|BACK)\\b",
-          "captures": {
-            "1": {
-              "name": "support.type.file.greenql"
+              "name": "entity.name.tag.json-key.greenql"
             },
             "2": {
-              "name": "punctuation.accessor.greenql"
-            },
-            "3": {
-              "name": "support.function.file.greenql"
+              "name": "punctuation.separator.key-value.greenql"
             }
           }
         }
@@ -153,10 +137,24 @@
     "definitions": {
       "patterns": [
         {
-          "match": "(?i)\\b(C|CLASS)\\s+([A-Za-z][A-Za-z0-9_]*)",
+          "match": "(?i)\\b(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED|STATIC)?\\s*\\b(F|FUNCTION)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
           "captures": {
             "1": {
-              "name": "storage.type.class.greenql"
+              "name": "storage.modifier.visibility.greenql"
+            },
+            "2": {
+              "name": "storage.type.function.greenql keyword.declaration.function.greenql"
+            },
+            "3": {
+              "name": "entity.name.function.definition.greenql"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(C|CLASS)\\s+([A-Za-z_][A-Za-z0-9_]*)(?!\\s*[/\\(])",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.greenql keyword.declaration.class.greenql"
             },
             "2": {
               "name": "entity.name.type.class.greenql"
@@ -164,26 +162,67 @@
           }
         },
         {
-          "match": "(?i)\\b(F|FUNCTION)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "match": "(?i)\\b(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED|STATIC)\\b",
+          "name": "storage.modifier.visibility.greenql"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?\\s*\\b(DECLARE|DECALRE|DELACE)\\s+(:)([A-Za-z_][A-Za-z0-9_]*)\\s+(\\$?[A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": {
-              "name": "storage.type.function.greenql"
+              "name": "storage.modifier.visibility.greenql"
             },
             "2": {
-              "name": "entity.name.function.definition.greenql"
+              "name": "storage.type.declaration.greenql keyword.declaration.variable.greenql"
+            },
+            "3": {
+              "name": "punctuation.definition.type.greenql"
+            },
+            "4": {
+              "name": "support.type.greenql"
+            },
+            "5": {
+              "name": "variable.other.declaration.greenql"
             }
           }
         },
         {
-          "match": "(?i)\\b(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED|STATIC)\\b",
-          "name": "storage.modifier.greenql"
+          "match": "(?i)\\b(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?\\s*\\b(DECLARE|DECALRE|DELACE)\\s+(\\$?[A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.visibility.greenql"
+            },
+            "2": {
+              "name": "storage.type.declaration.greenql keyword.declaration.variable.greenql"
+            },
+            "3": {
+              "name": "variable.other.declaration.greenql"
+            }
+          }
         }
       ]
     },
-    "qualifiedCalls": {
+    "slashBridge": {
       "patterns": [
         {
-          "match": "(?i)\\b(CALL|CLASS)\\s+([A-Za-z_][A-Za-z0-9_]*)(/)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "match": "(?i)\\b(srv|SRV|Srv|secondserver|Secondserver|SecondServer)\\s*(/)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": {
+              "name": "support.type.namespace.srvp.greenql"
+            },
+            "2": {
+              "name": "punctuation.separator.srvp.greenql"
+            },
+            "3": {
+              "name": "support.function.bridge.action.greenql"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(CALL|CLASS)\\s+([A-Za-z_][A-Za-z0-9_]*)(/)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
           "captures": {
             "1": {
               "name": "keyword.control.call.greenql"
@@ -192,13 +231,169 @@
               "name": "entity.name.type.class.greenql"
             },
             "3": {
-              "name": "punctuation.separator.greenql"
+              "name": "punctuation.separator.method.greenql"
             },
             "4": {
-              "name": "entity.name.function.greenql"
+              "name": "entity.name.function.call.user.greenql"
+            }
+          }
+        }
+      ]
+    },
+    "optionalParams": {
+      "patterns": [
+        {
+          "match": "(\\?)\\s*(\\$?[A-Za-z_][A-Za-z0-9_]*)(\\s*:\\s*)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.optional.greenql"
+            },
+            "2": {
+              "name": "variable.parameter.optional.greenql"
+            },
+            "3": {
+              "name": "punctuation.definition.type.greenql"
+            },
+            "4": {
+              "name": "support.type.greenql"
             }
           }
         },
+        {
+          "match": "(\\?)\\s*(\\$?[A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.optional.greenql"
+            },
+            "2": {
+              "name": "variable.parameter.optional.greenql"
+            }
+          }
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.identity.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:uni_random|random_int|spark_id|fresh_id|fusion|param|uuid|now|len|ENV)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.builtin.hash.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:hash_adler32|hash_sha256|hash_sha512|hash_crc32|hash_pass|hash_md5|hash)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.builtin.pattern.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:exec_pattern|load_pattern|execPattern|loadpattern|execpattern|loadPattern)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.builtin.api.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:api_fetch|fetch_api|call_api)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.builtin.data.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:delete_data_recursive|transfer_data_delete|set_data_readonly|instance_exists|transfer_data|get_instances|reshape_data|table_exists|base_exists|delete_data|data_exists|erase_data|last_added|count_data|tally_data|fetch_data|plant_data|get_tables|copy_data|last_data|seed_data|lock_data|move_data|get_bases|instances|edit_data|get_data|editdata|add_data|tables|bases|fetch)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.builtin.schema.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:delete_instance|rename_instance|delete_column|drop_instance|sprout_column|rename_table|delete_table|prune_column|rename_base|delete_base|new_column|drop_table|drop_base)\\s*(?=\\()"
+        },
+        {
+          "name": "support.function.builtin.advanced.greenql support.function.builtin.greenql",
+          "match": "(?i)\\b(?:install_social_patterns|social_schema_patterns|retry_failed_jobs|encryption_config|user_data_redact|user_data_delete|user_data_export|define_procedure|evaluate_policy|fulltext_search|define_db_user|define_db_role|call_procedure|define_trigger|mark_pii_field|define_policy|refresh_view|audit_export|delete_media|audit_search|define_view|delayed_job|enqueue_job|queue_stats|soft_delete|rotate_key|signed_url|get_view|put_blob|recover|monitor|cursor|page)\\s*(?=\\()"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.declaration.greenql",
+          "match": "(?i)\\b(?:PROTECTED|FUNCTION|PRIVATE|DECLARE|DECALRE|PUBLIC|DELACE|STATIC|CLASS|PRIV|META|PUB|C|F)\\b"
+        },
+        {
+          "name": "keyword.control.greenql",
+          "match": "(?i)\\b(?:DELETE_LOG_FILE|SET_LOGFILE|MAP_OBJECT|CLEAR_LOG|END_PROC|OUTPUT|ERROR|CLASS|CALL|BACK|ELSE|FOR|LOG|MSG|IF)\\b"
+        },
+        {
+          "name": "keyword.danger.greenql",
+          "match": "(?i)\\b(?:ROLLBACK|UNINDEX|DELETE|REVOKE|ERASE|DROP)\\b"
+        },
+        {
+          "name": "keyword.transaction.greenql",
+          "match": "(?i)\\b(?:TRANSACTION|SAVEPOINT|TIMEOUT|COMMIT|BEGIN|TX|TO)\\b"
+        },
+        {
+          "name": "keyword.structure.greenql",
+          "match": "(?i)\\b(?:INSTANCES|DESCRIBE|INSTANCE|COLUMNS|DEFAULT|WITHOUT|COLUMN|TABLES|RENAME|BRANCH|BASES|TABLE|TYPES|ALTER|BASE|ROOT|EDIT|TYPE|WITH|SHOW|GROW|INTO|ADD|USE)\\b"
+        },
+        {
+          "name": "keyword.query.greenql",
+          "match": "(?i)\\b(?:DISTINCT|EXPLAIN|EXECUTE|OPTIONS|RESHAPE|PREPARE|EXISTS|OFFSET|HAVING|SEARCH|WHERE|COUNT|QUERY|LIMIT|GROUP|INNER|AFTER|SIZE|SORT|JOIN|FROM|DESC|DATA|LEFT|PICK|SEED|MIN|ASC|MAX|SUM|AVG|IN|BY|ON)\\b"
+        },
+        {
+          "name": "keyword.engine.greenql",
+          "match": "(?i)\\b(?:MIGRATE_TO_V2|SUGGESTIONS|CONSTRAINTS|REFERENCES|CONSTRAINT|COMPOSITE|RELATIONS|REQUIRED|FULLTEXT|SET_NULL|RESTRICT|SNAPSHOT|CASCADE|SUGGEST|INDEXES|MONITOR|FOREIGN|MIGRATE|RECOVER|ANALYZE|REINDEX|PREFIX|REPAIR|HEALTH|SORTED|CREATE|UNIQUE|CURSOR|BACKUP|CHECK|RANGE|INDEX|STATS|PEEK|PAGE|AUTO|PACK|KEY)\\b"
+        },
+        {
+          "name": "keyword.cluster.greenql",
+          "match": "(?i)\\b(?:PARTITIONS|PARTITION|HEARTBEAT|READ_ONLY|READONLY|WRITABLE|REGISTER|PRIMARY|REPLICA|BUCKETS|CLUSTER|SHARDS|WORKER|TENANT|SHARD|USER|DATE|NODE|ROLE|HASH)\\b"
+        },
+        {
+          "name": "keyword.security.greenql",
+          "match": "(?i)\\b(?:REVOKE|GRANT)\\b"
+        },
+        {
+          "name": "keyword.file.greenql",
+          "match": "(?i)\\b(?:INCLUDE|PATTERN|EXEC|FILE|RUN)\\b"
+        },
+        {
+          "name": "constant.language.boolean.greenql",
+          "match": "(?i)\\b(?:true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.greenql",
+          "match": "(?i)\\bnull\\b"
+        },
+        {
+          "name": "constant.language.time.greenql",
+          "match": "(?i)\\bNOW\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.greenql",
+          "match": "(?i)(:?)\\b(?:blob_reference|timestamp|datetime|datetype|timetype|decimal|boolean|integer|object|number|double|string|float|mixed|email|array|text|bool|date|uuid|time|json|ulid|blob|enum|any|map|arr|str|obj|int|url|var)\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.language.this.greenql",
+          "match": "(?i)\\bthis\\s*\\.\\s*_[A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "name": "variable.other.constant.greenql",
+          "match": "\\$[A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "name": "variable.other.local.greenql",
+          "match": "_[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.call.user.greenql",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\s*(?=\\()"
+        }
+      ]
+    },
+    "qualified": {
+      "patterns": [
         {
           "match": "\\b([A-Za-z0-9_\\-]+)(\\.)([A-Za-z0-9_\\-]+)\\b",
           "captures": {
@@ -215,71 +410,15 @@
         }
       ]
     },
-    "runtimeFunctions": {
-      "patterns": [
-        {
-          "name": "support.function.runtime.greenql",
-          "match": "(?i)\\\\b(?:install_social_patterns|social_schema_patterns|delete_data_recursive|transfer_data_delete|encryption_config|set_data_readonly|retry_failed_jobs|user_data_export|user_data_delete|user_data_redact|define_procedure|delete_instance|evaluate_policy|instance_exists|fulltext_search|rename_instance|define_trigger|call_procedure|mark_pii_field|define_db_user|define_db_role|sprout_column|get_instances|transfer_data|drop_instance|define_policy|delete_column|hash_adler32|audit_search|delete_media|reshape_data|audit_export|delete_table|refresh_view|table_exists|rename_table|prune_column|delete_data|delete_base|delayed_job|define_view|soft_delete|hash_sha256|rename_base|queue_stats|data_exists|enqueue_job|base_exists|hash_sha512|erase_data|last_added|plant_data|new_column|fetch_data|uni_random|get_tables|hash_crc32|tally_data|drop_table|signed_url|rotate_key|count_data|get_bases|drop_base|last_data|instances|seed_data|api_fetch|move_data|fetch_api|lock_data|edit_data|copy_data|put_blob|add_data|get_view|get_data|fresh_id|call_api|hash_md5|spark_id|editData|monitor|recover|cursor|tables|bases|param|fetch|page|uuid|hash|len|ENV)\\\\s*(?=\\\\()"
-        }
-      ]
-    },
-    "danger": {
-      "patterns": [
-        {
-          "name": "keyword.control.danger.greenql",
-          "match": "(?i)\\\\b(?:ROLLBACK|RECOVER|UNINDEX|REPAIR|REVOKE|DELETE|ERASE|DROP)\\\\b"
-        }
-      ]
-    },
-    "keywords": {
-      "patterns": [
-        {
-          "name": "keyword.control.greenql",
-          "match": "(?i)\\\\b(?:DELETE_LOG_FILE|MIGRATE_TO_V2|SET_LOGFILE|MAP_OBJECT|CLEAR_LOG|PROTECTED|SAVEPOINT|PARTITION|HEARTBEAT|SNAPSHOT|DESCRIBE|END_PROC|ROLLBACK|DISTINCT|REGISTER|FUNCTION|FULLTEXT|PREPARE|OPTIONS|RECOVER|MONITOR|REINDEX|EXPLAIN|UNINDEX|EXECUTE|INCLUDE|DECLARE|MIGRATE|DECALRE|CLUSTER|ANALYZE|RESHAPE|SUGGEST|PRIVATE|TIMEOUT|STATIC|REVOKE|BACKUP|REPAIR|EXISTS|CREATE|DELACE|BRANCH|OUTPUT|CURSOR|PUBLIC|COMMIT|HEALTH|DELETE|INNER|BEGIN|INDEX|GRANT|SHARD|CLASS|STATS|ERROR|ERASE|CHECK|QUERY|COUNT|ALTER|ELSE|GROW|PICK|FILE|CALL|PACK|SHOW|META|PRIV|ROOT|PAGE|DROP|BACK|LEFT|JOIN|AUTO|SEED|PEEK|EDIT|MAX|AVG|LOG|FOR|RUN|SUM|MSG|PUB|MIN|USE|IF|TX|F|C)\\\\b"
-        }
-      ]
-    },
-    "types": {
-      "patterns": [
-        {
-          "name": "entity.name.type.greenql",
-          "match": "(?i)\\\\b(?:BLOB_REFERENCE|AUTO_INCREMENT|CONSTRAINTS|TRANSACTION|PARTITIONS|CONSTRAINT|PARTITION|INSTANCES|RELATIONS|RELATION|INSTANCE|DATETIME|TIMESTAMP|BOOLEAN|DECIMAL|INDEXES|TABLES|TENANT|STRING|DOUBLE|SHARDS|COLUMN|TABLE|BASES|FLOAT|MIXED|INDEX|ARRAY|EMAIL|TEXT|UUID|ULID|JSON|BOOL|USER|BASE|NODE|DATA|INT)\\\\b"
-        }
-      ]
-    },
-    "clauses": {
-      "patterns": [
-        {
-          "name": "keyword.other.clause.greenql",
-          "match": "(?i)\\\\b(?:REFERENCES|READ_ONLY|AUTO_INCREMENT|ENCRYPTED|SET_NULL|WRITABLE|RESTRICT|SNAPSHOT|READONLY|REQUIRED|COLUMNS|BUCKETS|FOREIGN|DEFAULT|CASCADE|REPLICA|PRIMARY|WITHOUT|OFFSET|REPORT|UNIQUE|UPDATE|HAVING|SEARCH|WORKER|FORCE|FALSE|AFTER|GROUP|LIMIT|WHERE|TYPES|TRUE|HASH|MODE|NULL|DATE|FROM|SIZE|COLD|FULL|ROLE|SORT|WITH|DESC|AND|ADD|SET|NOT|ASC|NOW|KEY|AS|ON|TO|BY|IN|OR)\\\\b"
-        }
-      ]
-    },
-    "variables": {
-      "patterns": [
-        {
-          "name": "variable.other.constant.greenql",
-          "match": "\\$[A-Za-z_][A-Za-z0-9_]*"
-        },
-        {
-          "name": "variable.other.greenql",
-          "match": "_[A-Za-z][A-Za-z0-9_]*"
-        },
-        {
-          "name": "variable.language.this.greenql",
-          "match": "(?i)\\bthis(?:_f)?\\b"
-        }
-      ]
-    },
-    "numbersOperatorsPunctuation": {
+    "numbersOps": {
       "patterns": [
         {
           "name": "constant.numeric.greenql",
-          "match": "\\b-?(?:0x[0-9A-Fa-f]+|\\d+(?:\\.\\d+)?)\\b"
+          "match": "-?\\b\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?\\b"
         },
         {
           "name": "keyword.operator.comparison.greenql",
-          "match": "==|!=|>=|<=|~=|=|>|<"
+          "match": "==|!=|>=|<=|~=|>|<|="
         },
         {
           "name": "keyword.operator.logical.greenql",
@@ -287,15 +426,27 @@
         },
         {
           "name": "keyword.operator.arithmetic.greenql",
-          "match": "[+\\-*/%]"
+          "match": "\\+\\+|--|[+\\-*/%]"
         },
         {
-          "name": "punctuation.terminator.statement.greenql",
-          "match": ";"
+          "name": "punctuation.section.block.greenql",
+          "match": "[{}]"
         },
         {
-          "name": "punctuation.definition.group.greenql",
-          "match": "[(){}\\[\\],.:/]"
+          "name": "punctuation.section.array.greenql",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.section.parens.greenql",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.separator.greenql",
+          "match": "[;,.]"
+        },
+        {
+          "name": "punctuation.separator.key-value.greenql",
+          "match": ":"
         }
       ]
     },
@@ -303,7 +454,7 @@
       "patterns": [
         {
           "name": "entity.name.identifier.greenql",
-          "match": "\\b[A-Za-z][A-Za-z0-9_\\-]*\\b"
+          "match": "\\b[A-Za-z_][A-Za-z0-9_\\-]*\\b"
         }
       ]
     }

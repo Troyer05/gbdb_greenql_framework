@@ -11,35 +11,44 @@ $report = [];
 $defaultTarget = dirname(Vars::DB_PATH()) . '/backup_' . date('Ymd_His');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    if (!GreenQLUIv2Helper::checkCsrf((string)($_POST['csrf'] ?? ''))) {
+    if (!GreenQLUIv2Helper::checkCsrf((string) ($_POST['csrf'] ?? ''))) {
         $msg = 'Ungültiger CSRF Token.';
     } else {
-        $target = rtrim((string)($_POST['path'] ?? ''), '/');
-        if ($target === '') $target = $defaultTarget;
+        $target = rtrim((string) ($_POST['path'] ?? ''), '/');
+
+        if ($target === '')
+            $target = $defaultTarget;
 
         $report = gbdbui_copy_tree(Vars::DB_PATH(), $target);
         $msg = $report['ok'] ? 'Backup erstellt: ' . $target : 'Backup mit Fehlern.';
     }
+
 }
+
 ?>
 <!doctype html>
 <html lang="de">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GBDB Backup</title>
     <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
 </head>
+
 <body class="gbdbui-dashboard gbdbui-pro">
     <?php gbdbui_nav('backup'); ?>
     <main class="gbdbui-wide">
         <section class="gbdbui-hero">
             <p class="gbdbui-kicker">Safe</p>
             <h1>Backup</h1>
-            <p>Erstellt eine saubere Dateisystem-Kopie der kompletten GBDB-Daten. Ideal vor Migration, Crypto-Konvertierung oder Re-Install.</p>
+            <p>Erstellt eine saubere Dateisystem-Kopie der kompletten GBDB-Daten. Ideal vor Migration,
+                Crypto-Konvertierung oder Re-Install.</p>
         </section>
 
-        <?php if ($msg): ?><div class="gbdbui-flash <?= $report && !$report['ok'] ? 'bad' : 'ok' ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
+        <?php if ($msg): ?>
+            <div class="gbdbui-flash <?= $report && !$report['ok'] ? 'bad' : 'ok' ?>"><?= gbdbui_e($msg) ?></div>
+        <?php endif; ?>
 
         <section class="gbdbui-page-grid">
             <div class="gbdbui-panel gbdbui-safe-zone span-8">
@@ -81,4 +90,5 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         </section>
     </main>
 </body>
+
 </html>

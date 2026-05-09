@@ -1,19 +1,22 @@
 <?php
 
+/**
+ * @uses PDO
+ */
+
 class SQL {
 
-    /** @var PDO|null */
     public static ?PDO $pdo = null;
 
     /**
-     * Stellt die Verbindung her (sicher, UTF-8, Fehlermodus)
+     * connect to db
+     * @return bool
      */
     public static function connect(): bool {
         if (self::$pdo instanceof PDO) {
             return true;
         }
 
-        // DEV oder PROD DB auswählen
         if (Vars::__DEV__()) {
             $dsn = "mysql:host=" . Vars::sql_dev_server() . ";dbname=" . Vars::sql_dev_database() . ";charset=utf8mb4";
             $user = Vars::sql_dev_user();
@@ -36,13 +39,12 @@ class SQL {
 
         } catch (PDOException $e) {
             error_log("[SQL::connect] ERROR: " . $e->getMessage());
+
             return false;
         }
+
     }
 
-    /**
-     * Interne: prepared statement ausführen
-     */
     private static function run(string $query, array $params = []): array|bool {
         self::connect();
 
@@ -62,14 +64,21 @@ class SQL {
 
             return false;
         }
+
     }
 
     /**
      * SELECT
+     * @param string $table
+     * @param string $select
+     * @param string $where
+     * @param mixed $is
+     * @return array|bool
      */
     public static function select(string $table, string $select = "*", string $where = "", mixed $is = "",): array|bool {
         if ($where !== "") {
             $query = "SELECT $select FROM `$table` WHERE `$where` = :is";
+
             return self::run($query, ["is" => $is]);
         }
 
@@ -80,6 +89,9 @@ class SQL {
 
     /**
      * INSERT
+     * @param string $table
+     * @param array $data
+     * @return array|bool
      */
     public static function insert(string $table, array $data): bool {
         $cols = array_keys($data);
@@ -92,6 +104,11 @@ class SQL {
 
     /**
      * UPDATE
+     * @param string $table
+     * @param array $data
+     * @param string $where
+     * @param mixed $is
+     * @return array|bool
      */
     public static function update(string $table, array $data, string $where, mixed $is): bool {
         $setParts = [];
@@ -109,9 +126,15 @@ class SQL {
 
     /**
      * DELETE
+     * @param string $table
+     * @param string $where
+     * @param mixed $is
+     * @return array|bool
      */
     public static function delete(string $table, string $where, mixed $is): bool {
         $sql = "DELETE FROM `$table` WHERE `$where` = :is";
+
         return self::run($sql, ["is" => $is]);
     }
+
 }

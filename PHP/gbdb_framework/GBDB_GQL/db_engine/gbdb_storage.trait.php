@@ -2,11 +2,6 @@
 
 trait GBDB_StorageTrait {
 
-    /**
-     * Gibt den Pfad der aktuellen Instanz zurück.
-     * @param bool $ensure Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function instancePath(bool $ensure = false): string {
         $instance = self::instanceName();
 
@@ -23,14 +18,6 @@ trait GBDB_StorageTrait {
         return Vars::DB_PATH() . $instance . "/";
     }
 
-
-    /**
-     * Baut den Tabellenpfad.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function makePath(string $database, string $table, bool $ensure = false): string {
         $database = Format::cleanString($database);
         $table = Format::cleanString($table);
@@ -50,12 +37,6 @@ trait GBDB_StorageTrait {
         return self::instancePath($ensure) . $database . "/" . $table . Vars::data_extension();
     }
 
-
-    /**
-     * Liest eine JSON/DB-Datei.
-     * @param string $file Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function ini(string $file): array {
         if (!is_file($file)) {
             return [];
@@ -65,6 +46,7 @@ trait GBDB_StorageTrait {
 
         if ($raw === false) {
             error_log("[GBDB] Konnte Datei nicht lesen: {$file}");
+
             return [];
         }
 
@@ -73,6 +55,7 @@ trait GBDB_StorageTrait {
 
             if ($decoded === null) {
                 error_log("[GBDB] Crypt::decode() fehlgeschlagen für: {$file}");
+
                 return [];
             }
 
@@ -84,13 +67,6 @@ trait GBDB_StorageTrait {
         return is_array($db) ? $db : [];
     }
 
-
-    /**
-     * Schreibt eine Tabelle atomar.
-     * @param string $file Übergabewert.
-     * @param array $db Übergabewert.
-     * @return bool Rückgabewert.
-     */
     private static function writeTable(string $file, array $db): bool {
         $dir = dirname($file);
 
@@ -102,6 +78,7 @@ trait GBDB_StorageTrait {
 
         if ($json === false) {
             error_log("[GBDB] json_encode() fehlgeschlagen für: {$file}");
+
             return false;
         }
 
@@ -110,32 +87,17 @@ trait GBDB_StorageTrait {
         return GBDBStorage::atomicWrite($file, $payload);
     }
 
-
-    /**
-     * Gibt die Lock-Datei einer Tabelle zurück.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function lockFileForTable(string $database, string $table, bool $ensure = false): string {
         return self::makePath($database, $table, $ensure) . ".lock";
     }
 
-
-    /**
-     * Gibt die Meta-Datei einer Tabelle zurück.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function metaFileForTable(string $database, string $table, bool $ensure = false): string {
         $dataFile = self::makePath($database, $table, $ensure);
         $dir = dirname($dataFile) . "/";
 
         if (!Vars::crypt_data()) {
             $t = Format::cleanString($table);
+
             return $dir . "__meta__" . $t . Vars::data_extension();
         }
 
@@ -148,20 +110,13 @@ trait GBDB_StorageTrait {
         return $dir . self::nameToken("__meta__|" . $tbToken, "meta") . Vars::data_extension();
     }
 
-
-    /**
-     * Gibt die Append-Datei einer Tabelle zurück.
-     * @param string $database Übergabewert.
-     * @param string $table Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function appendFileForTable(string $database, string $table, bool $ensure = false): string {
         $dataFile = self::makePath($database, $table, $ensure);
         $dir = dirname($dataFile) . "/";
 
         if (!Vars::crypt_data()) {
             $t = Format::cleanString($table);
+
             return $dir . "__append__" . $t . Vars::data_extension();
         }
 
@@ -174,13 +129,6 @@ trait GBDB_StorageTrait {
         return $dir . self::nameToken("__append__|" . $tbToken, "meta") . Vars::data_extension();
     }
 
-
-    /**
-     * Führt eine Aktion mit Tabellen-Lock aus.
-     * @param string $lockFile Übergabewert.
-     * @param callable $fn Übergabewert.
-     * @return mixed Rückgabewert.
-     */
     private static function withTableLock(string $lockFile, callable $fn): mixed {
         $dir = dirname($lockFile);
 
@@ -192,6 +140,7 @@ trait GBDB_StorageTrait {
 
         if ($engineLock === false && method_exists(static::class, "acquireLock")) {
             error_log("[GBDB] Engine-Lock Timeout: {$lockFile}");
+
             return false;
         }
 
@@ -200,12 +149,14 @@ trait GBDB_StorageTrait {
         if (!$handle) {
             if ($engineLock !== false) self::releaseLock($engineLock);
             error_log("[GBDB] Konnte Lockfile nicht öffnen: {$lockFile}");
+
             return false;
         }
 
         try {
             if (!@flock($handle, LOCK_EX)) {
                 error_log("[GBDB] Konnte Lock nicht setzen: {$lockFile}");
+
                 return false;
             }
 
@@ -213,16 +164,12 @@ trait GBDB_StorageTrait {
         } finally {
             @flock($handle, LOCK_UN);
             @fclose($handle);
+
             if ($engineLock !== false) self::releaseLock($engineLock);
         }
+
     }
 
-
-    /**
-     * Liest die Meta-Daten einer Tabelle.
-     * @param string $metaFile Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function readMeta(string $metaFile): array {
         $meta = self::ini($metaFile);
 
@@ -233,35 +180,16 @@ trait GBDB_StorageTrait {
         return GBDBStorage::normalizeMeta();
     }
 
-
-    /**
-     * Schreibt die Meta-Daten einer Tabelle.
-     * @param string $metaFile Übergabewert.
-     * @param array $meta Übergabewert.
-     * @return bool Rückgabewert.
-     */
     private static function writeMeta(string $metaFile, array $meta): bool {
         $meta = GBDBStorage::touchMeta($meta);
+
         return self::writeTable($metaFile, [$meta]);
     }
 
-
-    /**
-     * Prüft, ob eine Zeile eine Header-Zeile ist.
-     * @param array $row Übergabewert.
-     * @return bool Rückgabewert.
-     */
     private static function isHeaderRow(array $row): bool {
         return isset($row["id"]) && (int)$row["id"] === -1;
     }
 
-
-    /**
-     * Stellt sicher, dass eine Tabelle einen Header hat.
-     * @param array $tableData Übergabewert.
-     * @param array $cols Übergabewert.
-     * @return void Rückgabewert.
-     */
     private static function ensureHeader(array &$tableData, array $cols): void {
         if (!empty($tableData) && isset($tableData[0]) && is_array($tableData[0])) {
             return;
@@ -282,14 +210,6 @@ trait GBDB_StorageTrait {
         $tableData = [$header];
     }
 
-
-    /**
-     * Baut eine Tabellenzeile aus Header und Daten.
-     * @param array $header Übergabewert.
-     * @param array $data Übergabewert.
-     * @param int $id Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function buildRowFromHeader(array $header, array $data, int $id): array {
         $row = [];
 
@@ -310,13 +230,6 @@ trait GBDB_StorageTrait {
         return $row;
     }
 
-
-    /**
-     * Fügt eine Append-Operation hinzu.
-     * @param string $appendFile Übergabewert.
-     * @param array $op Übergabewert.
-     * @return bool Rückgabewert.
-     */
     private static function appendOp(string $appendFile, array $op): bool {
         $dir = dirname($appendFile);
 
@@ -341,19 +254,15 @@ trait GBDB_StorageTrait {
 
         if (!GBDBStorage::appendLine($appendFile, $line)) {
             GBDBStorage::wal($appendFile, $op, "failed", $tx);
+
             return false;
         }
 
         GBDBStorage::wal($appendFile, $op, "committed", $tx);
+
         return true;
     }
 
-
-    /**
-     * Liest alle Append-Operationen.
-     * @param string $appendFile Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function readAppendOps(string $appendFile): array {
         GBDBStorage::recoverWal($appendFile);
 
@@ -401,7 +310,9 @@ trait GBDB_StorageTrait {
                 if (is_array($op) && isset($op["op"])) {
                     $ops[] = $op;
                 }
+
             }
+
         } finally {
             @fclose($handle);
         }
@@ -409,13 +320,6 @@ trait GBDB_StorageTrait {
         return $ops;
     }
 
-
-    /**
-     * Wendet Append-Operationen auf Basisdaten an.
-     * @param array $base Übergabewert.
-     * @param array $ops Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function applyOps(array $base, array $ops): array {
         if (empty($base) || empty($ops)) {
             return $base;
@@ -441,6 +345,7 @@ trait GBDB_StorageTrait {
                 if (is_string($extraKey) && str_starts_with($extraKey, "_gbdb_") && $extraKey !== "id") {
                     $tmp[$extraKey] = $extraValue;
                 }
+
             }
 
             if (isset($row["id"])) {
@@ -474,6 +379,7 @@ trait GBDB_StorageTrait {
                 $order[] = $id;
                 $seen[$id] = true;
             }
+
         }
 
         foreach ($ops as $op) {
@@ -519,6 +425,7 @@ trait GBDB_StorageTrait {
                     if (empty($header) || array_key_exists($key, $header) || array_key_exists($key, $rowsById[$id])) {
                         $rowsById[$id][$key] = $value;
                     }
+
                 }
 
                 $rowsById[$id] = $normalize($rowsById[$id]);
@@ -528,6 +435,7 @@ trait GBDB_StorageTrait {
             if ($type === "del" && isset($op["id"])) {
                 unset($rowsById[(int)$op["id"]]);
             }
+
         }
 
         $out = [];
@@ -540,18 +448,12 @@ trait GBDB_StorageTrait {
             if (isset($rowsById[$id]) && is_array($rowsById[$id])) {
                 $out[] = $rowsById[$id];
             }
+
         }
 
         return $out;
     }
 
-    /**
-     * Synchronisiert die neue Page-/Chunk-Storage-Struktur einer Tabelle.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @param string $reason Grund.
-     * @return array Bericht.
-     */
     private static function syncStorageForTable(string $database, string $table, string $reason = "sync"): array {
         $file = self::makePath($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
@@ -562,6 +464,7 @@ trait GBDB_StorageTrait {
         }
 
         $base = self::ini($file);
+
         if (empty($base) || !isset($base[0]) || !is_array($base[0])) {
             return ["ok" => false, "error" => "invalid_table"];
         }
@@ -605,26 +508,32 @@ trait GBDB_StorageTrait {
     }
 
     /**
-     * Prüft die Page-/Chunk-Storage-Struktur einer Tabelle.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @return array Prüfbericht.
+     * handles verify storage.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function verifyStorage(string $database, string $table): array {
         $file = self::makePath($database, $table);
+
         if (!is_file($file)) return ["ok" => false, "errors" => ["table_not_found"], "warnings" => []];
 
         return GBDBStorage::verifyStorage($file);
     }
 
     /**
-     * Gibt einen Storage-Bericht einer Tabelle zurück.
-     * @param string $database Datenbank.
-     * @param string $table Tabelle.
-     * @return array Bericht.
+     * handles storage stats.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
      */
     public static function storageStats(string $database, string $table): array {
         $file = self::makePath($database, $table);
+
         if (!is_file($file)) return ["ok" => false, "error" => "table_not_found"];
 
         $dir = GBDBStorage::storageDir($file);
@@ -632,11 +541,14 @@ trait GBDB_StorageTrait {
         $meta = self::readMeta(self::metaFileForTable($database, $table));
 
         $bytes = 0;
+
         if (is_dir($dir)) {
             $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+
             foreach ($it as $item) {
                 if ($item->isFile()) $bytes += (int)$item->getSize();
             }
+
         }
 
         return [

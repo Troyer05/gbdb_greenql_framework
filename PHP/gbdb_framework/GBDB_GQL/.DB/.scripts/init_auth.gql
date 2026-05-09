@@ -1,0 +1,48 @@
+declare $instance = param("instance");
+declare $username = param("username");
+declare $email = param("email");
+declare $password = param("password");
+declare $active = param("active");
+declare $tfa = param("2fa");
+declare $role = param("role");
+declare $firstname = param("firstname");
+declare $lastname = param("lastname");
+declare $adress = param("adress");
+declare $telephone = param("telephone");
+declare $mobile = param("mobile");
+declare $gender = param("gender");
+declare $image = param("image");
+declare $text = param("text");
+declare $pattern = load_pattern("used_by_auth_class");
+declare $uid = uni_random();
+
+if (!instance_exists($instance)) {
+    GROW INSTANCE $instance;
+}
+
+USE INSTANCE $instance;
+EXEC PATTERN $pattern;
+ROOT main;
+
+SEED users WITH
+    uid=$uid,
+    username=$username,
+    email=$email,
+    password=$password,
+    active=$active,
+    tfa=$tfa,
+    role=$role,
+    date=now();
+
+SEED meta WITH
+    uid=$uid,
+    firstname=$firstname,
+    lastname=$lastname,
+    adress=$adress,
+    telephone=$telephone,
+    mobile=$mobile,
+    gender=$gender,
+    image=$image,
+    text=$text;
+
+FILE.BACK true;

@@ -1,19 +1,12 @@
 <?php
 
 class Cookie {
-    private const DUR = 60 * 60 * 24 * 360; // 1 Jahr
+    private const DUR = 60 * 60 * 24 * 360; // 1 year
 
-    /**
-     * Validiere Cookie-Namen.
-     * Nur: a-z A-Z 0-9 _
-     */
     protected static function validateName(string $name): string {
         return preg_replace('/[^a-zA-Z0-9_]/', '', $name);
     }
 
-    /**
-     * Standardoptionen für Cookies
-     */
     protected static function options(
         int $expiration,
         ?bool $secureOverride = null
@@ -34,9 +27,6 @@ class Cookie {
         ];
     }
 
-    /**
-     * Master-Setter für Cookies
-     */
     protected static function send(string $name, string $value, int $expiration): void {
         $name = self::validateName($name);
 
@@ -52,19 +42,22 @@ class Cookie {
     }
 
     /**
-     * Speichert einen Wert in der angegebenen Quelle.
-     * @param string $name Übergabewert.
-     * @param string $value Übergabewert.
-     * @param int $expiration Übergabewert.
-     * @return void Rückgabewert.
+     * sets or updates a cookie
+     * @param string $name
+     * @param string $value
+     * @param int $expiration
+     * @return void
      */
     public static function set(string $name, string $value, int $expiration = self::DUR): void {
         self::send($name, $value, $expiration);
     }
 
     /**
-     * Sicheres Cookie — nutzt dieselben Optionen,
-     * aber zwingt secure = true
+     * sets or updates a secure
+     * @param string $name
+     * @param string $value
+     * @param int $expiration
+     * @return void
      */
     public static function setSecure(string $name, string $value, int $expiration = self::DUR): void {
         $name = self::validateName($name);
@@ -79,30 +72,31 @@ class Cookie {
     }
 
     /**
-     * Verarbeitet die Funktion add.
-     * @param string $name Übergabewert.
-     * @param string $value Übergabewert.
-     * @return void Rückgabewert.
+     * Adds a new cookie if not exists
+     * @param string $name
+     * @param string $value
+     * @return void
      */
     public static function add(string $name, string $value): void {
         if (!self::exists($name)) {
             self::set($name, $value);
         }
+
     }
 
     /**
-     * Liest Daten aus der angegebenen Quelle.
-     * @param string $name Übergabewert.
-     * @return mixed Rückgabewert.
+     * get value of a cookie
+     * @param string $name
+     * @return mixed
      */
     public static function get(string $name): mixed {
         return $_COOKIE[$name] ?? null;
     }
 
     /**
-     * Löscht Daten aus der angegebenen Quelle.
-     * @param string $name Übergabewert.
-     * @return void Rückgabewert.
+     * deletes a cookie right now
+     * @param string $name
+     * @return void
      */
     public static function delete(string $name): void {
         $name = self::validateName($name);
@@ -117,29 +111,19 @@ class Cookie {
     }
 
     /**
-     * Bearbeitet bestehende Daten.
-     * @param string $name Übergabewert.
-     * @param string $value Übergabewert.
-     * @return void Rückgabewert.
+     * updates a cookie
+     * @param string $name
+     * @param string $value
+     * @return void
      */
     public static function edit(string $name, string $value): void {
         self::set($name, $value);
     }
 
     /**
-     * Verarbeitet die Funktion compare.
-     * @param string $name Übergabewert.
-     * @param string $value Übergabewert.
-     * @return bool Rückgabewert.
-     */
-    public static function compare(string $name, string $value): bool {
-        return self::get($name) === $value;
-    }
-
-    /**
-     * REFRESH entfernt jetzt Cookies NICHT und setzt sie NICHT neu.
-     * Das ist viel sinnvoller:
-     * → Nur erneuern, wenn Laufzeit kurz davor ist zu verfallen.
+     * renew cookie-lifetime to $thresholdSeconds from now
+     * @param int $thresholdSeconds
+     * @return void
      */
     public static function refresh(int $thresholdSeconds = 3600): void {
         foreach ($_COOKIE as $name => $value) {
@@ -150,11 +134,12 @@ class Cookie {
             // Wir kennen das Ablaufdatum nicht → nur erneuern, wenn sinnvoll
             self::set($nameClean, $value);
         }
+
     }
 
     /**
-     * Initialisiert die Klasse und legt benötigte Strukturen an.
-     * @return void Rückgabewert.
+     * initializes cookies from env
+     * @return void
      */
     public static function init(): void {
         foreach (Vars::init_cookies() as $r) {
@@ -164,16 +149,15 @@ class Cookie {
             self::add($name, $value);
         }
 
-        // Falls gewünscht, kannst du hier Refresh deaktivieren
-        // self::refresh();
     }
 
     /**
-     * Verarbeitet die Funktion exists.
-     * @param string $name Übergabewert.
-     * @return bool Rückgabewert.
+     * does this cookie exists?
+     * @param string $name
+     * @return bool
      */
     public static function exists(string $name): bool {
         return isset($_COOKIE[self::validateName($name)]);
     }
+
 }

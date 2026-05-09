@@ -2,11 +2,29 @@
     "ok": true,
     "auto": true,
     "dirty_shutdown": false,
-    "started_at": 1778063309,
-    "tables": [],
+    "started_at": 1778364721,
+    "tables": [
+        {
+            "ok": true,
+            "db": "main",
+            "table": "kunden",
+            "wal": {
+                "ok": true,
+                "replayed": 0,
+                "dangling": 0
+            },
+            "half_written": {
+                "ok": true,
+                "truncated_removed": 0
+            },
+            "rolled_back": 0,
+            "errors": [],
+            "instance": "test"
+        }
+    ],
     "replayed": 0,
     "dangling": 0,
     "rolled_back": 0,
     "errors": [],
-    "finished_at": 1778063309
+    "finished_at": 1778364721
 }

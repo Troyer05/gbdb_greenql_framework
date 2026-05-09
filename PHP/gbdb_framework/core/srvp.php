@@ -1,817 +1,335 @@
 <?php
 
-class SrvP {
-    private static array $ctx = [];
+class SecondServer {
+    private const DO_START_SESSION = "start_session(srvp.init)";
 
-    /**
-     * Ermittelt den API-Endpunkt.
-     * @return string Rückgabewert.
-     */
     private static function endpoint(): string {
-        $host = trim((string)Vars::srvp_ip());
-        $host = preg_replace('#/+$#', '', $host) ?? $host;
+        return rtrim(Vars::srvp_ip(), "/") . "/backend.php";
+    }
 
-        if (str_ends_with($host, "/backend.php")) {
-            return (Vars::srvp_ssl() ? "https://" : "http://") . $host;
+    private static function error(string $message = "", array $data = []): array {
+        return [
+            "ok" => false,
+            "message" => $message,
+            "data" => $data
+        ];
+    }
+
+    private static function send(array $body): array {
+        $body["static_auth"] = Vars::srvp_static_key();
+
+        $tmp = Http::post(self::endpoint(), $body);
+
+        if (!is_string($tmp) || trim($tmp) == "") {
+            return self::error("Empty response from server.");
         }
 
-        return (Vars::srvp_ssl() ? "https://" : "http://") . $host . "/backend.php";
-    }
+        $response = json_decode($tmp, true);
 
-    /**
-     * Setzt den Remote-Kontext, z.B. GBDB Instanz.
-     * @param array $ctx Übergabewert.
-     * @return void Rückgabewert.
-     */
-    public static function setContext(array $ctx): void {
-        self::$ctx = $ctx;
-    }
-
-    /**
-     * Setzt die Remote-GBDB-Instanz.
-     * @param string $instance Übergabewert.
-     * @return void Rückgabewert.
-     */
-    public static function setInstance(string $instance): void {
-        self::$ctx["instance"] = GreenQL::cleanName($instance);
-    }
-
-    /**
-     * Gibt den aktuellen Remote-Kontext zurück.
-     * @return array Rückgabewert.
-     */
-    public static function getContext(): array {
-        return self::$ctx;
-    }
-
-    /**
-     * Kombiniert globalen und lokalen Kontext.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    private static function ctx(array $ctx = []): array {
-        return array_merge(self::$ctx, $ctx);
-    }
-
-    /**
-     * Sendet eine Anfrage und verarbeitet die Antwort.
-     * @param array $payload Übergabewert.
-     * @return array Rückgabewert.
-     */
-    private static function request(array $payload): array {
-        $resp = Http::post(
-            self::endpoint(),
-            $payload,
-            ["Content-Type: application/json"]
-        );
-
-        if ($resp === false || $resp === null || $resp === "") {
-            throw new Exception("Empty response from backend: " . self::endpoint());
+        if (!is_array($response)) {
+            return self::error("Invalid JSON response from server.", [
+                "raw" => $tmp
+            ]);
         }
 
-        if (is_array($resp)) {
-            return $resp;
-        }
-
-        $decoded = json_decode((string)$resp, true);
-
-        if (!is_array($decoded)) {
-            throw new Exception("Invalid JSON response: " . $resp);
-        }
-
-        return $decoded;
+        return $response;
     }
 
-    /**
-     * Gibt den data-Teil einer Backend-Antwort zurück.
-     * @param array $resp Übergabewert.
-     * @return mixed Rückgabewert.
-     */
-    private static function data(array $resp): mixed {
-        return $resp["data"] ?? $resp;
-    }
-
-    /**
-     * Verarbeitet die Funktion get token.
-     * @return string Rückgabewert.
-     */
     private static function getToken(): string {
-        $resp = self::request([
-            "sauth" => hash("sha256", Vars::srvp_static_key()),
-            "do" => "gtoken"
+        $response = self::send([
+            "do" => self::DO_START_SESSION
         ]);
 
-        if (!isset($resp["data"]) || $resp["data"] == "") {
-            throw new Exception("Token not returned by backend");
+        if (!isset($response["ok"]) || !$response["ok"]) {
+            return "";
         }
 
-        return $resp["data"];
-    }
-
-    /**
-     * Verarbeitet die Funktion payload with token.
-     * @param array $body Übergabewert.
-     * @return array Rückgabewert.
-     */
-    private static function payloadWithToken(array $body): array {
-        $body["sauth"] = hash("sha256", Vars::srvp_static_key());
-        $body["token"] = self::getToken();
-
-        return $body;
-    }
-
-    /**
-     * Fügt Kontext zur Nutzlast hinzu.
-     * @param array $body Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    private static function payload(array $body, array $ctx = []): array {
-        $ctx = self::ctx($ctx);
-
-        if (!empty($ctx)) {
-            $body["ctx"] = $ctx;
-
-            if (!empty($ctx["instance"])) {
-                $body["instance"] = $ctx["instance"];
-            }
+        if (!isset($response["data"]) || !is_array($response["data"])) {
+            return "";
         }
 
-        return self::payloadWithToken($body);
-    }
-
-    /**
-     * Prüft den Backend-Treiber.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function driver(array $ctx = []): array {
-        return self::request(self::payload(["do" => "driver"], $ctx));
-    }
-
-    /**
-     * Listet Instanzen.
-     * @return array Rückgabewert.
-     */
-    public static function listInstances(): array {
-        return self::request(self::payload(["do" => "instances"]));
-    }
-
-    /**
-     * Erstellt eine Instanz.
-     * @param string $instance Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function createInstance(string $instance): array {
-        return self::request(self::payload([
-            "do" => "create_instance",
-            "instance" => $instance
-        ]));
-    }
-
-    /**
-     * Löscht eine Instanz.
-     * @param string $instance Übergabewert.
-     * @param bool $force Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function deleteInstance(string $instance, bool $force = false): array {
-        return self::request(self::payload([
-            "do" => "delete_instance",
-            "instance" => $instance,
-            "force" => $force
-        ]));
-    }
-
-    /**
-     * Listet Bases.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function listDBs(array $ctx = []): array {
-        return self::request(self::payload(["do" => "bases"], $ctx));
-    }
-
-    /**
-     * Listet Tabellen.
-     * @param string $db Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function listTables(string $db, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "tables",
-            "db" => $db
-        ], $ctx));
-    }
-
-    /**
-     * Erstellt eine Base.
-     * @param string $db Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function createDatabase(string $db, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "create_base",
-            "db" => $db
-        ], $ctx));
-    }
-
-    /**
-     * Löscht eine Base.
-     * @param string $db Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function deleteDatabase(string $db, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "delete_base",
-            "db" => $db
-        ], $ctx));
-    }
-
-    /**
-     * Erstellt eine Tabelle.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $cols Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function createTable(string $db, string $table, array $cols, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "create_table",
-            "db" => $db,
-            "table" => $table,
-            "cols" => $cols
-        ], $ctx));
-    }
-
-    /**
-     * Löscht eine Tabelle.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function deleteTable(string $db, string $table, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "delete_table",
-            "db" => $db,
-            "table" => $table
-        ], $ctx));
-    }
-
-    /**
-     * Liest Tabellenschlüssel.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function getKeys(string $db, string $table, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "keys",
-            "db" => $db,
-            "table" => $table
-        ], $ctx));
-    }
-
-    /**
-     * Verarbeitet die Funktion get data.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param bool $filter Übergabewert.
-     * @param string $where Übergabewert.
-     * @param string $is Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function getData(string $db, string $table, bool $filter = false, string $where = "", string $is = "", array $ctx = []): array {
-        $body = [
-            "do" => "get",
-            "db" => $db,
-            "table" => $table
-        ];
-
-        if ($filter) {
-            $body["where"] = $where;
-            $body["is"] = $is;
+        if (!isset($response["data"]["token"])) {
+            return "";
         }
 
-        return self::request(self::payload($body, $ctx));
+        return (string)$response["data"]["token"];
     }
 
-    /**
-     * Verarbeitet die Funktion add data.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $data Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function addData(string $db, string $table, array $data, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "put",
-            "db" => $db,
-            "table" => $table,
-            "data" => $data
-        ], $ctx));
-    }
+    private static function sendInstruction(array $body): array {
+        $token = self::getToken();
 
-    /**
-     * Alias für addData.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param array $data Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function insertData(string $db, string $table, array $data, array $ctx = []): array {
-        return self::addData($db, $table, $data, $ctx);
-    }
-
-    /**
-     * Verarbeitet die Funktion delete data.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param string $where Übergabewert.
-     * @param string $is Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function deleteData(string $db, string $table, string $where, string $is, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "delete",
-            "db" => $db,
-            "table" => $table,
-            "where" => $where,
-            "is" => $is
-        ], $ctx));
-    }
-
-    /**
-     * Verarbeitet die Funktion edit data.
-     * @param string $db Übergabewert.
-     * @param string $table Übergabewert.
-     * @param string $where Übergabewert.
-     * @param string $is Übergabewert.
-     * @param array $data Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function editData(string $db, string $table, string $where, string $is, array $data, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "edit",
-            "db" => $db,
-            "table" => $table,
-            "where" => $where,
-            "is" => $is,
-            "data" => $data
-        ], $ctx));
-    }
-
-    /**
-     * Führt eine GreenQL-Abfrage aus.
-     * @param string $script Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @param array $params Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function query(string $script, array $ctx = [], array $params = []): array {
-        return self::request(self::payload([
-            "do" => "query",
-            "query" => $script,
-            "params" => $params
-        ], $ctx));
-    }
-
-    /**
-     * Führt ein Script aus und gibt das Ergebnis zurück.
-     * @param string $path Übergabewert.
-     * @param array $params Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function runScript(string $path, array $params = [], array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "runscript",
-            "path" => $path,
-            "params" => $params
-        ], $ctx));
-    }
-
-    public static function get(string $base, string $table, mixed $where = '', mixed $is = '', array $options = [], array $ctx = []): array { return self::request(self::payload(["do"=>"gbdb_get","base"=>$base,"table"=>$table,"where"=>$where,"is"=>$is,"options"=>$options], $ctx)); }
-    public static function create(string $base, string $table = '', bool $useDataTypes = false, array|object $rows = [], array $ctx = []): array { return self::request(self::payload(["do"=>"gbdb_create","base"=>$base,"table"=>$table,"use_data_types"=>$useDataTypes,"rows"=>is_object($rows)?get_object_vars($rows):$rows], $ctx)); }
-    public static function fullTextSearch(string $base, string $table, string $text, array $ctx = []): array { return self::request(self::payload(["do"=>"gbdb_full_text_search","base"=>$base,"table"=>$table,"text"=>$text], $ctx)); }
-    public static function createBackup(string $path = '', array $ctx = []): array { return self::request(self::payload(["do"=>"gbdb_backup","path"=>$path], $ctx)); }
-    public static function runFile(string $path, array $params = [], array $ctx = []): array { return self::request(self::payload(["do"=>"gbdb_run_file","path"=>$path,"params"=>$params], $ctx)); }
-
-    /**
-     * Initialisiert Auth auf dem Zielserver.
-     * @return array Rückgabewert.
-     */
-    public static function auth_init(): array {
-        return self::request(self::payload(["do" => "auth", "action" => "init"]));
-    }
-
-    /**
-     * Meldet einen Benutzer über den Zielserver an.
-     * @param string $username_or_email Übergabewert.
-     * @param string $plain_text_password Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_login(string $username_or_email, string $plain_text_password): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "login",
-            "username_or_email" => $username_or_email,
-            "plain_text_password" => $plain_text_password
-        ]));
-    }
-
-    /**
-     * Prüft einen Auth-Token über den Zielserver.
-     * @param string $jwt Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_token(string $jwt): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "token",
-            "jwt" => $jwt
-        ]));
-    }
-
-    /**
-     * Meldet einen Benutzer remote ab.
-     * @param string $jwt Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_logout(string $jwt): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "logout",
-            "jwt" => $jwt
-        ]));
-    }
-
-    /**
-     * Prüft 2FA remote.
-     * @param string $uid Übergabewert.
-     * @param string $code Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_login2Fa(string $uid, string $code): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "login_2fa",
-            "uid" => $uid,
-            "code" => $code
-        ]));
-    }
-
-    /**
-     * Liest den aktuell authentifizierten Benutzer remote.
-     * @param string $jwt Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_me(string $jwt): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "me",
-            "jwt" => $jwt
-        ]));
-    }
-
-    /**
-     * Liest Auth-Daten über den Zielserver.
-     * @param string $table Übergabewert.
-     * @param string $where Übergabewert.
-     * @param string $is Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_get(string $table, string $where = "", string $is = ""): array {
-        $body = [
-            "do" => "auth",
-            "action" => "get",
-            "table" => $table
-        ];
-
-        if ($where != "") {
-            $body["where"] = $where;
-            $body["is"] = $is;
+        if ($token == "") {
+            return self::error("Could not start server session.");
         }
 
-        return self::request(self::payload($body));
+        $body["tmp_token"] = $token;
+
+        return self::send($body);
     }
 
     /**
-     * Liest einen Benutzer über den Zielserver.
-     * @param string $uid Übergabewert.
-     * @return array Rückgabewert.
+     * checks server availability
+     *
+     * @return bool
      */
-    public static function auth_user(string $uid): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "user",
+    public static function ping(): bool {
+        $res = self::sendInstruction([
+            "do" => "ping"
+        ]);
+
+        return isset($res["ok"]) && $res["ok"] === true;
+    }
+
+    /**
+     * returns second-servers db driver
+     * @return array
+     */
+    public static function driver(): array {
+        return self::sendInstruction([
+            "do" => "get_engine_driver"
+        ]);
+    }
+
+    /**
+     * starts a job
+     *
+     * @param string $job
+     * @param array $parameters
+     * @return array
+     */
+    public static function startJob(string $job, array $parameters = []): array {
+        return self::sendInstruction([
+            "do" => "start_job",
+            "job" => $job,
+            "parameters" => $parameters
+        ]);
+    }
+
+    /**
+     * lists all jobs
+     * @return array
+     */
+    public static function listJobs(): array {
+        return self::sendInstruction([
+            "do" => "list_jobs"
+        ]);
+    }
+
+    /**
+     * registers a new user
+     *
+     * @param array $data
+     * @return array
+     */
+    public static function registerUser(array $data): array {
+        return self::sendInstruction([
+            "do" => "register_user",
+            "user_data" => $data
+        ]);
+    }
+
+    /**
+     * logs in a user
+     *
+     * @param string $user
+     * @param string $password
+     * @return array
+     */
+    public static function login(string $user, string $password): array {
+        return self::sendInstruction([
+            "do" => "login_user",
+            "user_data" => [
+                "user" => $user,
+                "password" => $password
+            ]
+        ]);
+    }
+
+    /**
+     * logs in a user with raw user data
+     *
+     * @param array $data
+     * @return array
+     */
+    public static function loginUser(array $data): array {
+        return self::sendInstruction([
+            "do" => "login_user",
+            "user_data" => $data
+        ]);
+    }
+
+    /**
+     * logs out a user
+     *
+     * @return array
+     */
+    public static function logout(): array {
+        return self::sendInstruction([
+            "do" => "logout_user"
+        ]);
+    }
+
+    /**
+     * initializes auth system
+     *
+     * @return array
+     */
+    public static function initAuth(): array {
+        return self::sendInstruction([
+            "do" => "init"
+        ]);
+    }
+
+    /**
+     * verifies email token
+     *
+     * @param string $token
+     * @return array
+     */
+    public static function verifyEmail(string $token): array {
+        return self::sendInstruction([
+            "do" => "verify_email",
+            "tmp_token" => $token
+        ]);
+    }
+
+    /**
+     * verifies 2fa code
+     *
+     * @param string|int $code
+     * @return array
+     */
+    public static function verify2fa(string|int $code): array {
+        return self::sendInstruction([
+            "do" => "verify_2fa_code",
+            "code" => (string)$code
+        ]);
+    }
+
+    /**
+     * deletes a user
+     *
+     * @param string $uid
+     * @return array
+     */
+    public static function deleteUser(string $uid): array {
+        return self::sendInstruction([
+            "do" => "delete_user",
             "uid" => $uid
-        ]));
+        ]);
     }
 
     /**
-     * Legt einen Benutzer über den Zielserver an.
-     * @param array $user_data Übergabewert.
-     * @param array $user_meta Übergabewert.
-     * @param bool $is_this_register Übergabewert.
-     * @return array Rückgabewert.
+     * edits a user
+     *
+     * @param string $uid
+     * @param array $data
+     * @return array
      */
-    public static function auth_newUser(array $user_data, array $user_meta = [], bool $is_this_register = false): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "new_user",
-            "user_data" => $user_data,
-            "user_meta" => $user_meta,
-            "is_this_register" => $is_this_register
-        ]));
-    }
-
-    /**
-     * Bearbeitet einen Benutzer über den Zielserver.
-     * @param string $uid Übergabewert.
-     * @param array $user_data Übergabewert.
-     * @param array $user_meta Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function auth_editUser(string $uid, array $user_data, array $user_meta = []): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "edit_user",
+    public static function editUser(string $uid, array $data): array {
+        return self::sendInstruction([
+            "do" => "edit_user",
             "uid" => $uid,
-            "user_data" => $user_data,
-            "user_meta" => $user_meta
-        ]));
+            "user_data" => $data
+        ]);
     }
 
     /**
-     * Löscht Auth-Daten über den Zielserver.
-     * @param string $table Übergabewert.
-     * @param string $where Übergabewert.
-     * @param string $is Übergabewert.
-     * @return array Rückgabewert.
+     * returns a user by uid
+     *
+     * @param string $uid
+     * @return array
      */
-    public static function auth_delete(string $table, string $where, string $is): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "delete",
-            "table" => $table,
-            "where" => $where,
-            "is" => $is
-        ]));
+    public static function getUser(string $uid): array {
+        return self::sendInstruction([
+            "do" => "get_user",
+            "uid" => $uid
+        ]);
     }
 
     /**
-     * Verifiziert eine E-Mail über den Zielserver.
-     * @param string $token Übergabewert.
-     * @return array Rückgabewert.
+     * returns a user by jwt
+     *
+     * @param string $jwt
+     * @return array
      */
-    public static function auth_verifyEmail(string $token): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "verify_email",
-            "token" => $token
-        ]));
+    public static function getJwtUser(string $jwt): array {
+        return self::sendInstruction([
+            "do" => "get_jwt_user",
+            "jwt" => $jwt
+        ]);
     }
 
     /**
-     * Verifiziert einen 2FA-Code über den Zielserver.
-     * @param string $code Übergabewert.
-     * @return array Rückgabewert.
+     * returns users
+     *
+     * @param int $limit
+     * @return array
      */
-    public static function auth_verify2FaCode(string $code): array {
-        return self::request(self::payload([
-            "do" => "auth",
-            "action" => "verify_2fa",
-            "code" => $code
-        ]));
+    public static function getUsers(int $limit = 10000000): array {
+        return self::sendInstruction([
+            "do" => "get_users",
+            "limit" => $limit
+        ]);
     }
 
     /**
-     * Verarbeitet die Funktion srv_enqueue.
-     * @param string $service Übergabewert.
-     * @param string $action Übergabewert.
-     * @param array $payload Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
+     * runs auth action by name
+     *
+     * @param string $do
+     * @param array $data
+     * @return array
      */
-    public static function srv_enqueue(string $service, string $action, array $payload = [], array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "srv_enqueue",
-            "service" => $service,
-            "action" => $action,
-            "payload" => $payload
-        ], $ctx));
-    }
-
-    /**
-     * Verarbeitet die Funktion srv_run_one.
-     * @param int $id Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function srv_run_one(int $id, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "srv_run_one",
-            "id" => $id
-        ], $ctx));
-    }
-
-    /**
-     * Verarbeitet die Funktion srv_status.
-     * @param int|null $id Übergabewert.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function srv_status(?int $id = null, array $ctx = []): array {
-        $body = ["do" => "srv_status"];
-
-        if ($id !== null) {
-            $body["id"] = $id;
+    public static function userAuth(string $do, array $data = []): array {
+        if ($do == "register_user") {
+            return self::registerUser($data);
         }
 
-        return self::request(self::payload($body, $ctx));
-    }
+        if ($do == "login_user") {
+            return self::loginUser($data);
+        }
 
-    /**
-     * Verarbeitet die Funktion srv_logs.
-     * @param int $job_id Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function srv_logs(int $job_id): array {
-        return self::request(self::payload([
-            "do" => "srv_logs",
-            "job_id" => $job_id
-        ]));
-    }
+        if ($do == "logout_user") {
+            return self::logout();
+        }
 
-    /**
-     * Verarbeitet die Funktion srv_jobs.
-     * @param array $ctx Übergabewert.
-     * @return array Rückgabewert.
-     */
-    public static function srv_jobs(array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "srv_jobs"
-        ], $ctx));
-    }
+        if ($do == "init") {
+            return self::initAuth();
+        }
 
-    /**
-     * Prüft, ob eine Remote-Instanz existiert.
-     * @param string $instance Instanzname.
-     * @return array Backend-Antwort.
-     */
-    public static function instance_exists(string $instance): array {
-        return self::request(self::payload([
-            "do" => "instance_exists",
-            "instance" => $instance
-        ]));
-    }
+        if ($do == "verify_email") {
+            return self::verifyEmail((string)($data["token"] ?? ""));
+        }
 
-    /**
-     * Prüft, ob eine Remote-Base existiert.
-     * @param string $db Base.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function base_exists(string $db, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "base_exists",
-            "db" => $db
-        ], $ctx));
-    }
+        if ($do == "verify_2fa_code") {
+            return self::verify2fa((string)($data["code"] ?? ""));
+        }
 
-    /**
-     * Prüft, ob eine Remote-Tabelle existiert.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function table_exists(string $db, string $table, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "table_exists",
-            "db" => $db,
-            "table" => $table
-        ], $ctx));
-    }
+        if ($do == "delete_user") {
+            return self::deleteUser((string)($data["uid"] ?? ""));
+        }
 
-    /**
-     * Prüft, ob Remote-Daten anhand eines Filters existieren.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $where Spalte.
-     * @param mixed $is Vergleichswert.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function data_exists(string $db, string $table, string $where, mixed $is, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "data_exists",
-            "db" => $db,
-            "table" => $table,
-            "where" => $where,
-            "is" => $is
-        ], $ctx));
-    }
+        if ($do == "edit_user") {
+            return self::editUser(
+                (string)($data["uid"] ?? ""),
+                is_array($data["user_data"] ?? null) ? $data["user_data"] : $data
+            );
+        }
 
-    /**
-     * Liest Remote-Monitoring-Daten.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function monitor(string $db = "", string $table = "", array $ctx = []): array {
-        $body = ["do" => "monitor"];
-        if ($db !== "") $body["db"] = $db;
-        if ($table !== "") $body["table"] = $table;
-        return self::request(self::payload($body, $ctx));
-    }
+        if ($do == "get_user") {
+            return self::getUser((string)($data["uid"] ?? ""));
+        }
 
-    /**
-     * Führt Remote-Recovery für eine Tabelle aus.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function recover(string $db, string $table, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "recover",
-            "db" => $db,
-            "table" => $table
-        ], $ctx));
-    }
+        if ($do == "get_jwt_user") {
+            return self::getJwtUser((string)($data["jwt"] ?? ""));
+        }
 
-    /**
-     * Lädt eine Remote-Page.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param int $page Seite ab 1.
-     * @param int $size Seitengröße.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function page(string $db, string $table, int $page = 1, int $size = 50, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "page",
-            "db" => $db,
-            "table" => $table,
-            "page" => $page,
-            "size" => $size
-        ], $ctx));
-    }
+        if ($do == "get_users") {
+            return self::getUsers((int)($data["limit"] ?? 10000000));
+        }
 
-    /**
-     * Lädt einen Remote-Cursor.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param int $size Chunk-Größe.
-     * @param string|null $cursor Cursor-Token.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function cursor(string $db, string $table, int $size = 100, ?string $cursor = null, array $ctx = []): array {
-        $body = [
-            "do" => "cursor",
-            "db" => $db,
-            "table" => $table,
-            "size" => $size
-        ];
-        if ($cursor !== null && $cursor !== "") $body["cursor"] = $cursor;
-        return self::request(self::payload($body, $ctx));
+        return self::error("Unknown auth action: " . $do);
     }
-
-    /**
-     * Führt Remote-Volltextsuche aus.
-     * @param string $db Base.
-     * @param string $table Tabelle.
-     * @param string $query Suchtext.
-     * @param array $columns Spaltenfilter.
-     * @param int $limit Maximale Treffer.
-     * @param array $ctx Kontext.
-     * @return array Backend-Antwort.
-     */
-    public static function fulltext_search(string $db, string $table, string $query, array $columns = [], int $limit = 50, array $ctx = []): array {
-        return self::request(self::payload([
-            "do" => "fulltext_search",
-            "db" => $db,
-            "table" => $table,
-            "query" => $query,
-            "columns" => $columns,
-            "limit" => $limit
-        ], $ctx));
-    }
-
 }
+
+?>

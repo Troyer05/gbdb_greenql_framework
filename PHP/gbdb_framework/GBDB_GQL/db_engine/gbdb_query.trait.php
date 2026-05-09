@@ -1,10 +1,13 @@
 <?php
 
 trait GBDB_QueryTrait {
+
     /**
-     * Setzt Query-Grenzen für komplexe Abfragen.
-     * @param array $options Optionen: timeout, memory, max_join_size, block_full_scan.
-     * @return array Aktive Optionen.
+     * handles query options.
+     *
+     * @param array $options value.
+     *
+     * @return array result.
      */
     public static function queryOptions(array $options = []): array {
         if (isset($options['timeout'])) {
@@ -32,11 +35,12 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Speichert eine parametrisierte Query intern ab.
-     * Platzhalter werden als :name im Script angegeben.
-     * @param string $name Name.
-     * @param string $script GreenQL-/Query-Script.
-     * @return bool true bei Erfolg.
+     * handles prepare query.
+     *
+     * @param string $name value.
+     * @param string $script value.
+     *
+     * @return bool result.
      */
     public static function prepareQuery(string $name, string $script): bool {
         $name = Format::cleanString($name);
@@ -51,11 +55,13 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Führt eine vorbereitete Query aus.
-     * @param string $name Name.
-     * @param array $params Parameter.
-     * @param array $ctx Kontext.
-     * @return array Ergebnis.
+     * handles execute prepared query.
+     *
+     * @param string $name value.
+     * @param array $params value.
+     * @param array $ctx value.
+     *
+     * @return array result.
      */
     public static function executePreparedQuery(string $name, array $params = [], array $ctx = []): array {
         $name = Format::cleanString($name);
@@ -75,10 +81,12 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Bindet Parameter sicher in ein Query-Script ein.
-     * @param string $script Script.
-     * @param array $params Parameter.
-     * @return string Script mit JSON-kodierten Werten.
+     * handles bind query params.
+     *
+     * @param string $script value.
+     * @param array $params value.
+     *
+     * @return string result.
      */
     public static function bindQueryParams(string $script, array $params): string {
         return preg_replace_callback('/:([a-zA-Z_][a-zA-Z0-9_]*)/', function ($m) use ($params) {
@@ -94,12 +102,6 @@ trait GBDB_QueryTrait {
         }, $script) ?? $script;
     }
 
-    /**
-     * Liefert einen stabilen Query-Cache-Key.
-     * @param string $type Typ.
-     * @param array $payload Payload.
-     * @return string Key.
-     */
     private static function queryCacheKey2(string $type, array $payload): string {
         return $type . ':' . hash(
             'sha256',
@@ -108,22 +110,25 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Leert den Query-Cache.
-     * @return void
+     * handles clear query cache.
+     *
+     * @return void result.
      */
     public static function clearQueryCache(): void {
         self::$queryCache = [];
     }
 
     /**
-     * Führt einen Inner Join aus.
-     * @param string $database Base.
-     * @param string $leftTable Linke Tabelle.
-     * @param string $rightTable Rechte Tabelle.
-     * @param string $leftKey Linker Join-Key.
-     * @param string $rightKey Rechter Join-Key.
-     * @param array $options Optionen.
-     * @return array Join-Ergebnis.
+     * handles inner join.
+     *
+     * @param string $database value.
+     * @param string $leftTable value.
+     * @param string $rightTable value.
+     * @param string $leftKey value.
+     * @param string $rightKey value.
+     * @param array $options value.
+     *
+     * @return array result.
      */
     public static function innerJoin(
         string $database,
@@ -137,14 +142,16 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Führt einen Left Join aus.
-     * @param string $database Base.
-     * @param string $leftTable Linke Tabelle.
-     * @param string $rightTable Rechte Tabelle.
-     * @param string $leftKey Linker Join-Key.
-     * @param string $rightKey Rechter Join-Key.
-     * @param array $options Optionen.
-     * @return array Join-Ergebnis.
+     * handles left join.
+     *
+     * @param string $database value.
+     * @param string $leftTable value.
+     * @param string $rightTable value.
+     * @param string $leftKey value.
+     * @param string $rightKey value.
+     * @param array $options value.
+     *
+     * @return array result.
      */
     public static function leftJoin(
         string $database,
@@ -158,15 +165,17 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Führt einen tabellenintern geplanten Join aus.
-     * @param string $database Base.
-     * @param string $leftTable Linke Tabelle.
-     * @param string $rightTable Rechte Tabelle.
-     * @param string $leftKey Linker Key.
-     * @param string $rightKey Rechter Key.
-     * @param string $type inner|left.
-     * @param array $options Optionen: select, prefix_left, prefix_right, limit, cache_ttl.
-     * @return array Ergebnis mit keys, rows und plan.
+     * handles join.
+     *
+     * @param string $database value.
+     * @param string $leftTable value.
+     * @param string $rightTable value.
+     * @param string $leftKey value.
+     * @param string $rightKey value.
+     * @param string $type value.
+     * @param array $options value.
+     *
+     * @return array result.
      */
     public static function join(
         string $database,
@@ -264,11 +273,13 @@ trait GBDB_QueryTrait {
                 foreach ($matches as $rrow) {
                     $rows[] = self::projectJoinRow($lrow, $rrow, $prefixLeft, $prefixRight, $select);
                 }
+
             }
 
             if (count($rows) >= $limit) {
                 break;
             }
+
         }
 
         $keys = [];
@@ -277,6 +288,7 @@ trait GBDB_QueryTrait {
             foreach (array_keys($row) as $key) {
                 $keys[$key] = true;
             }
+
         }
 
         $result = [
@@ -298,7 +310,17 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Erstellt einen einfachen Join-Query-Plan.
+     * handles join plan.
+     *
+     * @param string $leftTable value.
+     * @param string $rightTable value.
+     * @param int $leftRows value.
+     * @param int $rightRows value.
+     * @param string $leftKey value.
+     * @param string $rightKey value.
+     * @param string $type value.
+     *
+     * @return array result.
      */
     public static function joinPlan(
         string $leftTable,
@@ -323,9 +345,6 @@ trait GBDB_QueryTrait {
         ];
     }
 
-    /**
-     * Projiziert eine Join-Zeile.
-     */
     private static function projectJoinRow(array $left, array $right, string $prefixLeft, string $prefixRight, array $select): array {
         $all = [];
 
@@ -347,15 +366,18 @@ trait GBDB_QueryTrait {
             if (array_key_exists((string)$key, $all)) {
                 $out[(string)$key] = $all[(string)$key];
             }
+
         }
 
         return $out;
     }
 
     /**
-     * Führt eine Subquery als Callable auf Query-Rows aus.
-     * @param callable $query Callback.
-     * @return array Ergebnis.
+     * handles subquery.
+     *
+     * @param callable $query value.
+     *
+     * @return array result.
      */
     public static function subquery(callable $query): array {
         $started = microtime(true);
@@ -379,12 +401,14 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Streamt Query-Ergebnisse callbackbasiert in Chunks.
-     * @param string $database Base.
-     * @param string $table Tabelle.
-     * @param callable $callback Callback.
-     * @param int $chunkSize Chunk-Größe.
-     * @return array Bericht.
+     * handles stream query.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param callable $callback value.
+     * @param int $chunkSize value.
+     *
+     * @return array result.
      */
     public static function streamQuery(string $database, string $table, callable $callback, int $chunkSize = 500): array {
         $rows = self::getData($database, $table);
@@ -409,11 +433,13 @@ trait GBDB_QueryTrait {
     }
 
     /**
-     * Prüft, ob ein Full Table Scan erlaubt ist.
-     * @param string $database Base.
-     * @param string $table Tabelle.
-     * @param string $where Spalte.
-     * @return bool true wenn erlaubt.
+     * handles allow full scan.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $where value.
+     *
+     * @return bool result.
      */
     public static function allowFullScan(string $database, string $table, string $where = ''): bool {
         if (!self::$queryBlockFullScan) {
@@ -429,4 +455,5 @@ trait GBDB_QueryTrait {
 
         return in_array($where, $indexes, true);
     }
+
 }

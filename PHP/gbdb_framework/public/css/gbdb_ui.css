@@ -990,3 +990,398 @@ button.xs,.gbdbui-dashboard button.xs{min-height:34px!important;padding:7px 10px
 .gbdbui-inline-form select{
     min-height:42px;
 }
+
+/* greenQL buntes Syntax Highlighting: Builtins, eigene Funktionen und Deklarationen getrennt */
+.gbdbui-highlight-editor .tok-builtin-fn,.tok-builtin-fn{color:#22c55e;font-weight:950;text-shadow:0 0 12px rgba(34,197,94,.24)}
+.gbdbui-highlight-editor .tok-user-fn,.tok-user-fn{color:#c084fc;font-weight:850}
+.gbdbui-highlight-editor .tok-fndef,.tok-fndef{color:#f97316;font-weight:950;text-decoration:underline;text-decoration-color:rgba(249,115,22,.45);text-underline-offset:3px}
+.gbdbui-highlight-editor .tok-fn-key,.tok-fn-key{color:#fb7185;font-weight:950}
+.gbdbui-highlight-editor .tok-var-decl,.tok-var-decl{color:#fde047;font-weight:950}
+.gbdbui-highlight-editor .tok-const,.tok-const{color:#facc15;font-weight:950}
+.gbdbui-highlight-editor .tok-type,.tok-type{color:#38bdf8;font-weight:950}
+.gbdbui-highlight-editor .tok-class-key,.tok-class-key{color:#f472b6;font-weight:950}
+.gbdbui-highlight-editor .tok-class-name,.tok-class-name{color:#f0abfc;font-weight:950}
+
+
+/* greenQL Knallbunt Syntax Highlighting */
+.tok-key, .tok-query { color: #38bdf8; font-weight: 900; }
+.tok-structure { color: #a78bfa; font-weight: 900; }
+.tok-control { color: #ff4fd8; font-weight: 900; }
+.tok-decl { color: #ffe45e; font-weight: 950; }
+.tok-instance { color: #00e5ff; font-weight: 950; }
+.tok-index, .tok-constraint, .tok-health { color: #facc15; font-weight: 900; }
+.tok-string { color: #7cff6b; }
+.tok-num { color: #00e5ff; font-weight: 800; }
+.tok-lit { color: #ff4fd8; font-weight: 900; }
+.tok-fn, .tok-user-fn { color: #ff9f1c; font-weight: 900; }
+.tok-builtin-fn { color: #00e5ff; font-weight: 950; text-shadow: 0 0 10px rgba(0,229,255,.20); }
+.tok-pattern-fn { color: #ff4fd8; font-weight: 950; }
+.tok-data-fn { color: #22c55e; font-weight: 950; }
+.tok-hash-fn { color: #c084fc; font-weight: 950; }
+.tok-fn-key { color: #ff3d81; font-weight: 950; }
+.tok-fndef { color: #ffffff; font-weight: 950; text-decoration: underline; text-decoration-color: #ff4fd8; text-underline-offset: 3px; }
+.tok-class-key { color: #ff3d81; font-weight: 950; }
+.tok-class-name { color: #38bdf8; font-weight: 950; text-decoration: underline; text-decoration-color: #00e5ff; text-underline-offset: 3px; }
+.tok-var { color: #00ffb3; font-weight: 850; }
+.tok-var-decl { color: #ffea00; font-weight: 950; }
+.tok-const { color: #ff4fd8; font-weight: 950; }
+.tok-type { color: #00d4ff; font-weight: 950; font-style: italic; }
+.tok-field { color: #facc15; }
+.tok-brace { color: #e2e8f0; font-weight: 800; }
+.tok-op { color: #ff3d81; }
+.tok-wild { color: #facc15; font-weight: 950; }
+.tok-semi { color: #94a3b8; }
+.tok-comment { color: #6f7d97; font-style: italic; }
+
+/* greenQL Ultra Knallbunt Highlighting */
+.tok-fn, .tok-user-fn { color: #ff9f1c !important; font-weight: 950; font-style: italic; text-shadow: 0 0 10px rgba(255,159,28,.28); }
+.tok-fn-key { color: #ff00e5 !important; font-weight: 950; }
+.tok-fndef { color: #ffffff !important; font-weight: 950; text-decoration: underline; text-decoration-color: #ff00e5; text-shadow: 0 0 12px rgba(255,0,229,.45); }
+.tok-class-key { color: #00e5ff !important; font-weight: 950; }
+.tok-class-name { color: #22ff88 !important; font-weight: 950; text-decoration: underline; text-decoration-color: #22ff88; }
+.tok-identity-fn { color: #00e5ff !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(0,229,255,.36); }
+.tok-builtin-fn { color: #00e5ff !important; font-weight: 950; text-shadow: 0 0 10px rgba(0,229,255,.25); }
+.tok-pattern-fn { color: #ff00e5 !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(255,0,229,.36); }
+.tok-data-fn { color: #22ff88 !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(34,255,136,.28); }
+.tok-hash-fn { color: #ff5c8a !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(255,92,138,.32); }
+.tok-schema-fn { color: #ffe45e !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(255,228,94,.26); }
+.tok-advanced-fn { color: #a78bfa !important; font-weight: 950; text-decoration: underline; text-shadow: 0 0 12px rgba(167,139,250,.32); }
+.tok-var-decl { color: #ff4fd8 !important; font-weight: 950; }
+.tok-const { color: #ffea00 !important; font-weight: 950; }
+.tok-var { color: #00ffb3 !important; font-weight: 900; }
+.tok-type { color: #ff9f1c !important; font-weight: 950; font-style: italic; }
+.tok-decl { color: #ff00e5 !important; font-weight: 950; }
+.tok-query { color: #38bdf8 !important; font-weight: 900; }
+.tok-control { color: #ff4fd8 !important; font-weight: 900; }
+.tok-structure { color: #facc15 !important; font-weight: 900; }
+.tok-instance { color: #00ffb3 !important; font-weight: 900; }
+.tok-field { color: #f472b6 !important; font-weight: 800; }
+.tok-string { color: #7cff6b !important; }
+.tok-num { color: #00e5ff !important; font-weight: 900; }
+.tok-lit { color: #c084fc !important; font-weight: 950; }
+
+
+.gbdbui-highlight-editor .tok-api-fn,.tok-api-fn{color:#38bdf8!important;font-weight:950;text-decoration:underline;text-shadow:0 0 12px rgba(56,189,248,.30)}
+.gbdbui-highlight-editor .tok-instance-fn,.tok-instance-fn{color:#00ffb3!important;font-weight:950;text-decoration:underline;text-shadow:0 0 12px rgba(0,255,179,.26)}
+.gbdbui-highlight-editor .tok-srv-fn,.tok-srv-fn{color:#f97316!important;font-weight:950;text-decoration:underline;text-shadow:0 0 12px rgba(249,115,22,.32)}
+.gbdbui-highlight-editor .tok-cluster,.tok-cluster{color:#38bdf8!important;font-weight:900}
+.gbdbui-highlight-editor .tok-security,.tok-security{color:#fb7185!important;font-weight:900}
+.gbdbui-highlight-editor .tok-oop,.tok-oop{color:#ff00e5!important;font-weight:950}
+.gbdbui-highlight-editor .tok-file,.tok-file{color:#a78bfa!important;font-weight:950}
+
+
+/* greenQL High-Contrast Ultra Highlighting 2026.9 */
+.tok-comment{color:#7b879d!important;font-style:italic!important}.tok-string{color:#7cff6b!important}.tok-num{color:#00e5ff!important;font-weight:900!important}.tok-lit{color:#ff4fd8!important;font-weight:950!important}.tok-brace{color:#e2e8f0!important;font-weight:900!important}.tok-op{color:#ff3d81!important;font-weight:900!important}.tok-semi{color:#94a3b8!important}.tok-wild{color:#ffe45e!important;font-weight:950!important}
+.tok-decl{color:#ff00e5!important;font-weight:950!important;text-shadow:0 0 12px rgba(255,0,229,.32)!important}.tok-var-decl{color:#ffea00!important;font-weight:950!important}.tok-var{color:#00ffb3!important;font-weight:900!important}.tok-const{color:#ffd000!important;font-weight:950!important;text-shadow:0 0 10px rgba(255,208,0,.28)!important}.tok-this{color:#ff9f1c!important;font-weight:950!important;font-style:italic!important}.tok-type{color:#38bdf8!important;font-weight:950!important;font-style:italic!important}
+.tok-fn-key{color:#fb7185!important;font-weight:950!important}.tok-fndef{color:#ffffff!important;background:rgba(124,58,237,.38)!important;border-radius:5px!important;font-weight:950!important;text-decoration:underline!important;text-decoration-color:#ff00e5!important;text-underline-offset:3px!important}.tok-user-fn,.tok-fn{color:#ff9f1c!important;font-weight:950!important;font-style:italic!important;text-shadow:0 0 10px rgba(255,159,28,.24)!important}.tok-class-key{color:#00e5ff!important;font-weight:950!important}.tok-class-name{color:#22ff88!important;font-weight:950!important;text-decoration:underline!important;text-decoration-color:#22ff88!important;text-underline-offset:3px!important}
+.tok-identity-fn{color:#00e5ff!important}.tok-hash-fn{color:#ff5c8a!important}.tok-pattern-fn{color:#ff00e5!important}.tok-api-fn{color:#38bdf8!important}.tok-instance-fn{color:#00ffb3!important}.tok-data-fn{color:#22ff88!important}.tok-schema-fn{color:#ffe45e!important}.tok-advanced-fn{color:#a78bfa!important}.tok-builtin-fn{color:#67e8f9!important}.tok-declared-only-fn{color:#fb7185!important;text-decoration-style:dotted!important}.tok-identity-fn,.tok-hash-fn,.tok-pattern-fn,.tok-api-fn,.tok-instance-fn,.tok-data-fn,.tok-schema-fn,.tok-advanced-fn,.tok-builtin-fn,.tok-declared-only-fn{font-weight:950!important;text-decoration:underline!important;text-underline-offset:3px!important;text-shadow:0 0 12px rgba(255,255,255,.16)!important}
+.tok-query{color:#38bdf8!important;font-weight:900!important}.tok-control{color:#ff4fd8!important;font-weight:900!important}.tok-structure{color:#facc15!important;font-weight:900!important}.tok-instance{color:#00ffb3!important;font-weight:900!important}.tok-index{color:#c084fc!important;font-weight:900!important}.tok-constraint{color:#f472b6!important;font-weight:900!important}.tok-health{color:#2dd4bf!important;font-weight:900!important}.tok-cluster{color:#38bdf8!important;font-weight:900!important}.tok-security{color:#fb7185!important;font-weight:950!important}.tok-oop{color:#ff00e5!important;font-weight:950!important}.tok-file{color:#a78bfa!important;font-weight:950!important}.tok-srv-namespace{color:#f97316!important;font-weight:950!important}.tok-srv-fn{color:#fb923c!important;font-weight:950!important;text-decoration:underline!important;text-underline-offset:3px!important;text-shadow:0 0 12px rgba(249,115,22,.28)!important}.tok-field{color:#f472b6!important;font-weight:850!important}
+
+/* ============================================================
+   Public API Center
+   ============================================================ */
+.public-api-hero{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(300px,430px);
+    gap:20px;
+    align-items:end;
+}
+.public-api-endpoint-card,
+.public-api-code-card,
+.public-api-note-grid > div{
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:22px;
+    background:rgba(2,6,23,.38);
+    padding:18px;
+    box-shadow:0 14px 40px rgba(0,0,0,.18);
+}
+.public-api-endpoint-card span,
+.public-api-note-grid strong,
+.public-api-right-picker > span{
+    display:block;
+    color:#93c5fd;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:11px;
+    font-weight:900;
+    margin-bottom:8px;
+}
+.public-api-endpoint-card code{
+    display:block;
+    margin-bottom:12px;
+    color:#e0f2fe;
+    word-break:break-all;
+    font-size:13px;
+}
+.public-api-stat-grid{
+    margin-top:18px;
+}
+.public-api-grid{
+    align-items:start;
+}
+.public-api-right-picker{
+    display:grid;
+    gap:8px;
+}
+.public-api-right-picker > div{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+    gap:8px;
+}
+.public-api-right-picker label{
+    display:flex;
+    grid-template-columns:none;
+    align-items:center;
+    gap:7px;
+    padding:8px 10px;
+    border:1px solid rgba(148,163,184,.16);
+    border-radius:14px;
+    background:rgba(15,23,42,.46);
+    color:#dbeafe;
+}
+.public-api-right-picker input[type="checkbox"]{
+    width:auto!important;
+    min-height:0!important;
+}
+.public-api-code-card pre{
+    overflow:auto;
+    margin:0 0 12px;
+    padding:16px;
+    border:1px solid rgba(148,163,184,.14);
+    border-radius:16px;
+    background:rgba(2,6,23,.62);
+    color:#dbeafe;
+    font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+}
+.public-api-note-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin-top:14px;
+}
+.public-api-note-grid span{
+    color:#94a3b8;
+    line-height:1.5;
+    font-size:13px;
+}
+.public-api-key-list,
+.public-api-module-list{
+    display:grid;
+    gap:14px;
+}
+.public-api-key-card,
+.public-api-module{
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:22px;
+    background:rgba(15,23,42,.54);
+    padding:16px;
+}
+.public-api-key-card.is-expired{
+    border-color:rgba(251,113,133,.28);
+    background:rgba(127,29,29,.16);
+}
+.public-api-key-main{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(220px,300px);
+    gap:14px;
+    align-items:start;
+}
+.public-api-key-card h4{
+    margin:0 0 6px;
+    font-size:20px;
+    letter-spacing:-.02em;
+}
+.public-api-key-card p{
+    margin:0 0 12px;
+    color:#94a3b8;
+}
+.public-api-key-main details{
+    display:grid;
+    gap:9px;
+    padding:12px;
+    border:1px solid rgba(148,163,184,.16);
+    border-radius:16px;
+    background:rgba(2,6,23,.34);
+}
+.public-api-key-main summary{
+    cursor:pointer;
+    color:#dbeafe;
+    font-weight:850;
+    margin-bottom:9px;
+}
+.public-api-chip-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+    align-items:center;
+}
+.public-api-key-edit{
+    margin-top:14px;
+    padding-top:14px;
+    border-top:1px solid rgba(148,163,184,.12);
+}
+.public-api-key-actions{
+    display:flex;
+    justify-content:flex-start;
+}
+.public-api-delete-form{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:10px;
+}
+.public-api-module summary{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    cursor:pointer;
+    color:#f8fafc;
+}
+.public-api-module summary span{
+    color:#94a3b8;
+    font-size:12px;
+    word-break:break-all;
+    text-align:right;
+}
+.public-api-module .public-api-chip-row{
+    margin-top:12px;
+}
+.public-api-actions-table{
+    margin-top:12px;
+}
+@media(max-width:980px){
+    .public-api-hero,
+    .public-api-key-main,
+    .public-api-note-grid{
+        grid-template-columns:1fr;
+    }
+    .public-api-module summary{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+    .public-api-module summary span{
+        text-align:left;
+    }
+}
+
+/* ============================================================
+   Public API Center - compact table overflow fix
+   ============================================================ */
+.public-api-body .gbdbui-panel,
+.public-api-body .public-api-module,
+.public-api-body .gbdbui-table-wrap{
+    min-width:0;
+    max-width:100%;
+}
+.public-api-body .gbdbui-table-wrap{
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+}
+.public-api-body .gbdbui-table{
+    width:100%;
+    min-width:0;
+    table-layout:fixed;
+}
+.public-api-body .gbdbui-table th,
+.public-api-body .gbdbui-table td{
+    white-space:normal;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+}
+.public-api-body .gbdbui-table code,
+.public-api-body .public-api-module summary span,
+.public-api-body .public-api-endpoint-card code,
+.public-api-body .public-api-code-card pre{
+    overflow-wrap:anywhere;
+    word-break:break-word;
+}
+.public-api-actions-table .gbdbui-table th:first-child,
+.public-api-actions-table .gbdbui-table td:first-child{
+    width:52%;
+}
+.public-api-actions-table .gbdbui-table th:last-child,
+.public-api-actions-table .gbdbui-table td:last-child{
+    width:48%;
+}
+
+.public-api-log-panel{
+    padding:0;
+    overflow:hidden;
+}
+.public-api-log-details{
+    padding:18px;
+}
+.public-api-log-details summary{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    cursor:pointer;
+    list-style:none;
+}
+.public-api-log-details summary::-webkit-details-marker{
+    display:none;
+}
+.public-api-log-details summary::before{
+    content:"+";
+    display:grid;
+    place-items:center;
+    width:28px;
+    height:28px;
+    flex:0 0 28px;
+    border:1px solid rgba(147,197,253,.25);
+    border-radius:10px;
+    background:rgba(30,64,175,.22);
+    color:#bfdbfe;
+    font-weight:950;
+}
+.public-api-log-details[open] summary::before{
+    content:"−";
+}
+.public-api-log-details summary span{
+    display:grid;
+    gap:4px;
+    min-width:0;
+    flex:1;
+}
+.public-api-log-details summary strong{
+    color:#f8fafc;
+    font-size:18px;
+}
+.public-api-log-details summary small{
+    color:#94a3b8;
+    line-height:1.4;
+}
+.public-api-log-details summary em{
+    padding:7px 10px;
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:999px;
+    background:rgba(15,23,42,.58);
+    color:#dbeafe;
+    font-size:12px;
+    font-style:normal;
+    font-weight:850;
+    white-space:nowrap;
+}
+.public-api-log-table{
+    margin-top:16px;
+}
+
+@media(max-width:760px){
+    .public-api-body .gbdbui-panel{
+        padding:16px;
+    }
+    .public-api-module{
+        padding:12px;
+    }
+    .public-api-body .gbdbui-table th,
+    .public-api-body .gbdbui-table td{
+        padding:10px 9px;
+        font-size:12px;
+    }
+    .public-api-body .gbdbui-table code,
+    .public-api-chip-row .gbdbui-pill{
+        font-size:11px;
+    }
+}

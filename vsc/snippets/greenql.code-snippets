@@ -727,5 +727,129 @@
       "REVOKE ${1:READ} ${2:*} ON ${3:users} IN ${4:main};"
     ],
     "description": "Recht entziehen"
+  },
+  "Pattern bootstrap MuseumQR": {
+    "prefix": [
+      "pattern museumqr",
+      "museumqr bootstrap",
+      "exec pattern museumqr"
+    ],
+    "body": [
+      "declare \\$mid = param(\"museum_id\");",
+      "declare \\$instance = param(\"main_instance\");",
+      "declare \\$name = param(\"museum_name\");",
+      "declare \\$logo = param(\"logo_path\");",
+      "declare \\$intro = param(\"intro\");",
+      "declare \\$kdnr = param(\"kunden_nr\");",
+      "declare \\$lKey = param(\"license_key\");",
+      "",
+      "declare \\$expoInstance = \"expokey\";",
+      "declare \\$pattern = loadPattern(\"museumqr\");",
+      "declare \\$expoPattern = loadPattern(\"expokey\");",
+      "",
+      "if (!instance_exists(\\$instance)) {",
+      "    GROW INSTANCE \\$instance;",
+      "}",
+      "",
+      "USE INSTANCE \\$instance;",
+      "EXEC PATTERN \\$pattern;",
+      "",
+      "ROOT system;",
+      "",
+      "SEED users WITH",
+      "    uid=uni_random(),",
+      "    username=\"admin\",",
+      "    email=\"\",",
+      "    name=\"Administrator\",",
+      "    password=hash_sha256(\"admin\"),",
+      "    role=\"admin\",",
+      "    active=true,",
+      "    admin_theme=\"dark\",",
+      "    created_at=now(),",
+      "    updated_at=now(),",
+      "    last_login=\"\";",
+      "",
+      "if (!instance_exists(\\$expoInstance)) {",
+      "    GROW INSTANCE \\$expoInstance;",
+      "}",
+      "",
+      "USE INSTANCE \\$expoInstance;",
+      "EXEC PATTERN \\$expoPattern;"
+    ],
+    "description": "MuseumQR + ExpoKey Pattern-Initialisierung"
+  },
+  "Load pattern": {
+    "prefix": [
+      "loadPattern",
+      "load pattern"
+    ],
+    "body": [
+      "declare \\$${1:pattern} = loadPattern(\"${2:museumqr}\");"
+    ],
+    "description": "Enterprise-Pattern laden"
+  },
+  "Exec pattern": {
+    "prefix": [
+      "exec pattern",
+      "EXEC PATTERN"
+    ],
+    "body": [
+      "EXEC PATTERN ${1:\\$pattern};"
+    ],
+    "description": "Enterprise-Pattern in aktueller Instanz ausführen"
+  },
+  "Exec pattern in instance": {
+    "prefix": [
+      "exec pattern in",
+      "exec_pattern instance"
+    ],
+    "body": [
+      "EXEC PATTERN ${1:\\$pattern} IN ${2:\\$instance};"
+    ],
+    "description": "Enterprise-Pattern in bestimmter Instanz ausführen"
+  },
+  "Typed table all types": {
+    "prefix": [
+      "typed table",
+      "grow table types"
+    ],
+    "body": [
+      "GROW TABLE ${1:example} (",
+      "    uid:uuid REQUIRED UNIQUE,",
+      "    title:string REQUIRED,",
+      "    body:text,",
+      "    email:email,",
+      "    url:url,",
+      "    count:int DEFAULT 0,",
+      "    price:decimal DEFAULT 0.0,",
+      "    active:bool DEFAULT true,",
+      "    meta:json DEFAULT {},",
+      "    tags:array DEFAULT [],",
+      "    created_at:datetime DEFAULT now()",
+      ") WITH TYPES IN ${2:main};"
+    ],
+    "description": "Typed GROW TABLE mit GreenQL-Datentypen"
+  },
+  "Declare typed variable": {
+    "prefix": [
+      "declare typed",
+      "typed var",
+      ":int",
+      ":string"
+    ],
+    "body": [
+      "DECLARE :${1|int,string,float,bool,array,json,mixed|} _${2:name} = ${3:value};"
+    ],
+    "description": "Variable mit optionalem GreenQL-Datentyp deklarieren"
+  },
+  "Declare typed constant": {
+    "prefix": [
+      "typed const",
+      "declare typed const"
+    ],
+    "body": [
+      "DECLARE :${1|string,int,float,bool,array,json,mixed|} \\$${2:NAME} = ${3:value};"
+    ],
+    "description": "Konstante mit optionalem GreenQL-Datentyp deklarieren"
   }
 }

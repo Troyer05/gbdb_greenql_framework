@@ -1,13 +1,16 @@
 <?php
 $EXT_PLAIN = '.json';
-$EXT_ENC   = '.db';
-$GBDB_ROOT   = rtrim(Vars::DB_PATH(), "/") . "/";
+$EXT_ENC = '.db';
+$GBDB_ROOT = rtrim(Vars::DB_PATH(), "/") . "/";
 $GBDB_PARENT = rtrim(dirname(rtrim($GBDB_ROOT, "/")), "/") . "/";
 
-function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+function h(string $s): string {
+    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+}
 
 function ensure_dir(string $dir): void {
-    if (!is_dir($dir)) @mkdir($dir, 0777, true);
+    if (!is_dir($dir))
+        @mkdir($dir, 0777, true);
 }
 
 function atomic_write(string $file, string $payload): bool {
@@ -17,17 +20,24 @@ function atomic_write(string $file, string $payload): bool {
 
     $tmp = $file . '.' . uniqid('tmp_', true);
 
-    if (@file_put_contents($tmp, $payload, LOCK_EX) === false) return false;
-    if (!@rename($tmp, $file)) { @unlink($tmp); return false; }
+    if (@file_put_contents($tmp, $payload, LOCK_EX) === false)
+
+        return false;
+
+    if (!@rename($tmp, $file)) {
+        @unlink($tmp);
+
+        return false;
+    }
 
     return true;
 }
 
 function name_token(string $plain, string $ns = 'g'): string {
-    $key  = (string)Vars::cryptKey();
+    $key = (string) Vars::cryptKey();
     $data = $ns . '|' . $plain;
-    $raw  = hash_hmac('sha256', $data, $key, true);
-    $b64  = base64_encode($raw);
+    $raw = hash_hmac('sha256', $data, $key, true);
+    $b64 = base64_encode($raw);
     $safe = rtrim(strtr($b64, '+/', '-_'), '=');
 
     return 'gb_' . $safe;
@@ -40,7 +50,9 @@ function json_pretty_flags(): int {
 function read_plain_json(string $file): array {
     $raw = @file_get_contents($file);
 
-    if ($raw === false) return [];
+    if ($raw === false)
+
+        return [];
     $arr = json_decode($raw, true);
 
     return is_array($arr) ? $arr : [];
@@ -49,10 +61,14 @@ function read_plain_json(string $file): array {
 function read_enc_db(string $file): array {
     $raw = @file_get_contents($file);
 
-    if ($raw === false) return [];
+    if ($raw === false)
+
+        return [];
     $decoded = Crypt::decode($raw);
 
-    if ($decoded === null) return [];
+    if ($decoded === null)
+
+        return [];
     $arr = json_decode($decoded, true);
 
     return is_array($arr) ? $arr : [];
@@ -61,14 +77,19 @@ function read_enc_db(string $file): array {
 function write_plain_json(string $file, array $data): bool {
     $json = json_encode($data, json_pretty_flags());
 
-    if ($json === false) return false;
+    if ($json === false)
+
+        return false;
+
     return atomic_write($file, $json);
 }
 
 function write_enc_db(string $file, array $data): bool {
     $json = json_encode($data, json_pretty_flags());
 
-    if ($json === false) return false;
+    if ($json === false)
+
+        return false;
     $payload = Crypt::encode($json);
 
     return atomic_write($file, $payload);
@@ -77,6 +98,7 @@ function write_enc_db(string $file, array $data): bool {
 function db_index_filename(string $extEnc): string {
     return name_token('__db_index__', 'meta') . $extEnc;
 }
+
 function table_index_filename(string $extEnc): string {
     return name_token('__table_index__', 'meta') . $extEnc;
 }
@@ -87,14 +109,16 @@ function build_index_table(array $mapPlainToToken): array {
     $id = 0;
 
     foreach ($mapPlainToToken as $plain => $token) {
-        $db[] = ["id" => $id++, "plain" => (string)$plain, "token" => (string)$token];
+        $db[] = ["id" => $id++, "plain" => (string) $plain, "token" => (string) $token];
     }
 
     return $db;
 }
 
 function parse_index_table(array $table): array {
-    if (empty($table) || !isset($table[0]) || !is_array($table[0])) return [];
+    if (empty($table) || !isset($table[0]) || !is_array($table[0]))
+
+        return [];
 
     unset($table[0]);
 
@@ -102,27 +126,36 @@ function parse_index_table(array $table): array {
     $map = [];
 
     foreach ($table as $r) {
-        if (!is_array($r)) continue;
-        if (!isset($r['plain'], $r['token'])) continue;
+        if (!is_array($r))
+            continue;
 
-        $p = (string)$r['plain'];
-        $t = (string)$r['token'];
+        if (!isset($r['plain'], $r['token']))
+            continue;
 
-        if ($p !== '' && $t !== '') $map[$p] = $t;
+        $p = (string) $r['plain'];
+        $t = (string) $r['token'];
+
+        if ($p !== '' && $t !== '')
+            $map[$p] = $t;
     }
 
     return $map;
 }
 
 function rrmdir(string $dir): void {
-    if (!is_dir($dir)) return;
+    if (!is_dir($dir))
+
+        return;
 
     foreach (scandir($dir) as $f) {
-        if ($f === '.' || $f === '..') continue;
+        if ($f === '.' || $f === '..')
+            continue;
         $p = $dir . '/' . $f;
 
-        if (is_dir($p)) rrmdir($p);
-        else @unlink($p);
+        if (is_dir($p))
+            rrmdir($p);
+        else
+            @unlink($p);
     }
 
     @rmdir($dir);
@@ -131,6 +164,7 @@ function rrmdir(string $dir): void {
 function meta_filename_plain(string $tblPlain, string $extPlain): string {
     return "__meta__" . $tblPlain . $extPlain;
 }
+
 function append_filename_plain(string $tblPlain, string $extPlain): string {
     return "__append__" . $tblPlain . $extPlain;
 }
@@ -138,16 +172,31 @@ function append_filename_plain(string $tblPlain, string $extPlain): string {
 function meta_filename_enc(string $tblToken, string $extEnc): string {
     return name_token('__meta__|' . $tblToken, 'meta') . $extEnc;
 }
+
 function append_filename_enc(string $tblToken, string $extEnc): string {
     return name_token('__append__|' . $tblToken, 'meta') . $extEnc;
 }
 
 function looks_like_meta_or_append_or_idx(string $file, string $extPlain, string $extEnc): bool {
-    if (str_starts_with($file, "__meta__") && str_ends_with($file, $extPlain)) return true;
-    if (str_starts_with($file, "__append__") && str_ends_with($file, $extPlain)) return true;
-    if (str_starts_with($file, "__idx__")) return true;
-    if (str_starts_with($file, "__idxa__")) return true;
-    if (str_ends_with($file, ".lock")) return true;
+    if (str_starts_with($file, "__meta__") && str_ends_with($file, $extPlain))
+
+        return true;
+
+    if (str_starts_with($file, "__append__") && str_ends_with($file, $extPlain))
+
+        return true;
+
+    if (str_starts_with($file, "__idx__"))
+
+        return true;
+
+    if (str_starts_with($file, "__idxa__"))
+
+        return true;
+
+    if (str_ends_with($file, ".lock"))
+
+        return true;
 
     return false;
 }
@@ -155,20 +204,31 @@ function looks_like_meta_or_append_or_idx(string $file, string $extPlain, string
 function detect_state(string $gbdbRoot, string $extEnc, string $extPlain): string {
     $encIdx = $gbdbRoot . db_index_filename($extEnc);
 
-    if (is_file($encIdx)) return 'encrypted';
+    if (is_file($encIdx))
+
+        return 'encrypted';
 
     foreach (@scandir($gbdbRoot) ?: [] as $d) {
-        if ($d === '.' || $d === '..') continue;
+        if ($d === '.' || $d === '..')
+            continue;
 
         $p = $gbdbRoot . $d;
 
-        if (!is_dir($p)) continue;
+        if (!is_dir($p))
+            continue;
 
         foreach (@scandir($p) ?: [] as $f) {
-            if ($f === '.' || $f === '..') continue;
-            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc)) continue;
-            if (str_ends_with($f, $extPlain)) return 'plain';
+            if ($f === '.' || $f === '..')
+                continue;
+
+            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc))
+                continue;
+
+            if (str_ends_with($f, $extPlain))
+
+                return 'plain';
         }
+
     }
 
     return 'unknown';
@@ -178,16 +238,23 @@ function dump_plain(string $gbdbRoot, string $extPlain, string $extEnc): array {
     $out = [];
 
     foreach (scandir($gbdbRoot) as $dbDir) {
-        if ($dbDir === '.' || $dbDir === '..') continue;
+        if ($dbDir === '.' || $dbDir === '..')
+            continue;
         $dbPath = $gbdbRoot . $dbDir;
 
-        if (!is_dir($dbPath)) continue;
+        if (!is_dir($dbPath))
+            continue;
         $tables = [];
 
         foreach (scandir($dbPath) as $f) {
-            if ($f === '.' || $f === '..') continue;
-            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc)) continue;
-            if (!str_ends_with($f, $extPlain)) continue;
+            if ($f === '.' || $f === '..')
+                continue;
+
+            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc))
+                continue;
+
+            if (!str_ends_with($f, $extPlain))
+                continue;
 
             $tablePlain = substr($f, 0, -strlen($extPlain));
             $tables[$tablePlain] = read_plain_json($dbPath . '/' . $f);
@@ -203,7 +270,9 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
     $out = [];
     $dbIdxFile = $gbdbRoot . db_index_filename($extEnc);
 
-    if (!is_file($dbIdxFile)) return [];
+    if (!is_file($dbIdxFile))
+
+        return [];
 
     $dbIdxTable = read_enc_db($dbIdxFile);
     $dbMap = parse_index_table($dbIdxTable);
@@ -211,7 +280,8 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
     foreach ($dbMap as $dbPlain => $dbToken) {
         $dbPath = $gbdbRoot . $dbToken . '/';
 
-        if (!is_dir($dbPath)) continue;
+        if (!is_dir($dbPath))
+            continue;
 
         $tblIdxFile = $dbPath . table_index_filename($extEnc);
 
@@ -226,7 +296,9 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
 
         foreach ($tblMap as $tblPlain => $tblToken) {
             $tblFile = $dbPath . $tblToken . $extEnc;
-            if (!is_file($tblFile)) continue;
+
+            if (!is_file($tblFile))
+                continue;
             $tables[$tblPlain] = read_enc_db($tblFile);
         }
 
@@ -238,22 +310,26 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
 
 function compute_meta_from_table(array $table): array {
     $maxId = 0;
-    $rows  = 0;
+    $rows = 0;
 
     foreach ($table as $i => $r) {
-        if (!is_array($r)) continue;
-        if ($i === 0 && isset($r["id"]) && (int)$r["id"] === -1) continue;
+        if (!is_array($r))
+            continue;
+
+        if ($i === 0 && isset($r["id"]) && (int) $r["id"] === -1)
+            continue;
 
         $rows++;
 
-        if (isset($r["id"])) $maxId = max($maxId, (int)$r["id"]);
+        if (isset($r["id"]))
+            $maxId = max($maxId, (int) $r["id"]);
     }
 
     return [
-        "last_id"    => $maxId,
-        "rows"       => $rows,
+        "last_id" => $maxId,
+        "rows" => $rows,
         "append_ops" => 0,
-        "indexes"    => [],
+        "indexes" => [],
         "created_at" => time(),
         "updated_at" => time(),
     ];
@@ -271,17 +347,18 @@ function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc)
         $dbMap[$dbPlain] = $dbToken;
     }
 
-    $dbIdxPath  = $targetRoot . db_index_filename($extEnc);
+    $dbIdxPath = $targetRoot . db_index_filename($extEnc);
     $dbIdxTable = build_index_table($dbMap);
 
     if (!write_enc_db($dbIdxPath, $dbIdxTable)) {
         $log[] = "❌ Konnte DB-Index nicht schreiben: {$dbIdxPath}";
+
         return $log;
     }
 
     foreach ($dump as $dbPlain => $tables) {
         $dbToken = $dbMap[$dbPlain];
-        $dbDir   = $targetRoot . $dbToken . '/';
+        $dbDir = $targetRoot . $dbToken . '/';
 
         ensure_dir($dbDir);
 
@@ -292,7 +369,7 @@ function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc)
             $tblMap[$tblPlain] = $tblToken;
         }
 
-        $tblIdxPath  = $dbDir . table_index_filename($extEnc);
+        $tblIdxPath = $dbDir . table_index_filename($extEnc);
         $tblIdxTable = build_index_table($tblMap);
 
         if (!write_enc_db($tblIdxPath, $tblIdxTable)) {
@@ -313,7 +390,7 @@ function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc)
             $meta = compute_meta_from_table($tableArr);
             $metaFile = $dbDir . meta_filename_enc($tblToken, $extEnc);
 
-            if (!write_enc_db($metaFile, [ $meta ])) {
+            if (!write_enc_db($metaFile, [$meta])) {
                 $log[] = "⚠️ Meta konnte nicht geschrieben werden: {$dbPlain}/{$tblPlain}";
             }
 
@@ -327,6 +404,7 @@ function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc)
 
             $log[] = "✅ Encoded: {$dbPlain}/{$tblPlain}";
         }
+
     }
 
     return $log;
@@ -350,7 +428,9 @@ function write_plain_schema(string $targetRoot, array $dump, string $extPlain): 
             } else {
                 $log[] = "✅ Decoded: {$dbPlain}/{$tblPlain}";
             }
+
         }
+
     }
 
     return $log;
@@ -365,10 +445,12 @@ function swap_with_backup(string $gbdbRoot, string $parent, string $tmpRoot): st
         if (!@rename($currentPath, $backup)) {
             return "❌ Backup fehlgeschlagen (rename): {$currentPath} -> {$backup}";
         }
+
     }
 
     if (!@rename(rtrim($tmpRoot, "/"), $currentPath)) {
         @rename($backup, $currentPath);
+
         return "❌ Swap fehlgeschlagen (rename): {$tmpRoot} -> {$currentPath} (Rollback versucht)";
     }
 
@@ -384,13 +466,14 @@ $confirm = ($_POST['confirm'] ?? '') === 'yes';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!$confirm) {
         $errors[] = "Bitte bestätige die Checkbox (Backup + Umstellung).";
-    } elseif ($action !== 'encrypt' && $action !== 'decrypt') {
+    } else if ($action !== 'encrypt' && $action !== 'decrypt') {
         $errors[] = "Ungültige Aktion.";
     } else {
 
         $tmpRoot = $GBDB_PARENT . "GBDB__tmp_migrate__/";
 
-        if (is_dir($tmpRoot)) rrmdir($tmpRoot);
+        if (is_dir($tmpRoot))
+            rrmdir($tmpRoot);
 
         ensure_dir($tmpRoot);
 
@@ -410,7 +493,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $logs[] = "⚠️ Danach .framework.env.php: crypt_data() auf FALSE setzen (manuell).";
         }
 
-        if (is_dir($tmpRoot)) rrmdir($tmpRoot);
+        if (is_dir($tmpRoot))
+            rrmdir($tmpRoot);
     }
+
 }
+
 ?>

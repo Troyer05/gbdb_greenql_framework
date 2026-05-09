@@ -11,9 +11,11 @@ $report = [];
 $formats = ['json' => 'JSON', 'ndjson' => 'NDJSON', 'csv' => 'CSV'];
 $instances = GreenQLUIv2Helper::instances();
 $selectedInstance = GreenQLUIv2Helper::clean((string)($_GET['instance'] ?? $_POST['instance'] ?? ($_SESSION['gbdbui_import_export_instance'] ?? '')));
+
 if ($selectedInstance === '' || !in_array($selectedInstance, $instances, true)) {
     $selectedInstance = (string)($instances[0] ?? '');
 }
+
 if ($selectedInstance !== '') {
     $_SESSION['gbdbui_import_export_instance'] = $selectedInstance;
 }
@@ -23,6 +25,7 @@ $dbs = $selectedInstance !== '' ? GreenQLUIv2Helper::databases($selectedInstance
 
 foreach ($dbs as $db) {
     $db = (string)$db;
+
     foreach (GreenQLUIv2Helper::tables($selectedInstance, $db) as $table) {
         $table = (string)$table;
         $pairs[] = [
@@ -32,15 +35,12 @@ foreach ($dbs as $db) {
             'value' => $selectedInstance . '|' . $db . '|' . $table,
         ];
     }
+
 }
 
-/**
- * Zerlegt einen Tabellenwert aus der UI.
- * @param string $value Übergabewert.
- * @return array Rückgabewert.
- */
 function gbdbui_import_export_target(string $value): array {
     $parts = explode('|', $value, 3);
+
     return [
         GreenQLUIv2Helper::clean((string)($parts[0] ?? '')),
         GreenQLUIv2Helper::clean((string)($parts[1] ?? '')),
@@ -48,43 +48,26 @@ function gbdbui_import_export_target(string $value): array {
     ];
 }
 
-/**
- * Prüft ob eine Ziel-Tabelle in der sichtbaren aktiven Instanz existiert.
- * @param string $instance Instanzname.
- * @param string $db Base-Name.
- * @param string $table Tabellenname.
- * @return bool Rückgabewert.
- */
 function gbdbui_import_export_valid_target(string $instance, string $db, string $table): bool {
     if ($instance === '' || $db === '' || $table === '') return false;
+
     if (!GreenQLUIv2Helper::canAccessInstance($instance) || !GreenQLUIv2Helper::canAccessDb($instance, $db)) return false;
+
     return in_array($table, GreenQLUIv2Helper::tables($instance, $db), true);
 }
 
-/**
- * Führt eine Operation in einer temporär gesetzten Instanz aus.
- * @param string $instance Instanzname.
- * @param callable $callback Callback.
- * @return mixed Rückgabewert.
- */
 function gbdbui_import_export_with_instance(string $instance, callable $callback): mixed {
     $old = GBDB::getInstance();
     try {
         GBDB::setInstance($instance);
+
         return $callback();
     } finally {
         GBDB::setInstance($old);
     }
+
 }
 
-/**
- * Liefert einen sicheren Dateinamen für Downloads.
- * @param string $instance Instanzname.
- * @param string $db Übergabewert.
- * @param string $table Übergabewert.
- * @param string $format Übergabewert.
- * @return string Rückgabewert.
- */
 function gbdbui_export_filename(string $instance, string $db, string $table, string $format): string {
     return date('Ymd_His') . '_' . GreenQLUIv2Helper::clean($instance) . '_' . GreenQLUIv2Helper::clean($db) . '_' . GreenQLUIv2Helper::clean($table) . '.' . strtolower($format);
 }
@@ -96,6 +79,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } else {
         $action = (string)($_POST['gbdbui_import_export_action'] ?? '');
         $format = strtolower((string)($_POST['format'] ?? 'json'));
+
         if (!array_key_exists($format, $formats)) $format = 'json';
 
         if ($action === 'export') {
@@ -104,7 +88,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if (!gbdbui_import_export_valid_target($targetInstance, $db, $table)) {
                 $msg = 'Export-Ziel ist ungültig.';
                 $report = ['ok' => false, 'error' => 'invalid_target'];
-            } elseif (!method_exists('GBDB', 'exportRows')) {
+            } else if (!method_exists('GBDB', 'exportRows')) {
                 $msg = 'GBDB::exportRows ist in dieser Framework-Version nicht verfügbar.';
                 $report = ['ok' => false, 'error' => 'method_missing'];
             } else {
@@ -118,11 +102,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     header('Content-Disposition: attachment; filename="' . $downloadName . '"');
                     readfile($tmp);
                     @unlink($tmp);
+
                     exit;
                 }
 
                 $msg = 'Export konnte nicht erstellt werden.';
             }
+
         }
 
         if ($action === 'import') {
@@ -132,10 +118,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if (!gbdbui_import_export_valid_target($targetInstance, $db, $table)) {
                 $msg = 'Import-Ziel ist ungültig.';
                 $report = ['ok' => false, 'error' => 'invalid_target'];
-            } elseif (!method_exists('GBDB', 'importRows')) {
+            } else if (!method_exists('GBDB', 'importRows')) {
                 $msg = 'GBDB::importRows ist in dieser Framework-Version nicht verfügbar.';
                 $report = ['ok' => false, 'error' => 'method_missing'];
-            } elseif (!is_array($upload) || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($upload['tmp_name'] ?? ''))) {
+            } else if (!is_array($upload) || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($upload['tmp_name'] ?? ''))) {
                 $msg = 'Keine gültige Import-Datei hochgeladen.';
                 $report = ['ok' => false, 'error' => 'upload_failed'];
             } else {
@@ -143,9 +129,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 gbdbui_cache_clear();
                 $msg = !empty($report['ok']) ? 'Import abgeschlossen.' : 'Import mit Fehlern oder ungültigen Spalten.';
             }
+
         }
+
     }
+
 }
+
 ?>
 <!doctype html>
 <html lang="de">

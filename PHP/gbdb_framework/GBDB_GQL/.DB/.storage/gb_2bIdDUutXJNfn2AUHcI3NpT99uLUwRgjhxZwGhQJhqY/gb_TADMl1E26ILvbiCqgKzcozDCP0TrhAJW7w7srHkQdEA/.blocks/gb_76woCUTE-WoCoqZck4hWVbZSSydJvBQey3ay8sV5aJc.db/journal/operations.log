@@ -1,0 +1,2 @@
+{"ts":1778363587,"op":{"op":"sync","reason":"create_table","rows":0,"pages":0,"checksum":"195682c8669516c6f28ece9876ca775fe3e6dc2583dbf6c1ee899851d5a91130"},"checksum":"4f3ad439e8c30c52b337f477ce8297457921f7518102d2cc532b1956251895ed"}
+{"ts":1778363595,"op":{"op":"tombstone","ids":[1]},"checksum":"85756bc0f63468c238113f3c99ec99a078ec2c2e1c2e219464110a921105a791"}

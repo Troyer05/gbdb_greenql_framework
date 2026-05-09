@@ -2,12 +2,6 @@
 
 trait GBDB_IndexTrait {
 
-    /**
-     * Erzeugt einen sicheren Namen.
-     * @param string $plain Übergabewert.
-     * @param string $ns Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function nameToken(string $plain, string $ns = "g"): string {
         $plain = (string)$plain;
         $key = (string)Vars::cryptKey();
@@ -20,44 +14,22 @@ trait GBDB_IndexTrait {
         return "gb_" . $safe;
     }
 
-
-    /**
-     * Gibt die globale Instanz-Index-Datei zurück.
-     * @return string Rückgabewert.
-     */
     private static function instanceIndexFile(): string {
         return Vars::DB_PATH() . self::nameToken("__instance_index__", "meta") . Vars::data_extension();
     }
 
-
-    /**
-     * Gibt die Datenbank-Index-Datei einer Instanz zurück.
-     * @param string $instanceToken Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function dbIndexFileByInstanceToken(string $instanceToken): string {
         $dir = Vars::DB_PATH() . $instanceToken . "/";
+
         return $dir . self::nameToken("__db_index__", "meta") . Vars::data_extension();
     }
 
-
-    /**
-     * Gibt die Tabellen-Index-Datei einer Datenbank zurück.
-     * @param string $instanceToken Übergabewert.
-     * @param string $dbToken Übergabewert.
-     * @return string Rückgabewert.
-     */
     private static function tableIndexFileByTokens(string $instanceToken, string $dbToken): string {
         $dir = Vars::DB_PATH() . $instanceToken . "/" . $dbToken . "/";
+
         return $dir . self::nameToken("__table_index__", "meta") . Vars::data_extension();
     }
 
-
-    /**
-     * Liest eine Index-Datei.
-     * @param string $file Übergabewert.
-     * @return array Rückgabewert.
-     */
     private static function readIndex(string $file): array {
         $rows = self::ini($file);
 
@@ -85,18 +57,12 @@ trait GBDB_IndexTrait {
             if ($plain !== "" && $token !== "") {
                 $map[$plain] = $token;
             }
+
         }
 
         return $map;
     }
 
-
-    /**
-     * Schreibt eine Index-Datei.
-     * @param string $file Übergabewert.
-     * @param array $map Übergabewert.
-     * @return bool Rückgabewert.
-     */
     private static function writeIndex(string $file, array $map): bool {
         $db = [];
 
@@ -119,13 +85,6 @@ trait GBDB_IndexTrait {
         return self::writeTable($file, $db);
     }
 
-
-    /**
-     * Gibt den Token einer Instanz zurück.
-     * @param string $instancePlain Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return ?string Rückgabewert.
-     */
     private static function getInstanceToken(string $instancePlain, bool $ensure = false): ?string {
         $instancePlain = Format::cleanString($instancePlain);
 
@@ -171,13 +130,6 @@ trait GBDB_IndexTrait {
         return $token;
     }
 
-
-    /**
-     * Gibt den Token einer Datenbank zurück.
-     * @param string $dbPlain Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return ?string Rückgabewert.
-     */
     private static function getDbToken(string $dbPlain, bool $ensure = false): ?string {
         $instancePlain = self::instanceName();
         $dbPlain = Format::cleanString($dbPlain);
@@ -230,14 +182,6 @@ trait GBDB_IndexTrait {
         return $token;
     }
 
-
-    /**
-     * Gibt den Token einer Tabelle zurück.
-     * @param string $dbPlain Übergabewert.
-     * @param string $tablePlain Übergabewert.
-     * @param bool $ensure Übergabewert.
-     * @return ?string Rückgabewert.
-     */
     private static function getTableToken(string $dbPlain, string $tablePlain, bool $ensure = false): ?string {
         $instancePlain = self::instanceName();
         $dbPlain = Format::cleanString($dbPlain);
@@ -292,13 +236,6 @@ trait GBDB_IndexTrait {
         return $token;
     }
 
-
-    /**
-     * Entfernt eine Tabelle aus dem Tabellen-Index.
-     * @param string $dbPlain Übergabewert.
-     * @param string $tablePlain Übergabewert.
-     * @return void Rückgabewert.
-     */
     private static function dropTableFromIndex(string $dbPlain, string $tablePlain): void {
         if (!Vars::crypt_data()) {
             return;
@@ -318,14 +255,9 @@ trait GBDB_IndexTrait {
             unset($map[$tablePlain]);
             self::writeIndex($idxFile, $map);
         }
+
     }
 
-
-    /**
-     * Entfernt eine Datenbank aus dem Datenbank-Index.
-     * @param string $dbPlain Übergabewert.
-     * @return void Rückgabewert.
-     */
     private static function dropDatabaseFromIndex(string $dbPlain): void {
         if (!Vars::crypt_data()) {
             return;
@@ -344,14 +276,9 @@ trait GBDB_IndexTrait {
             unset($map[$dbPlain]);
             self::writeIndex($idxFile, $map);
         }
+
     }
 
-
-    /**
-     * Entfernt eine Instanz aus dem Instanz-Index.
-     * @param string $instancePlain Übergabewert.
-     * @return void Rückgabewert.
-     */
     private static function dropInstanceFromIndex(string $instancePlain): void {
         if (!Vars::crypt_data()) {
             return;
@@ -364,5 +291,7 @@ trait GBDB_IndexTrait {
             unset($map[$instancePlain]);
             self::writeIndex($idxFile, $map);
         }
+
     }
+
 }

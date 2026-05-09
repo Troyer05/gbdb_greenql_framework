@@ -1,0 +1,198 @@
+{
+    "name": "Pattern used by Auth-Class",
+    "active": true,
+    "description": "Auth-Class Pattern (core/auth.php)",
+    "structure": [
+        {
+            "base": "main",
+            "tables": [
+                {
+                    "name": "users",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "uid",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "username",
+                            "defaultValue": "Max M.",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "email",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "password",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "active",
+                            "defaultValue": true,
+                            "dataType": "bool"
+                        },
+                        {
+                            "rowName": "tfa",
+                            "defaultValue": false,
+                            "dataType": "bool"
+                        },
+                        {
+                            "rowName": "role",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "date",
+                            "defaultValue": 0,
+                            "dataType": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "meta",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "uid",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "firstname",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "lastname",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "adress",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "telephone",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "mobile",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "gender",
+                            "defaultValue": "",
+                            "dataType": "bool"
+                        },
+                        {
+                            "rowName": "image",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "text",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "base": "tokens",
+            "tables": [
+                {
+                    "name": "jwt",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "uid",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "token",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "exp",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "everify",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "uid",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "token",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "exp",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "pwf",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "uid",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "token",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "exp",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "2fa",
+                    "useDataTypes": true,
+                    "rows": [
+                        {
+                            "rowName": "uid",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        },
+                        {
+                            "rowName": "code",
+                            "defaultValue": "",
+                            "dataType": "int"
+                        },
+                        {
+                            "rowName": "exp",
+                            "defaultValue": "",
+                            "dataType": "string"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

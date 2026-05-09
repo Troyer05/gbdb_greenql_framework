@@ -46,6 +46,19 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles add foreign key.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param string $refDatabase value.
+     * @param string $refTable value.
+     * @param string $refColumn value.
+     * @param array $options value.
+     *
+     * @return bool result.
+     */
     public static function addForeignKey(
         string $database,
         string $table,
@@ -106,6 +119,19 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return $ok;
     }
 
+    /**
+     * handles define relation.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param string $refDatabase value.
+     * @param string $refTable value.
+     * @param string $refColumn value.
+     * @param array $options value.
+     *
+     * @return bool result.
+     */
     public static function defineRelation(
         string $database,
         string $table,
@@ -118,6 +144,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return self::addForeignKey($database, $table, $column, $refDatabase, $refTable, $refColumn, $options);
     }
 
+    /**
+     * handles drop relation.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $name value.
+     *
+     * @return bool result.
+     */
     public static function dropRelation(string $database, string $table, string $name): bool {
         $name = Format::cleanString($name);
 
@@ -184,6 +219,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return $relations;
     }
 
+    /**
+     * handles create relation index.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return bool result.
+     */
     public static function createRelationIndex(string $database, string $table, string $column): bool {
         if (method_exists(static::class, "createIndex")) {
             return (bool)self::createIndex($database, $table, $column, "single");
@@ -235,6 +279,7 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
             if (!$found) {
                 $errors[] = "foreign_key:" . (string)$relation["name"];
             }
+
         }
 
         return [
@@ -279,8 +324,11 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                         $relation["source_table"] = (string)$srcTable;
                         $incoming[] = $relation;
                     }
+
                 }
+
             }
+
         }
 
         return $incoming;
@@ -295,6 +343,7 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                 if (is_array($row) && array_key_exists($refColumn, $row)) {
                     $values[] = $row[$refColumn];
                 }
+
             }
 
             $values = array_values(array_unique($values, SORT_REGULAR));
@@ -347,6 +396,7 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                         [(string)$relation["local_column"] => null]
                     );
                 }
+
             }
 
             self::setInstance($old);
@@ -397,7 +447,9 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
 
                     self::setInstance($old);
                 }
+
             }
+
         }
 
         return ["ok" => true];
@@ -416,11 +468,20 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
             if (is_array($row) && array_key_exists($column, $row) && $row[$column] == $value) {
                 $out[] = $row;
             }
+
         }
 
         return $out;
     }
 
+    /**
+     * handles check orphans.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function checkOrphans(string $database, string $table): array {
         $rows = self::getData($database, $table);
 
@@ -443,6 +504,7 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                     "errors" => $check["errors"] ?? []
                 ];
             }
+
         }
 
         return [
@@ -452,6 +514,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles repair orphans.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $mode value.
+     *
+     * @return array result.
+     */
     public static function repairOrphans(string $database, string $table, string $mode = "report"): array {
         $mode = strtolower($mode);
         $report = self::checkOrphans($database, $table);
@@ -470,13 +541,16 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
 
                 $fixed++;
             }
-        } elseif ($mode === "delete") {
+
+        } else if ($mode === "delete") {
             foreach (($report["orphans"] ?? []) as $orphan) {
                 if (isset($orphan["id"])) {
                     self::deleteData($database, $table, "id", $orphan["id"]);
                     $fixed++;
                 }
+
             }
+
         }
 
         return [
@@ -488,6 +562,14 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles repair constraints.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function repairConstraints(string $database, string $table): array {
         $schemaRepair = self::repairSchema($database, $table);
 
@@ -504,6 +586,13 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles relation graph.
+     *
+     * @param null|string $database value.
+     *
+     * @return array result.
+     */
     public static function relationGraph(?string $database = null): array {
         $schema = self::readSchema();
         $instance = self::getInstance();
@@ -540,7 +629,9 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                         "relation" => $relation
                     ];
                 }
+
             }
+
         }
 
         return [
@@ -549,6 +640,13 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles relation docs.
+     *
+     * @param null|string $database value.
+     *
+     * @return string result.
+     */
     public static function relationDocs(?string $database = null): string {
         $graph = self::relationGraph($database);
         $md = "# GBDB Relation Docs\n\n";
@@ -562,6 +660,13 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return $md;
     }
 
+    /**
+     * handles check relations.
+     *
+     * @param null|string $database value.
+     *
+     * @return array result.
+     */
     public static function checkRelations(?string $database = null): array {
         $errors = [];
 
@@ -578,6 +683,7 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                     "orphans" => $check["orphans"] ?? []
                 ];
             }
+
         }
 
         return [
@@ -586,14 +692,31 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles uuid.
+     *
+     * @return string result.
+     */
     public static function uuid(): string {
         return self::uuidValue();
     }
 
+    /**
+     * handles ulid.
+     *
+     * @return string result.
+     */
     public static function ulid(): string {
         return self::ulidValue();
     }
 
+    /**
+     * handles snowflake id.
+     *
+     * @param int $node value.
+     *
+     * @return string result.
+     */
     public static function snowflakeId(int $node = 1): string {
         $node = max(0, min(1023, $node));
         $ms = (int)floor(microtime(true) * 1000) - 1704067200000;
@@ -606,6 +729,14 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return (string)$ms . str_pad((string)$node, 4, "0", STR_PAD_LEFT) . str_pad((string)$seq, 4, "0", STR_PAD_LEFT);
     }
 
+    /**
+     * handles distributed id.
+     *
+     * @param string $tenant value.
+     * @param string $shard value.
+     *
+     * @return string result.
+     */
     public static function distributedId(string $tenant = "", string $shard = ""): string {
         $tenant = Format::cleanString($tenant) ?: self::getInstance();
         $shard = Format::cleanString($shard) ?: "s0";
@@ -613,10 +744,31 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return $tenant . "_" . $shard . "_" . self::ulidValue();
     }
 
+    /**
+     * handles id exists.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param mixed $id value.
+     *
+     * @return bool result.
+     */
     public static function idExists(string $database, string $table, string $column, mixed $id): bool {
         return self::elementExists($database, $table, $column, $id);
     }
 
+    /**
+     * handles safe id.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param string $type value.
+     * @param array $options value.
+     *
+     * @return string result.
+     */
     public static function safeId(string $database, string $table, string $column = "uid", string $type = "ulid", array $options = []): string {
         for ($i = 0; $i < 50; $i++) {
             $id = match (strtolower($type)) {
@@ -629,11 +781,21 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
             if (!self::idExists($database, $table, $column, $id)) {
                 return $id;
             }
+
         }
 
         return self::distributedId((string)($options["tenant"] ?? ""), (string)($options["shard"] ?? "retry"));
     }
 
+    /**
+     * handles read generator.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $chunkSize value.
+     *
+     * @return generator result.
+     */
     public static function readGenerator(string $database, string $table, int $chunkSize = 500): Generator {
         $rows = self::getData($database, $table);
 
@@ -656,9 +818,21 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
             if ($i % $chunkSize === 0 && function_exists("gc_collect_cycles")) {
                 gc_collect_cycles();
             }
+
         }
+
     }
 
+    /**
+     * handles chunked rows.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $chunkSize value.
+     * @param null|callable $filter value.
+     *
+     * @return generator result.
+     */
     public static function chunkedRows(string $database, string $table, int $chunkSize = 500, ?callable $filter = null): Generator {
         $chunk = [];
 
@@ -673,13 +847,24 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
                 yield $chunk;
                 $chunk = [];
             }
+
         }
 
         if (!empty($chunk)) {
             yield $chunk;
         }
+
     }
 
+    /**
+     * handles open cursor.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $options value.
+     *
+     * @return array result.
+     */
     public static function openCursor(string $database, string $table, array $options = []): array {
         $token = "cur_" . bin2hex(random_bytes(16));
         $dir = Vars::DB_PATH() . ".temp/cursors/";
@@ -710,6 +895,13 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles fetch cursor.
+     *
+     * @param string $token value.
+     *
+     * @return array result.
+     */
     public static function fetchCursor(string $token): array {
         $token = preg_replace('/[^a-zA-Z0-9_\-]/', '', $token) ?? "";
         $file = Vars::DB_PATH() . ".temp/cursors/" . $token . ".json";
@@ -765,6 +957,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles get data guarded.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $maxRows value.
+     *
+     * @return array result.
+     */
     public static function getDataGuarded(string $database, string $table, int $maxRows = 10000): array {
         $meta = self::meta($database, $table);
 
@@ -784,6 +985,16 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles import streaming.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param iterable $rows value.
+     * @param int $chunkSize value.
+     *
+     * @return array result.
+     */
     public static function importStreaming(string $database, string $table, iterable $rows, int $chunkSize = 500): array {
         $inserted = 0;
         $failed = 0;
@@ -805,6 +1016,7 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
 
                 $buffer = [];
             }
+
         }
 
         foreach ($buffer as $r) {
@@ -818,6 +1030,16 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles export streaming.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param callable $writer value.
+     * @param int $chunkSize value.
+     *
+     * @return array result.
+     */
     public static function exportStreaming(string $database, string $table, callable $writer, int $chunkSize = 500): array {
         $chunks = 0;
         $rows = 0;
@@ -835,6 +1057,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles set max rows.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param int $maxRows value.
+     *
+     * @return bool result.
+     */
     public static function setMaxRows(string $database, string $table, int $maxRows): bool {
         $metaFile = self::metaFileForTable($database, $table, true);
         $meta = self::readMeta($metaFile);
@@ -843,6 +1074,17 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return self::writeMeta($metaFile, $meta);
     }
 
+    /**
+     * handles define partitioning.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $type value.
+     * @param string $column value.
+     * @param array $options value.
+     *
+     * @return bool result.
+     */
     public static function definePartitioning(string $database, string $table, string $type, string $column, array $options = []): bool {
         $type = strtolower(trim($type));
 
@@ -871,18 +1113,56 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return $ok;
     }
 
+    /**
+     * handles partition by date.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param string $format value.
+     *
+     * @return bool result.
+     */
     public static function partitionByDate(string $database, string $table, string $column, string $format = "Y-m"): bool {
         return self::definePartitioning($database, $table, "date", $column, ["format" => $format]);
     }
 
+    /**
+     * handles partition by user.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return bool result.
+     */
     public static function partitionByUser(string $database, string $table, string $column = "user_id"): bool {
         return self::definePartitioning($database, $table, "user", $column);
     }
 
+    /**
+     * handles partition by tenant.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     *
+     * @return bool result.
+     */
     public static function partitionByTenant(string $database, string $table, string $column = "tenant_id"): bool {
         return self::definePartitioning($database, $table, "tenant", $column);
     }
 
+    /**
+     * handles partition by hash.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param string $column value.
+     * @param int $buckets value.
+     *
+     * @return bool result.
+     */
     public static function partitionByHash(string $database, string $table, string $column, int $buckets = 16): bool {
         return self::definePartitioning($database, $table, "hash", $column, ["buckets" => max(1, $buckets)]);
     }
@@ -896,6 +1176,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         return self::writeMeta($metaFile, $meta);
     }
 
+    /**
+     * handles partition key.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $row value.
+     *
+     * @return string result.
+     */
     public static function partitionKey(string $database, string $table, array $row): string {
         $schema = self::schemaTable($database, $table);
         $p = is_array($schema["partitioning"] ?? null) ? $schema["partitioning"] : [];
@@ -946,6 +1235,14 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         self::writeMeta($metaFile, $meta);
     }
 
+    /**
+     * handles partition stats.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     *
+     * @return array result.
+     */
     public static function partitionStats(string $database, string $table): array {
         $meta = self::meta($database, $table);
 
@@ -955,6 +1252,15 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
         ];
     }
 
+    /**
+     * handles partition prune.
+     *
+     * @param string $database value.
+     * @param string $table value.
+     * @param array $criteria value.
+     *
+     * @return array result.
+     */
     public static function partitionPrune(string $database, string $table, array $criteria): array {
         $rows = self::getData($database, $table);
 
@@ -978,4 +1284,5 @@ trait GBDB_RelationsIdsStreamingPartitionTrait {
             fn($row) => is_array($row) && self::partitionKey($database, $table, $row) === $wanted
         ));
     }
+
 }

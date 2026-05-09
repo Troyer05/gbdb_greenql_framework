@@ -28,9 +28,11 @@ $result = null;
  * @param string $code PHP-Code.
  * @return string Rückgabewert.
  */
+
 function gbdbui_php_exec_prepare(string $code): string {
     $code = preg_replace('/^\s*<\?(php)?/i', '', $code) ?? $code;
     $code = preg_replace('/\?>\s*$/', '', $code) ?? $code;
+
     return $code;
 }
 
@@ -55,7 +57,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
 
         $result = ['ok' => $ok, 'output' => $output, 'error' => $error];
     }
+
 }
+
 ?>
 <!doctype html>
 <html lang="de">
@@ -127,35 +131,43 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
 
         const classForWord = word => {
             const lower = word.toLowerCase();
+
             for (const [name, set] of Object.entries(keywordGroups)) {
                 if (set.has(lower)) return 'tok-php-' + name;
             }
+
             return '';
         };
 
         const readQuoted = (src, start, quote) => {
             let i = start + 1;
+
             while (i < src.length) {
                 if (src[i] === '\\') {
                     i += 2;
                     continue;
                 }
+
                 if (src[i] === quote) {
                     i++;
                     break;
                 }
+
                 i++;
             }
+
             return i;
         };
 
         const readBlockComment = (src, start) => {
             const end = src.indexOf('*/', start + 2);
+
             return end === -1 ? src.length : end + 2;
         };
 
         const readLine = (src, start) => {
             const end = src.indexOf('\n', start);
+
             return end === -1 ? src.length : end;
         };
 
@@ -208,6 +220,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
                 }
 
                 const variable = rest.match(/^\$[A-Za-z_][A-Za-z0-9_]*/);
+
                 if (variable) {
                     out += '<span class="tok-var">' + escapeHtml(variable[0]) + '</span>';
                     i += variable[0].length;
@@ -215,6 +228,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
                 }
 
                 const staticMember = rest.match(/^::[A-Za-z_][A-Za-z0-9_]*/);
+
                 if (staticMember) {
                     out += '<span class="tok-field">' + escapeHtml(staticMember[0]) + '</span>';
                     i += staticMember[0].length;
@@ -222,6 +236,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
                 }
 
                 const objectMember = rest.match(/^-&gt;[A-Za-z_][A-Za-z0-9_]*/);
+
                 if (objectMember) {
                     out += '<span class="tok-field">' + escapeHtml(objectMember[0]) + '</span>';
                     i += objectMember[0].length;
@@ -229,6 +244,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
                 }
 
                 const word = rest.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+
                 if (word) {
                     const value = word[0];
                     const cls = classForWord(value);
@@ -248,6 +264,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
                 }
 
                 const number = rest.match(/^\d+(?:\.\d+)?/);
+
                 if (number) {
                     out += '<span class="tok-num">' + escapeHtml(number[0]) + '</span>';
                     i += number[0].length;
@@ -309,6 +326,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
                 }
 
                 paint();
+
                 return;
             }
 
@@ -340,6 +358,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
             const closesNext = /^\s*(?:\}|\]|\))/.test(after);
 
             if (opens) indent += '    ';
+
             if (closesNext) indent = indent.replace(/ {1,4}$/, '');
 
             textarea.setRangeText('\n' + indent, pos, textarea.selectionEnd, 'end');
@@ -364,6 +383,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
 
                 if (inBlockComment) {
                     out.push('    '.repeat(level) + trimmed);
+
                     if (trimmed.includes('*/')) inBlockComment = false;
                     continue;
                 }
@@ -399,9 +419,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['php_act
             textarea.addEventListener('input', paint);
             textarea.addEventListener('keydown', keyboardIndent);
             textarea.addEventListener('scroll', paint);
+
             if (indentBtn) indentBtn.addEventListener('click', formatPhp);
             paint();
         }
+
     })();
     </script>
 </body>

@@ -1,0 +1,18 @@
+{
+    "format": 4,
+    "updated_at": 1778364721,
+    "free_slots": [],
+    "tombstones": {
+        "1": {
+            "id": 1,
+            "deleted_at": 1778171939,
+            "reusable": true
+        },
+        "2": {
+            "id": 2,
+            "deleted_at": 1778362431,
+            "reusable": true
+        }
+    },
+    "reusable_slots": 2
+}

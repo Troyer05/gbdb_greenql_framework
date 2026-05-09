@@ -1,1008 +1,1129 @@
 <?php
 
 class Auth {
-    private const INSTANCE = "AUTH";
-    private const USER_TABLE_SCHEMA = ["uid", "username", "email", "password", "active", "rolle", "datum", "tfa"];
-    private const JWT_SCHEMA = ["uid", "token", "exp"];
-    private const MAIL_VERIFY_SCHEMA = ["uid", "token", "exp"];
-    private const PWF_SCHEMA = ["uid", "token", "exp"];
-    private const TFA_SCHEMA = ["uid", "code", "exp"];
-    private const USER_META_SCHEMA = ["uid", "vorname", "nachname", "telefon", "mobil", "adresse", "gender", "bio", "image"];
+    private const MAIL_VERIFY = "verify_mail.html";
+    private const MAIL_2FA = "tfa_mail.html";
+    private const COOKIE_NAME = "jwt";
+    private const KEYS = ["jwt", "pwf", "2fa", "everify"];
+
+    private static string $return_to_instance = "";
+    private static bool $srv = false;
 
     /**
-     * Liefert den Namen der Auth-Datenbank.
-     * @return string Rückgabewert.
+     * sets srv response mode
+     *
+     * @param bool $usage
+     * @return void
      */
-    private static function db(): string {
-        return Vars::AUTH()["main_db"];
+    public static function setSrvUsage(bool $usage): void {
+        self::$srv = $usage;
     }
 
-    /**
-     * Liefert den Namen des JWT-Cookies.
-     * @return string Rückgabewert.
-     */
-    private static function jwtCookie(): string {
-        return Vars::AUTH()["jwt_cookie_name"];
+    private static function instance(): string {
+        return Vars::auth_instance();
     }
 
-    /**
-     * Startet eine Session, falls noch keine aktiv ist.
-     * @return void Rückgabewert.
-     */
-    private static function session(): void {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-    }
+    private static function switchInstance(string $to = ""): void {
+        if ($to == "") {
+            GBDB::setInstance(self::instance());
 
-    /**
-     * Fügt neue Daten ein.
-     * @param string $table Tabelle.
-     * @param array $obj Daten.
-     * @return void Rückgabewert.
-     */
-    private static function insert(string $table, array $obj): void {
-        GBDB::insertData(self::db(), $table, $obj);
-    }
-
-    /**
-     * Bearbeitet bestehende Daten.
-     * @param string $table Tabelle.
-     * @param string $where Suchfeld.
-     * @param string $is Suchwert.
-     * @param array $obj Daten.
-     * @return void Rückgabewert.
-     */
-    private static function edit(string $table, string $where, string $is, array $obj): void {
-        GBDB::editData(self::db(), $table, $where, $is, $obj);
-    }
-
-    /**
-     * Leitet weiter, falls ein Ziel angegeben wurde.
-     * @param string $file Ziel.
-     * @return void Rückgabewert.
-     */
-    private static function redirect(string $file): void {
-        if ($file == "") {
             return;
         }
 
-        Ref::to($file);
-    }
+        if (self::$return_to_instance != "") {
+            GBDB::setInstance(self::$return_to_instance);
 
-    /**
-     * Prüft, ob ein Ablaufzeitpunkt abgelaufen ist.
-     * @param string $exp Ablaufzeit.
-     * @return bool Rückgabewert.
-     */
-    private static function expired(string $exp): bool {
-        return $exp == "" || time() >= (int)$exp;
-    }
-
-    /**
-     * Erzeugt einen Ablaufzeitpunkt für normale Tokens.
-     * @return string Rückgabewert.
-     */
-    private static function expires(): string {
-        $days = (int)(Vars::AUTH()["token_expires_days"] ?? 2);
-
-        if ($days <= 0) {
-            $days = 2;
-        }
-
-        return (string)(time() + ($days * 24 * 60 * 60));
-    }
-
-    /**
-     * Erzeugt einen Ablaufzeitpunkt für 2FA-Codes.
-     * @return string Rückgabewert.
-     */
-    private static function tfaExpires(): string {
-        $minutes = (int)(Vars::AUTH()["tfa_expires_minutes"] ?? 10);
-
-        if ($minutes <= 0) {
-            $minutes = 10;
-        }
-
-        return (string)(time() + ($minutes * 60));
-    }
-
-    /**
-     * Wandelt typische Werte in bool um.
-     * @param mixed $value Wert.
-     * @return bool Rückgabewert.
-     */
-    private static function boolValue(mixed $value): bool {
-        return $value === true || $value === 1 || $value === "1" || $value === "true" || $value === "yes" || $value === "on";
-    }
-
-    /**
-     * Prüft, ob ein Wert wie ein gespeicherter Hash aussieht.
-     * @param string $pass Passwort oder Hash.
-     * @return bool Rückgabewert.
-     */
-    private static function isHash(string $pass): bool {
-        return strlen($pass) == 64 && ctype_xdigit($pass);
-    }
-
-    /**
-     * Normalisiert ein Passwort für Speicherung.
-     * @param string $pass Passwort oder Hash.
-     * @return string Rückgabewert.
-     */
-    private static function passwordValue(string $pass): string {
-        if ($pass == "") {
-            return "";
-        }
-
-        if (self::isHash($pass)) {
-            return $pass;
-        }
-
-        return self::hashPass($pass);
-    }
-
-    /**
-     * Normalisiert ein GBDB-Ergebnis auf den ersten Datensatz.
-     * @param array $data Daten.
-     * @return array Rückgabewert.
-     */
-    private static function firstRow(array $data): array {
-        if (empty($data)) {
-            return [];
-        }
-
-        if (isset($data[0]) && is_array($data[0])) {
-            return $data[0];
-        }
-
-        return $data;
-    }
-
-    /**
-     * Liest eine HTML-Mail-Datei.
-     * @param string $path_with_file Datei.
-     * @return string Rückgabewert.
-     */
-    private static function readEmailHtmlFile(string $path_with_file): string {
-        if (!is_file($path_with_file)) {
-            throw new Exception("email html file not found: " . $path_with_file);
-        }
-
-        if (!is_readable($path_with_file)) {
-            throw new Exception("email html file not readable: " . $path_with_file);
-        }
-
-        $content = file_get_contents($path_with_file);
-
-        if ($content === false) {
-            throw new Exception("error reading email html file: " . $path_with_file);
-        }
-
-        return $content;
-    }
-
-    /**
-     * Holt Benutzer- und Meta-Daten zusammen.
-     * @param string $uid Benutzer-ID.
-     * @return array Rückgabewert.
-     */
-    private static function getUserFull(string $uid): array {
-        if ($uid == "") {
-            return [];
-        }
-
-        $user = self::firstRow(self::get("users", "uid", $uid));
-        $meta = self::firstRow(self::get("meta", "uid", $uid));
-
-        if (empty($user)) {
-            return [];
-        }
-
-        return array_merge($meta, $user);
-    }
-
-    /**
-     * Ersetzt Variablen in Mail-Vorlagen.
-     * @param string $content Inhalt.
-     * @param array $user Benutzer.
-     * @param array $extra Zusätzliche Werte.
-     * @return string Rückgabewert.
-     */
-    private static function replaceMailVars(string $content, array $user, array $extra = []): string {
-        $vars = array_merge([
-            "#vorname" => $user["vorname"] ?? "",
-            "#nachname" => $user["nachname"] ?? "",
-            "#username" => $user["username"] ?? "",
-            "#email" => $user["email"] ?? "",
-            "#telefon" => $user["telefon"] ?? "",
-            "#mobil" => $user["mobil"] ?? "",
-            "#adresse" => $user["adresse"] ?? "",
-            "#datum" => date("d.m.Y")
-        ], $extra);
-
-        return str_replace(array_keys($vars), array_values($vars), $content);
-    }
-
-    /**
-     * Versendet eine Mail über die Framework-Mailfunktion.
-     * @param array $mail Mail-Daten.
-     * @return void Rückgabewert.
-     */
-    private static function mail(array $mail): void {
-        Http::sendMail([
-            "to_name" => $mail["to_name"] ?? "",
-            "to_email" => $mail["to_email"] ?? "",
-            "from_name" => Vars::AUTH()["email_config"]["from_name"] ?? "",
-            "from_email" => Vars::AUTH()["email_config"]["from_email"] ?? "",
-            "subject" => $mail["subject"] ?? "",
-            "mail_content" => $mail["mail_content"] ?? ""
-        ]);
-    }
-
-    /**
-     * Versendet eine Verifizierungs-Mail.
-     * @param string $uid Benutzer-ID.
-     * @return void Rückgabewert.
-     */
-    private static function sendVerifyMail(string $uid): void {
-        $user = self::getUserFull($uid);
-
-        if (empty($user)) {
             return;
         }
 
-        $token = self::newVerifyToken();
-        $link = (Vars::AUTH()["email_config"]["verify_link"] ?? "") . $token;
-
-        self::insert("mailv", [
-            "uid" => $uid,
-            "token" => $token,
-            "exp" => self::expires()
-        ]);
-
-        $content = self::readEmailHtmlFile(Vars::AUTH()["email_config"]["mail_verify"]);
-        $content = self::replaceMailVars($content, $user, ["#link" => $link]);
-
-        self::mail([
-            "to_name" => trim(($user["vorname"] ?? "") . " " . ($user["nachname"] ?? "")),
-            "to_email" => $user["email"] ?? "",
-            "subject" => Vars::AUTH()["email_config"]["subject_verify"] ?? "E-Mail bestätigen",
-            "mail_content" => $content
-        ]);
+        if (Vars::main_instance() != "") {
+            GBDB::setInstance(Vars::main_instance());
+        }
     }
 
-    /**
-     * Versendet eine 2FA-Mail.
-     * @param string $uid Benutzer-ID.
-     * @return void Rückgabewert.
-     */
-    private static function send2FaMail(string $uid): void {
-        $user = self::getUserFull($uid);
-
-        if (empty($user)) {
-            return;
+    private static function cookie(string $do, string $value = ""): mixed {
+        if ($do == "get") {
+            return Cookie::get(self::COOKIE_NAME);
         }
 
-        foreach (self::get("tfa") as $t) {
-            if (($t["uid"] ?? "") == $uid) {
-                self::delete("tfa", "uid", $uid);
-                break;
+        if ($do == "exists") {
+            return Cookie::exists(self::COOKIE_NAME);
+        }
+
+        if ($do == "delete") {
+            Cookie::delete(self::COOKIE_NAME);
+
+            return true;
+        }
+
+        if ($do == "set") {
+            Cookie::set(self::COOKIE_NAME, $value);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static function ok(string $message = "", array $data = []): array {
+        return [
+            "ok" => true,
+            "message" => $message,
+            "data" => $data
+        ];
+    }
+
+    private static function error(string $message = "", array $data = []): array {
+        return [
+            "ok" => false,
+            "message" => $message,
+            "data" => $data
+        ];
+    }
+
+    private static function exp(): array {
+        return [
+            "jwt" => Vars::jwt_exp(),
+            "pwf" => Vars::pwf_exp(),
+            "2fa" => Vars::code_2fa_exp(),
+            "everify" => Vars::mail_verify_exp()
+        ];
+    }
+
+    private static function expires(string $key): string {
+        if (!in_array($key, self::KEYS, true)) {
+            throw new RuntimeException("exp-key " . $key . " not found in Auth::expires()");
+        }
+
+        $expiresInMinutes = (int)self::exp()[$key];
+
+        if ($expiresInMinutes <= 0) {
+            $expiresInMinutes = 1;
+        }
+
+        return date("Y-m-d H:i:s", time() + ($expiresInMinutes * 60));
+    }
+
+    private static function expired(string $exp, string $ref = "jwt"): bool {
+        if (!in_array($ref, self::KEYS, true)) {
+            return true;
+        }
+
+        if ($exp == "") {
+            return true;
+        }
+
+        $time = strtotime($exp);
+
+        if ($time === false) {
+            return true;
+        }
+
+        return $time < time();
+    }
+
+    private static function isWhitelisted(): bool {
+        $file = Vars::this_file();
+        $fileWithoutExt = pathinfo($file, PATHINFO_FILENAME);
+
+        foreach (Vars::auth_whitelist() as $entry) {
+            if ($entry == $file || $entry == $fileWithoutExt) {
+                return true;
             }
         }
 
-        $code = self::new2FaCode();
-
-        self::insert("tfa", [
-            "uid" => $uid,
-            "code" => $code,
-            "exp" => self::tfaExpires()
-        ]);
-
-        $content = self::readEmailHtmlFile(Vars::AUTH()["email_config"]["mail_2fa"]);
-        $content = self::replaceMailVars($content, $user, ["#code" => $code]);
-
-        self::mail([
-            "to_name" => trim(($user["vorname"] ?? "") . " " . ($user["nachname"] ?? "")),
-            "to_email" => $user["email"] ?? "",
-            "subject" => Vars::AUTH()["email_config"]["subject_2fa"] ?? "2FA Code",
-            "mail_content" => $content
-        ]);
+        return false;
     }
 
-    /**
-     * Erzeugt einen eindeutigen 2FA-Code.
-     * @return string Rückgabewert.
-     */
-    private static function new2FaCode(): string {
-        do {
-            $retry = false;
-            $code = (string)random_int(100000, 999999);
-
-            foreach (self::get("tfa") as $t) {
-                if (self::expired($t["exp"] ?? "")) {
-                    self::delete("tfa", "id", (string)($t["id"] ?? ""));
-                    continue;
-                }
-
-                if (($t["code"] ?? "") == $code) {
-                    $retry = true;
-                    break;
-                }
-            }
-        } while ($retry);
-
-        return $code;
+    private static function randomToken(int $bytes = 32): string {
+        return bin2hex(random_bytes($bytes));
     }
 
-    /**
-     * Erzeugt einen eindeutigen Mail-Verifizierungstoken.
-     * @return string Rückgabewert.
-     */
-    private static function newVerifyToken(): string {
+    private static function uniqueToken(string $table, string $column = "token", int $bytes = 32): string {
         do {
             $retry = false;
-            $token = bin2hex(random_bytes(32));
+            $token = self::randomToken($bytes);
+            $exists = GBDB::get("tokens", $table, true, $column, $token);
 
-            foreach (self::get("mailv") as $m) {
-                if (self::expired($m["exp"] ?? "")) {
-                    self::delete("mailv", "id", (string)($m["id"] ?? ""));
-                    continue;
-                }
-
-                if (($m["token"] ?? "") == $token) {
-                    $retry = true;
-                    break;
-                }
+            if (!empty($exists)) {
+                $retry = true;
             }
         } while ($retry);
 
         return $token;
     }
 
-    /**
-     * Erzeugt einen neuen JWT.
-     * @param string $uid Benutzer-ID.
-     * @return string Rückgabewert.
-     */
-    private static function newJWT(string $uid): string {
+    private static function uniqueUid(): string {
         do {
             $retry = false;
-            $jwt = bin2hex(random_bytes(32));
+            $uid = self::randomToken(32);
+            $user = GBDB::get("main", "users", true, "uid", $uid);
 
-            foreach (self::get("jwt") as $j) {
-                if (self::expired($j["exp"] ?? "")) {
-                    self::delete("jwt", "id", (string)($j["id"] ?? ""));
-                    continue;
-                }
-
-                if (($j["uid"] ?? "") == $uid) {
-                    self::delete("jwt", "uid", $uid);
-                    continue;
-                }
-
-                if (($j["token"] ?? "") == $jwt) {
-                    $retry = true;
-                    break;
-                }
-            }
-        } while ($retry);
-
-        self::insert("jwt", [
-            "uid" => $uid,
-            "token" => $jwt,
-            "exp" => self::expires()
-        ]);
-
-        return $jwt;
-    }
-
-    /**
-     * Erzeugt eine eindeutige Benutzer-ID.
-     * @return string Rückgabewert.
-     */
-    private static function newUID(): string {
-        do {
-            $retry = false;
-            $uid = bin2hex(random_bytes(32));
-
-            foreach (self::get("users") as $u) {
-                if (($u["uid"] ?? "") == $uid) {
-                    $retry = true;
-                    break;
-                }
+            if (!empty($user)) {
+                $retry = true;
             }
         } while ($retry);
 
         return $uid;
     }
 
-    /**
-     * Prüft, ob die aktuelle Datei ohne Login erreichbar ist.
-     * @return bool Rückgabewert.
-     */
-    private static function isNoLoginFile(): bool {
-        foreach ((Vars::AUTH()["files_no_login"] ?? []) as $file) {
-            if ($file != "" && str_contains(Vars::this_file(), $file)) {
-                return true;
-            }
+    private static function verifyPass(string $password, string $hash): bool {
+        if ($hash == "") {
+            return false;
         }
 
-        return false;
+        return password_verify($password, $hash);
+    }
+
+    private static function createSession(string $uid): string {
+        GBDB::delete("tokens", "jwt", "uid", $uid, true);
+
+        $jwt = self::uniqueToken("jwt", "token", 32);
+
+        $obj = [
+            "uid" => $uid,
+            "token" => $jwt,
+            "exp" => self::expires("jwt")
+        ];
+
+        GBDB::insert("tokens", "jwt", $obj);
+        self::cookie("set", $jwt);
+
+        return $jwt;
+    }
+
+    private static function readMailTemplate(string $file): string {
+        $file = dirname(__DIR__) . "/public/includes/mail_templates/" . $file;
+
+        if (!is_file($file)) {
+            return "";
+        }
+
+        $content = file_get_contents($file);
+
+        if ($content === false) {
+            return "";
+        }
+
+        return $content;
+    }
+
+    private static function cleanMailValue(mixed $value): string {
+        return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
+    }
+
+    private static function parse_email(string $mailAsHtml, string $linkOrCode, array $user, array $meta): string {
+        $safeLink = htmlspecialchars($linkOrCode, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
+
+        $replace = [
+            "<first_name/>" => self::cleanMailValue($meta["firstname"] ?? ""),
+            "<last_name/>" => self::cleanMailValue($meta["lastname"] ?? ""),
+            "<link/>" => '<a href="' . $safeLink . '">' . $safeLink . '</a>',
+            "<username/>" => self::cleanMailValue($user["username"] ?? ""),
+            "<email/>" => self::cleanMailValue($user["email"] ?? ""),
+            "<telephone/>" => self::cleanMailValue($meta["telephone"] ?? ""),
+            "<mobile/>" => self::cleanMailValue($meta["mobile"] ?? ""),
+            "<adress/>" => self::cleanMailValue($meta["adress"] ?? ""),
+            "<date/>" => date(Vars::date_format()),
+            "<now/>" => date("H:i"),
+            "<2fa_code/>" => self::cleanMailValue($linkOrCode)
+        ];
+
+        $tmp = str_replace(array_keys($replace), array_values($replace), $mailAsHtml);
+
+        if (Vars::auth_email_config()["nl2br"]) {
+            $tmp = nl2br($tmp);
+        }
+
+        return $tmp;
+    }
+
+    private static function delete_old_tokens(string $table): void {
+        if (!in_array($table, self::KEYS, true)) {
+            return;
+        }
+
+        $tokens = GBDB::get("tokens", $table);
+
+        if (empty($tokens) || !is_array($tokens)) {
+            return;
+        }
+
+        foreach ($tokens as $t) {
+            if (!is_array($t)) {
+                continue;
+            }
+
+            if (isset($t["id"]) && (int)$t["id"] === -1) {
+                continue;
+            }
+
+            if (!isset($t["exp"])) {
+                continue;
+            }
+
+            if (!self::expired((string)$t["exp"], $table)) {
+                continue;
+            }
+
+            if (isset($t["token"]) && $t["token"] != "") {
+                GBDB::delete("tokens", $table, "token", $t["token"], true);
+
+                continue;
+            }
+
+            if (isset($t["code"]) && $t["code"] != "") {
+                GBDB::delete("tokens", $table, "code", $t["code"], true);
+
+                continue;
+            }
+
+            if (isset($t["uid"]) && $t["uid"] != "") {
+                GBDB::delete("tokens", $table, "uid", $t["uid"], true);
+            }
+        }
+    }
+
+    private static function send_verify_email(array $user, array $meta): string {
+        if (Vars::verify_email()) {
+            GBDB::delete("tokens", "everify", "uid", $user["uid"], true);
+
+            $token = self::uniqueToken("everify", "token", 16);
+
+            $everify = [
+                "uid" => $user["uid"],
+                "token" => $token,
+                "exp" => self::expires("everify")
+            ];
+
+            $link = Vars::auth_email_config()["verify_link"] . $token;
+            $mail_as_html = self::readMailTemplate(self::MAIL_VERIFY);
+            $mail_content = self::parse_email($mail_as_html, $link, $user, $meta);
+
+            $mail_object = [
+                "to_name" => $user["username"],
+                "to_email" => $user["email"],
+                "from_name" => Vars::auth_email_config()["from_name"],
+                "from_email" => Vars::auth_email_config()["from_email"],
+                "subject" => Vars::auth_email_config()["subject_verify"],
+                "mail_content" => $mail_content
+            ];
+
+            Http::sendMail($mail_object);
+
+            GBDB::insert("tokens", "everify", $everify);
+            self::delete_old_tokens("everify");
+
+            return "Please verify your email to be able to login.";
+        }
+
+        return "You can now login.";
+    }
+
+    private static function start_2fa(string $uid): array {
+        $user = GBDB::get("main", "users", true, "uid", $uid);
+
+        if (empty($user)) {
+            return self::error("User not found.");
+        }
+
+        do {
+            $retry = false;
+            $code = (string)random_int(100000, 999999);
+            $cexists = GBDB::get("tokens", "2fa", true, "code", $code);
+
+            if (!empty($cexists)) {
+                $retry = true;
+            }
+        } while ($retry);
+
+        GBDB::delete("tokens", "2fa", "uid", $uid, true);
+
+        $obj = [
+            "uid" => $uid,
+            "code" => $code,
+            "exp" => self::expires("2fa")
+        ];
+
+        $mail_as_html = self::readMailTemplate(self::MAIL_2FA);
+        $meta = GBDB::get("main", "meta", true, "uid", $uid);
+
+        if (empty($meta)) {
+            $meta = [];
+        }
+
+        $mail_content = self::parse_email($mail_as_html, $code, $user, $meta);
+
+        $mail_object = [
+            "to_name" => $user["username"],
+            "to_email" => $user["email"],
+            "from_name" => Vars::auth_email_config()["from_name"],
+            "from_email" => Vars::auth_email_config()["from_email"],
+            "subject" => Vars::auth_email_config()["subject_2fa"],
+            "mail_content" => $mail_content
+        ];
+
+        Http::sendMail($mail_object);
+
+        GBDB::insert("tokens", "2fa", $obj);
+        self::delete_old_tokens("2fa");
+
+        if (!self::$srv) {
+            Ref::to(Vars::ref_2fa());
+        }
+
+        return self::ok("2FA code sent. Redirecting ....", [
+            "redirect" => Vars::ref_2fa()
+        ]);
     }
 
     /**
-     * Prüft die aktuelle lokale Authentifizierung.
-     * @return array Rückgabewert.
+     * sets the instance to return after auth operations
+     *
+     * @param string $instance
+     * @return void
      */
-    private static function auth(): array {
-        if (self::isNoLoginFile()) {
-            return [];
+    public static function setReturnInstance(string $instance): void {
+        self::$return_to_instance = $instance;
+    }
+
+    /**
+     * creates and initializes the auth structure
+     *
+     * @return array
+     */
+    public static function createStructure(): array {
+        if (!GBDB::existsInstance(self::instance())) {
+            GBDB::runScript("init_auth.gql", [
+                "instance" => self::instance(),
+                "username" => Vars::auth_root_user()["username"],
+                "email" => Vars::auth_root_user()["email"],
+                "password" => self::hashPass(Vars::auth_root_user()["password"]),
+                "active" => Vars::auth_root_user()["active"],
+                "2fa" => Vars::auth_root_user()["2fa"],
+                "role" => Vars::auth_root_user()["role"],
+                "firstname" => Vars::auth_root_user()["firstname"],
+                "lastname" => Vars::auth_root_user()["lastname"],
+                "adress" => Vars::auth_root_user()["adress"],
+                "telephone" => Vars::auth_root_user()["telephone"],
+                "mobile" => Vars::auth_root_user()["mobile"],
+                "gender" => Vars::auth_root_user()["gender"],
+                "image" => Vars::auth_root_user()["image"],
+                "text" => Vars::auth_root_user()["text"]
+            ]);
+
+            if (!self::$srv) {
+                Ref::this_file();
+
+                return [];
+            }
+
+            return self::ok("Structure created.");
         }
 
-        if (!Cookie::exists(self::jwtCookie())) {
-            self::logout();
-            return [];
-        }
-
-        $jwt = Cookie::get(self::jwtCookie());
-        $check = self::authByToken($jwt);
-
-        if ($check["ok"]) {
-            return $check["user"];
-        }
-
-        self::logout();
         return [];
     }
 
     /**
-     * Prüft auf doppelte Benutzer.
-     * @param string $username Benutzername.
-     * @param string $email E-Mail.
-     * @param string $uid Auszuschließende Benutzer-ID.
-     * @return string Rückgabewert.
+     * hashes a password in auth style
+     *
+     * @param string $password
+     * @return string
      */
-    private static function doubleUser(string $username, string $email, string $uid = ""): string {
-        foreach (self::get("users") as $u) {
-            if ($uid != "" && ($u["uid"] ?? "") == $uid) {
-                continue;
+    public static function hashPass(string $password): string {
+        return password_hash($password, PASSWORD_ARGON2ID);
+    }
+
+    /**
+     * logs out the current user
+     *
+     * @param string $error
+     * @return array
+     */
+    public static function logout(string $error = ""): array {
+        self::switchInstance();
+
+        $jwt = "";
+
+        if (self::cookie("exists")) {
+            $jwt = (string)self::cookie("get");
+
+            if ($jwt != "") {
+                GBDB::delete("tokens", "jwt", "token", $jwt, true);
             }
 
-            if ($username != "" && $username == ($u["username"] ?? "")) {
-                return "Benutzername bereits vergeben";
-            }
-
-            if ($email != "" && $email == ($u["email"] ?? "")) {
-                return "E-Mail Adresse bereits vorhanden";
-            }
+            self::cookie("delete");
         }
 
-        return "";
+        $err = "";
+
+        if ($error != "") {
+            $err = "?error=" . urlencode($error);
+        }
+
+        self::switchInstance("back");
+
+        if (!self::$srv) {
+            Ref::to(Vars::logout_ref() . $err);
+
+            return [];
+        }
+
+        return self::ok("User logged out", [
+            "jwt" => $jwt
+        ]);
     }
 
     /**
-     * Baut ein Benutzer-Objekt.
-     * @param string $uid Benutzer-ID.
-     * @param array $user_data Benutzerdaten.
-     * @param bool $new Neuer Benutzer.
-     * @return array Rückgabewert.
+     * initializes auth and returns the current user
+     *
+     * @return array
      */
-    private static function userObj(string $uid, array $user_data, bool $new = false): array {
-        $current = [];
+    public static function init(): array {
+        self::createStructure();
 
-        if (!$new) {
-            $current = self::firstRow(self::get("users", "uid", $uid));
+        if (self::isWhitelisted()) {
+            return [];
         }
 
-        $obj = [
-            "uid" => $uid,
-            "username" => $user_data["username"] ?? ($current["username"] ?? ""),
-            "email" => $user_data["email"] ?? ($current["email"] ?? ""),
-            "active" => $user_data["active"] ?? ($current["active"] ?? false),
-            "rolle" => $user_data["rolle"] ?? ($current["rolle"] ?? "user"),
-            "datum" => $current["datum"] ?? ($user_data["datum"] ?? date("d.m.Y")),
-            "tfa" => $user_data["tfa"] ?? ($current["tfa"] ?? false)
-        ];
+        if (!self::cookie("exists")) {
+            self::logout("jwt_not_found");
 
-        if ($new || array_key_exists("password", $user_data)) {
-            $obj["password"] = self::passwordValue((string)($user_data["password"] ?? ""));
-        } else {
-            $obj["password"] = $current["password"] ?? "";
+            exit;
         }
 
-        return $obj;
-    }
+        $jwt = (string)self::cookie("get");
 
-    /**
-     * Baut ein Meta-Objekt.
-     * @param string $uid Benutzer-ID.
-     * @param array $user_meta Meta-Daten.
-     * @param bool $new Neuer Benutzer.
-     * @return array Rückgabewert.
-     */
-    private static function metaObj(string $uid, array $user_meta, bool $new = false): array {
-        $current = [];
-
-        if (!$new) {
-            $current = self::firstRow(self::get("meta", "uid", $uid));
-        }
-
-        return [
-            "uid" => $uid,
-            "vorname" => $user_meta["vorname"] ?? ($current["vorname"] ?? ""),
-            "nachname" => $user_meta["nachname"] ?? ($current["nachname"] ?? ""),
-            "telefon" => $user_meta["telefon"] ?? ($current["telefon"] ?? ""),
-            "mobil" => $user_meta["mobil"] ?? ($current["mobil"] ?? ""),
-            "adresse" => $user_meta["adresse"] ?? ($current["adresse"] ?? ""),
-            "gender" => $user_meta["gender"] ?? ($current["gender"] ?? ""),
-            "bio" => $user_meta["bio"] ?? ($current["bio"] ?? ""),
-            "image" => $user_meta["image"] ?? ($current["image"] ?? "")
-        ];
-    }
-
-    /**
-     * Legt benötigte Tabellen an.
-     * @return void Rückgabewert.
-     */
-    private static function initTables(): void {
-        if (!in_array(self::db(), GBDB::listDBs(), true)) {
-            GBDB::createDatabase(self::db());
-        }
-
-        $tables = GBDB::listTables(self::db());
-
-        if (!in_array("users", $tables, true)) {
-            GBDB::createTable(self::db(), "users", self::USER_TABLE_SCHEMA);
-        }
-
-        if (!in_array("jwt", $tables, true)) {
-            GBDB::createTable(self::db(), "jwt", self::JWT_SCHEMA);
-        }
-
-        if (!in_array("mailv", $tables, true)) {
-            GBDB::createTable(self::db(), "mailv", self::MAIL_VERIFY_SCHEMA);
-        }
-
-        if (!in_array("pwf", $tables, true)) {
-            GBDB::createTable(self::db(), "pwf", self::PWF_SCHEMA);
-        }
-
-        if (!in_array("tfa", $tables, true)) {
-            GBDB::createTable(self::db(), "tfa", self::TFA_SCHEMA);
-        }
-
-        if (!in_array("meta", $tables, true)) {
-            GBDB::createTable(self::db(), "meta", self::USER_META_SCHEMA);
-        }
-
-        $rootUser = Vars::AUTH()["root_user"] ?? [];
-        $rootMeta = Vars::AUTH()["root_user_meta"] ?? [];
-
-        if (!empty($rootUser["uid"]) && empty(self::get("users", "uid", $rootUser["uid"]))) {
-            self::insert("users", self::userObj($rootUser["uid"], $rootUser, true));
-        }
-
-        if (!empty($rootMeta["uid"]) && empty(self::get("meta", "uid", $rootMeta["uid"]))) {
-            self::insert("meta", self::metaObj($rootMeta["uid"], $rootMeta, true));
-        }
-    }
-
-    /**
-     * Prüft Login-Daten zentral für lokalen und remote Login.
-     * @param string $username_or_email Benutzername oder E-Mail.
-     * @param string $plain_text_password Klartext-Passwort.
-     * @param bool $remote Remote-Modus.
-     * @return array Rückgabewert.
-     */
-    private static function loginCore(string $username_or_email, string $plain_text_password, bool $remote = false): array {
-        $err = "Keine Benutzer in der Datenbank";
-
-        foreach (self::get("users") as $u) {
-            $err = "Benutzer nicht gefunden";
-
-            if (($u["username"] ?? "") != $username_or_email && ($u["email"] ?? "") != $username_or_email) {
-                continue;
-            }
-
-            $err = "Passwort falsch";
-
-            if (($u["password"] ?? "") != self::hashPass($plain_text_password)) {
-                continue;
-            }
-
-            $err = "Benutzer deaktiviert oder E-Mail nicht verifiziert";
-
-            if (!self::boolValue($u["active"] ?? false)) {
-                continue;
-            }
-
-            if (self::boolValue($u["tfa"] ?? false)) {
-                self::send2FaMail($u["uid"]);
-
-                return [
-                    "ok" => false,
-                    "tfa" => true,
-                    "uid" => $u["uid"],
-                    "msg" => "2FA Code wurde versendet"
-                ];
-            }
-
-            $jwt = self::newJWT($u["uid"]);
-
-            return [
-                "ok" => true,
-                "tfa" => false,
-                "msg" => "Login erfolgreich",
-                "jwt" => $jwt,
-                "user" => self::getUserFull($u["uid"])
-            ];
-        }
-
-        return [
-            "ok" => false,
-            "tfa" => false,
-            "msg" => $err
-        ];
-    }
-
-    /**
-     * Initialisiert die Klasse und prüft lokale Authentifizierung.
-     * @return void Rückgabewert.
-     */
-    public static function init(): void {
-        self::initTables();
-        self::auth();
-    }
-
-    /**
-     * Initialisiert Auth ohne lokale Weiterleitung für Remote-Nutzung.
-     * @return array Rückgabewert.
-     */
-    public static function initRemote(): array {
-        self::initTables();
-
-        return [
-            "ok" => true,
-            "msg" => "Auth initialized"
-        ];
-    }
-
-    /**
-     * Erzeugt den Framework-Passwort-Hash.
-     * @param string $pass Passwort.
-     * @return string Rückgabewert.
-     */
-    public static function hashPass(string $pass): string {
-        return hash("sha256", hash("adler32", hash("md5", hash("sha512", $pass))));
-    }
-
-    /**
-     * Liest Daten aus der Auth-Datenbank.
-     * @param string $table Tabelle.
-     * @param string $where Suchfeld.
-     * @param string $is Suchwert.
-     * @return array Rückgabewert.
-     */
-    public static function get(string $table, string $where = "", string $is = ""): array {
-        if ($where == "") {
-            return GBDB::getData(self::db(), $table);
-        }
-
-        return GBDB::getData(self::db(), $table, true, $where, $is);
-    }
-
-    /**
-     * Löscht Daten aus der Auth-Datenbank.
-     * @param string $table Tabelle.
-     * @param string $where Suchfeld.
-     * @param string $is Suchwert.
-     * @return void Rückgabewert.
-     */
-    public static function delete(string $table, string $where, string $is): void {
-        if ($is == "") {
-            return;
-        }
-
-        GBDB::deleteData(self::db(), $table, $where, $is);
-    }
-
-    /**
-     * Beendet die aktuelle lokale Anmeldung.
-     * @return void Rückgabewert.
-     */
-    public static function logout(): void {
-        if (Cookie::exists(self::jwtCookie())) {
-            $jwt = Cookie::get(self::jwtCookie());
-
-            Cookie::delete(self::jwtCookie());
-            self::delete("jwt", "token", $jwt);
-        }
-
-        self::redirect(Vars::AUTH()["logout_file"] ?? "");
-    }
-
-    /**
-     * Prüft Login-Daten und startet die lokale Anmeldung.
-     * @param string $username_or_email Benutzername oder E-Mail.
-     * @param string $plain_text_password Klartext-Passwort.
-     * @return string Rückgabewert.
-     */
-    public static function login(string $username_or_email, string $plain_text_password): string {
-        $result = self::loginCore($username_or_email, $plain_text_password, false);
-
-        if (($result["tfa"] ?? false) === true) {
-            self::session();
-
-            $_SESSION["auth_tfa_uid"] = $result["uid"];
-            $_SESSION["auth_tfa_time"] = time();
-
-            return $result["msg"];
-        }
-
-        if ($result["ok"]) {
-            Cookie::set(self::jwtCookie(), $result["jwt"]);
-            self::redirect(Vars::AUTH()["login_file"] ?? "");
-            return "";
-        }
-
-        return $result["msg"];
-    }
-
-    /**
-     * Prüft Login-Daten für Remote/API/Srv-Nutzung.
-     * @param string $username_or_email Benutzername oder E-Mail.
-     * @param string $plain_text_password Klartext-Passwort.
-     * @return array Rückgabewert.
-     */
-    public static function loginRemote(string $username_or_email, string $plain_text_password): array {
-        return self::loginCore($username_or_email, $plain_text_password, true);
-    }
-
-    /**
-     * Schließt einen lokalen 2FA-Login ab.
-     * @param string $code 2FA-Code.
-     * @return string Rückgabewert.
-     */
-    public static function login2Fa(string $code): string {
-        self::session();
-
-        if (!isset($_SESSION["auth_tfa_uid"])) {
-            return "Keine offene 2FA Anmeldung gefunden";
-        }
-
-        $uid = $_SESSION["auth_tfa_uid"];
-        $result = self::login2FaRemote($uid, $code);
-
-        if ($result["ok"]) {
-            unset($_SESSION["auth_tfa_uid"]);
-            unset($_SESSION["auth_tfa_time"]);
-
-            Cookie::set(self::jwtCookie(), $result["jwt"]);
-            self::redirect(Vars::AUTH()["login_file"] ?? "");
-
-            return "";
-        }
-
-        return $result["msg"];
-    }
-
-    /**
-     * Schließt einen Remote/API/Srv-2FA-Login ab.
-     * @param string $uid Benutzer-ID.
-     * @param string $code 2FA-Code.
-     * @return array Rückgabewert.
-     */
-    public static function login2FaRemote(string $uid, string $code): array {
-        foreach (self::get("tfa") as $t) {
-            if (self::expired($t["exp"] ?? "")) {
-                self::delete("tfa", "id", (string)($t["id"] ?? ""));
-                continue;
-            }
-
-            if (($t["uid"] ?? "") == $uid && ($t["code"] ?? "") == $code) {
-                self::delete("tfa", "code", $code);
-
-                $jwt = self::newJWT($uid);
-
-                return [
-                    "ok" => true,
-                    "msg" => "Login erfolgreich",
-                    "jwt" => $jwt,
-                    "user" => self::getUserFull($uid)
-                ];
-            }
-        }
-
-        return [
-            "ok" => false,
-            "msg" => "2FA Code ungültig oder abgelaufen"
-        ];
-    }
-
-    /**
-     * Prüft einen JWT.
-     * @param string $jwt Token.
-     * @return array Rückgabewert.
-     */
-    public static function authByToken(string $jwt): array {
         if ($jwt == "") {
-            return [
-                "ok" => false,
-                "msg" => "Token fehlt"
-            ];
+            self::logout("jwt_not_found");
+
+            exit;
         }
 
-        foreach (self::get("jwt") as $j) {
-            if (self::expired($j["exp"] ?? "")) {
-                self::delete("jwt", "id", (string)($j["id"] ?? ""));
-                continue;
+        self::switchInstance();
+
+        $token = GBDB::get("tokens", "jwt", true, "token", $jwt);
+
+        if (empty($token)) {
+            self::switchInstance("back");
+            self::logout("session_terminated");
+
+            exit;
+        }
+
+        if (self::expired((string)$token["exp"], "jwt")) {
+            GBDB::delete("tokens", "jwt", "token", $jwt, true);
+            self::cookie("delete");
+            self::switchInstance("back");
+            self::logout("session_expired");
+
+            exit;
+        }
+
+        $user = GBDB::get("main", "users", true, "uid", $token["uid"]);
+
+        if (empty($user)) {
+            self::switchInstance("back");
+            self::logout("user_not_found");
+
+            exit;
+        }
+
+        if (!$user["active"]) {
+            self::switchInstance("back");
+            self::logout("user_deactivated");
+
+            exit;
+        }
+
+        self::switchInstance("back");
+
+        return $user;
+    }
+
+    /**
+     * logs in a user
+     *
+     * @param string $usernameOrEmail
+     * @param string $passwordPlainText
+     * @return array
+     */
+    public static function login(string $usernameOrEmail, string $passwordPlainText): array {
+        self::switchInstance();
+
+        self::delete_old_tokens("jwt");
+        self::delete_old_tokens("2fa");
+        self::delete_old_tokens("pwf");
+        self::delete_old_tokens("everify");
+
+        $usernameOrEmail = trim($usernameOrEmail);
+
+        if ($usernameOrEmail == "") {
+            self::switchInstance("back");
+
+            return self::error("Username or email is required.");
+        }
+
+        if ($passwordPlainText == "") {
+            self::switchInstance("back");
+
+            return self::error("Password is required.");
+        }
+
+        $user = GBDB::get("main", "users", true, "username", $usernameOrEmail);
+
+        if (empty($user)) {
+            $user = GBDB::get("main", "users", true, "email", $usernameOrEmail);
+
+            if (empty($user)) {
+                self::switchInstance("back");
+
+                return self::error("User with this username- or email not found.");
             }
+        }
 
-            if (($j["token"] ?? "") == $jwt) {
-                $user = self::getUserFull($j["uid"] ?? "");
+        if (!self::verifyPass($passwordPlainText, (string)$user["password"])) {
+            self::switchInstance("back");
 
-                if (empty($user)) {
-                    return [
-                        "ok" => false,
-                        "msg" => "Benutzer nicht gefunden"
-                    ];
-                }
+            return self::error("Password incorrect.");
+        }
 
-                return [
-                    "ok" => true,
-                    "user" => $user
-                ];
+        if (!$user["active"]) {
+            self::switchInstance("back");
+
+            return self::error("This user is deactivated.");
+        }
+
+        $verifyed = GBDB::get("tokens", "everify", true, "uid", $user["uid"]);
+
+        if (!empty($verifyed)) {
+            if (self::expired((string)$verifyed["exp"], "everify")) {
+                GBDB::delete("tokens", "everify", "uid", $user["uid"], true);
+            } else {
+                self::switchInstance("back");
+
+                return self::error("Users email is not verified.");
             }
+        }
+
+        if ($user["tfa"]) {
+            $result = self::start_2fa($user["uid"]);
+
+            self::switchInstance("back");
+
+            return $result;
+        }
+
+        self::createSession($user["uid"]);
+        self::switchInstance("back");
+
+        if (!self::$srv) {
+            Ref::to(Vars::after_login());
+
+            return [];
+        }
+
+        return self::ok("Logged in! Redirecting ....", [
+            "uid" => $user["uid"],
+            "username" => $user["username"],
+            "role" => $user["role"] ?? "",
+            "redirect" => Vars::after_login()
+        ]);
+    }
+
+    /**
+     * registers a new user
+     *
+     * @param string $username
+     * @param string $email
+     * @param string $passwordAsPlain
+     * @param bool $active
+     * @param bool $tfa
+     * @param string $role
+     * @param string $firstname
+     * @param string $lastname
+     * @param string $adress
+     * @param string $telephone
+     * @param string $mobile
+     * @param bool $gender
+     * @param string $image
+     * @return array
+     */
+    public static function user_registration(
+        string $username,
+        string $email,
+        string $passwordAsPlain,
+        bool $active = true,
+        bool $tfa = false,
+        string $role = "user",
+        string $firstname = "",
+        string $lastname = "",
+        string $adress = "",
+        string $telephone = "",
+        string $mobile = "",
+        bool $gender = false,
+        string $image = ""
+    ): array {
+        self::switchInstance();
+
+        $username = trim($username);
+        $email = trim($email);
+
+        if ($username == "") {
+            self::switchInstance("back");
+
+            return self::error("Username is required.");
+        }
+
+        if ($email == "") {
+            self::switchInstance("back");
+
+            return self::error("Email is required.");
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            self::switchInstance("back");
+
+            return self::error("Email is invalid.");
+        }
+
+        if ($passwordAsPlain == "") {
+            self::switchInstance("back");
+
+            return self::error("Password is required.");
+        }
+
+        $user = GBDB::get("main", "users", true, "username", $username);
+
+        if (!empty($user)) {
+            self::switchInstance("back");
+
+            return self::error("User with this username already exists.");
+        }
+
+        $user = GBDB::get("main", "users", true, "email", $email);
+
+        if (!empty($user)) {
+            self::switchInstance("back");
+
+            return self::error("User with this email already exists.");
+        }
+
+        $uid = self::uniqueUid();
+
+        $user = [
+            "uid" => $uid,
+            "username" => $username,
+            "email" => $email,
+            "password" => self::hashPass($passwordAsPlain),
+            "active" => $active,
+            "tfa" => $tfa,
+            "role" => $role,
+            "date" => date(Vars::date_format())
+        ];
+
+        $meta = [
+            "uid" => $uid,
+            "firstname" => $firstname,
+            "lastname" => $lastname,
+            "adress" => $adress,
+            "telephone" => $telephone,
+            "mobile" => $mobile,
+            "gender" => $gender,
+            "image" => $image,
+            "text" => ""
+        ];
+
+        GBDB::insert("main", "users", $user);
+        GBDB::insert("main", "meta", $meta);
+
+        $zusatz = self::send_verify_email($user, $meta);
+
+        self::switchInstance("back");
+
+        return self::ok("You are successfully registrated. " . $zusatz, [
+            "uid" => $uid,
+            "username" => $username,
+            "email" => $email,
+            "verify_email" => Vars::verify_email()
+        ]);
+    }
+
+    /**
+     * verifies an email through a token
+     *
+     * @param string $token
+     * @return array
+     */
+    public static function verify_email(string $token): array {
+        self::switchInstance();
+
+        $token = trim($token);
+        $uid = GBDB::get("tokens", "everify", true, "token", $token);
+
+        if (empty($uid)) {
+            self::switchInstance("back");
+
+            return self::error("Email verification failed.");
+        }
+
+        if (self::expired((string)$uid["exp"], "everify")) {
+            GBDB::delete("tokens", "everify", "token", $token, true);
+            self::switchInstance("back");
+
+            return self::error("Email verification token expired.");
+        }
+
+        $user = GBDB::get("main", "users", true, "uid", $uid["uid"]);
+
+        GBDB::delete("tokens", "everify", "uid", $uid["uid"], true);
+
+        if (empty($user)) {
+            self::switchInstance("back");
+
+            return self::error("Email verification failed.");
+        }
+
+        self::delete_old_tokens("everify");
+        self::switchInstance("back");
+
+        return self::ok("Email verified. You can now login.", [
+            "uid" => $uid["uid"]
+        ]);
+    }
+
+    /**
+     * verifies a 2fa code
+     *
+     * @param string|int $code
+     * @return array
+     */
+    public static function verify_2fa_code(string|int $code): array {
+        self::switchInstance();
+
+        $code = trim((string)$code);
+        $token = GBDB::get("tokens", "2fa", true, "code", $code);
+
+        if (empty($token)) {
+            self::switchInstance("back");
+
+            return self::error("2FA code is invalid.");
+        }
+
+        if (self::expired((string)$token["exp"], "2fa")) {
+            GBDB::delete("tokens", "2fa", "uid", $token["uid"], true);
+            self::switchInstance("back");
+
+            return self::error("2FA code expired.");
+        }
+
+        $user = GBDB::get("main", "users", true, "uid", $token["uid"]);
+
+        GBDB::delete("tokens", "2fa", "uid", $token["uid"], true);
+
+        if (empty($user)) {
+            self::switchInstance("back");
+
+            return self::error("User not found.");
+        }
+
+        if (!$user["active"]) {
+            self::switchInstance("back");
+
+            return self::error("This user is deactivated.");
+        }
+
+        self::createSession($user["uid"]);
+        self::delete_old_tokens("2fa");
+        self::switchInstance("back");
+
+        return self::ok("2FA verified. Logged in.", [
+            "uid" => $user["uid"],
+            "username" => $user["username"],
+            "role" => $user["role"] ?? ""
+        ]);
+    }
+
+    /**
+     * edits a user
+     *
+     * @param string $uid
+     * @param string $username
+     * @param string $email
+     * @param string $passwordAsPlain
+     * @param bool $active
+     * @param bool $tfa
+     * @param string $role
+     * @param string $firstname
+     * @param string $lastname
+     * @param string $adress
+     * @param string $telephone
+     * @param string $mobile
+     * @param bool $gender
+     * @param string $image
+     * @param string $text
+     * @return array
+     */
+    public static function edit_user(
+        string $uid,
+        string $username,
+        string $email,
+        string $passwordAsPlain,
+        bool $active = true,
+        bool $tfa = false,
+        string $role = "user",
+        string $firstname = "",
+        string $lastname = "",
+        string $adress = "",
+        string $telephone = "",
+        string $mobile = "",
+        bool $gender = false,
+        string $image = "",
+        string $text = ""
+    ): array {
+        self::switchInstance();
+
+        $uid = trim($uid);
+        $username = trim($username);
+        $email = trim($email);
+
+        $user = GBDB::get("main", "users", true, "uid", $uid);
+
+        if (empty($user)) {
+            self::switchInstance("back");
+
+            return self::error("User not found.");
+        }
+
+        if ($username == "") {
+            self::switchInstance("back");
+
+            return self::error("Username is required.");
+        }
+
+        if ($email == "") {
+            self::switchInstance("back");
+
+            return self::error("Email is required.");
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            self::switchInstance("back");
+
+            return self::error("Email is invalid.");
+        }
+
+        $sameUsername = GBDB::get("main", "users", true, "username", $username);
+
+        if (!empty($sameUsername) && (string)$sameUsername["uid"] !== $uid) {
+            self::switchInstance("back");
+
+            return self::error("User with this username already exists.");
+        }
+
+        $sameEmail = GBDB::get("main", "users", true, "email", $email);
+
+        if (!empty($sameEmail) && (string)$sameEmail["uid"] !== $uid) {
+            self::switchInstance("back");
+
+            return self::error("User with this email already exists.");
+        }
+
+        $userObj = [
+            "username" => $username,
+            "email" => $email,
+            "active" => $active,
+            "tfa" => $tfa,
+            "role" => $role
+        ];
+
+        if ($passwordAsPlain != "") {
+            $userObj["password"] = self::hashPass($passwordAsPlain);
+        }
+
+        $metaObj = [
+            "firstname" => $firstname,
+            "lastname" => $lastname,
+            "adress" => $adress,
+            "telephone" => $telephone,
+            "mobile" => $mobile,
+            "gender" => $gender,
+            "image" => $image,
+            "text" => $text
+        ];
+
+        $meta = GBDB::get("main", "meta", true, "uid", $uid);
+
+        GBDB::edit("main", "users", "uid", $uid, $userObj);
+
+        if (empty($meta)) {
+            $metaObj["uid"] = $uid;
+
+            GBDB::insert("main", "meta", $metaObj);
+        } else {
+            GBDB::edit("main", "meta", "uid", $uid, $metaObj);
+        }
+
+        self::switchInstance("back");
+
+        return self::ok("User updated", [
+            "uid" => $uid,
+            "main_data" => $userObj,
+            "meta_data" => $metaObj
+        ]);
+    }
+
+    /**
+     * deletes a user
+     *
+     * @param string $uid
+     * @return array
+     */
+    public static function delete_user(string $uid): array {
+        self::switchInstance();
+
+        $uid = trim($uid);
+        $user = GBDB::get("main", "users", true, "uid", $uid);
+
+        if (empty($user)) {
+            self::switchInstance("back");
+
+            return self::error("User not found.");
+        }
+
+        GBDB::delete("main", "users", "uid", $uid, true);
+        GBDB::delete("main", "meta", "uid", $uid, true);
+        GBDB::delete("tokens", "jwt", "uid", $uid, true);
+        GBDB::delete("tokens", "2fa", "uid", $uid, true);
+        GBDB::delete("tokens", "everify", "uid", $uid, true);
+        GBDB::delete("tokens", "pwf", "uid", $uid, true);
+
+        self::switchInstance("back");
+
+        return self::ok("User deleted", [
+            "uid" => $uid,
+            "deleted_at" => date("Y-m-d H:i:s")
+        ]);
+    }
+
+    /**
+     * returns a user by uid
+     *
+     * @param string $uid
+     * @return array
+     */
+    public static function get_user(string $uid): array {
+        self::switchInstance();
+
+        $uid = trim($uid);
+
+        if ($uid == "") {
+            self::switchInstance("back");
+
+            return [];
+        }
+
+        $user = GBDB::get("main", "users", true, "uid", $uid);
+        $meta = GBDB::get("main", "meta", true, "uid", $uid);
+
+        self::switchInstance("back");
+
+        if (empty($user)) {
+            return [];
+        }
+
+        if (empty($meta)) {
+            $meta = [];
         }
 
         return [
-            "ok" => false,
-            "msg" => "Token ungültig oder abgelaufen"
+            "main_data" => $user,
+            "meta_data" => $meta
         ];
     }
 
     /**
-     * Gibt den aktuell eingeloggten Benutzer zurück.
-     * @return array Rückgabewert.
+     * returns a user by jwt
+     *
+     * @param string $jwt
+     * @return array
      */
-    public static function me(): array {
-        if (!Cookie::exists(self::jwtCookie())) {
+    public static function get_jwt_user(string $jwt): array {
+        self::switchInstance();
+
+        $jwt = trim($jwt);
+
+        if ($jwt == "") {
+            self::switchInstance("back");
+
             return [];
         }
 
-        $check = self::authByToken(Cookie::get(self::jwtCookie()));
+        $token = GBDB::get("tokens", "jwt", true, "token", $jwt);
 
-        if (!$check["ok"]) {
+        if (empty($token)) {
+            self::switchInstance("back");
+
             return [];
         }
 
-        return $check["user"];
+        if (self::expired((string)$token["exp"], "jwt")) {
+            GBDB::delete("tokens", "jwt", "token", $jwt, true);
+
+            self::switchInstance("back");
+
+            return [];
+        }
+
+        $user = GBDB::get("main", "users", true, "uid", $token["uid"]);
+        $meta = GBDB::get("main", "meta", true, "uid", $token["uid"]);
+
+        self::switchInstance("back");
+
+        if (empty($user)) {
+            return [];
+        }
+
+        if (empty($meta)) {
+            $meta = [];
+        }
+
+        return [
+            "main_data" => $user,
+            "meta_data" => $meta
+        ];
     }
 
     /**
-     * Prüft, ob lokal ein Benutzer eingeloggt ist.
-     * @return bool Rückgabewert.
+     * returns users
+     *
+     * @param int $limit
+     * @return array
      */
-    public static function check(): bool {
-        return !empty(self::me());
-    }
+    public static function getUsers(int $limit = 10000000): array {
+        self::switchInstance();
 
-    /**
-     * Holt einen Benutzer anhand der UID.
-     * @param string $uid Benutzer-ID.
-     * @return array Rückgabewert.
-     */
-    public static function user(string $uid): array {
-        return self::getUserFull($uid);
-    }
-
-    /**
-     * Legt einen neuen Benutzer an.
-     * @param array $user_data Benutzerdaten.
-     * @param array $user_meta Meta-Daten.
-     * @param bool $is_this_register Registrierung.
-     * @return string Rückgabewert.
-     */
-    public static function newUser(array $user_data, array $user_meta, bool $is_this_register = false): string {
-        $err = self::doubleUser($user_data["username"] ?? "", $user_data["email"] ?? "");
-
-        if ($err != "") {
-            return $err;
+        if ($limit <= 0) {
+            $limit = 100;
         }
 
-        $uid = self::newUID();
-
-        self::insert("users", self::userObj($uid, $user_data, true));
-        self::insert("meta", self::metaObj($uid, $user_meta, true));
-
-        if ($is_this_register) {
-            self::sendVerifyMail($uid);
+        if ($limit > 10000000) {
+            $limit = 10000000;
         }
 
-        return "";
-    }
+        $gql = "
+        USE INSTANCE " . self::instance() . ";
+        ROOT main;
 
-    /**
-     * Bearbeitet einen Benutzer.
-     * @param string $uid Benutzer-ID.
-     * @param array $user_data Benutzerdaten.
-     * @param array $user_meta Meta-Daten.
-     * @return string Rückgabewert.
-     */
-    public static function editUser(string $uid, array $user_data, array $user_meta = []): string {
-        $current = self::firstRow(self::get("users", "uid", $uid));
+        PICK * FROM users LIMIT " . $limit . ";
+        ";
 
-        if (empty($current)) {
-            return "Benutzer nicht gefunden";
-        }
+        $users = GBDB::query($gql);
 
-        $username = $user_data["username"] ?? ($current["username"] ?? "");
-        $email = $user_data["email"] ?? ($current["email"] ?? "");
+        self::switchInstance("back");
 
-        $err = self::doubleUser($username, $email, $uid);
-
-        if ($err != "") {
-            return $err;
-        }
-
-        self::edit("users", "uid", $uid, self::userObj($uid, $user_data));
-
-        if (!empty($user_meta)) {
-            $meta = self::firstRow(self::get("meta", "uid", $uid));
-
-            if (empty($meta)) {
-                self::insert("meta", self::metaObj($uid, $user_meta, true));
-            } else {
-                self::edit("meta", "uid", $uid, self::metaObj($uid, $user_meta));
-            }
-        }
-
-        return "";
-    }
-
-    /**
-     * Verifiziert eine E-Mail-Adresse.
-     * @param string $token Token.
-     * @return bool Rückgabewert.
-     */
-    public static function verifyEmail(string $token): bool {
-        $ok = false;
-
-        foreach (self::get("mailv") as $m) {
-            if (self::expired($m["exp"] ?? "")) {
-                self::delete("mailv", "id", (string)($m["id"] ?? ""));
-                continue;
-            }
-
-            if (($m["token"] ?? "") == $token) {
-                self::delete("mailv", "token", $token);
-                self::editUser($m["uid"], ["active" => true]);
-                $ok = true;
-            }
-        }
-
-        return $ok;
-    }
-
-    /**
-     * Prüft einen 2FA-Code ohne Login-Abschluss.
-     * @param string $code 2FA-Code.
-     * @return bool Rückgabewert.
-     */
-    public static function verify2FaCode(string $code): bool {
-        foreach (self::get("tfa") as $t) {
-            if (self::expired($t["exp"] ?? "")) {
-                self::delete("tfa", "id", (string)($t["id"] ?? ""));
-                continue;
-            }
-
-            if (($t["code"] ?? "") == $code) {
-                self::delete("tfa", "code", $code);
-                return true;
-            }
-        }
-
-        return false;
+        return $users;
     }
 }
+
+?>

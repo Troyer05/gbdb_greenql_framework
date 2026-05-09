@@ -3,8 +3,10 @@
 class Json {
 
     /**
-     * Dekodiert einen JSON-String in ein PHP-Array oder Objekt
-     * Gibt bei Fehlern eine klare Fehlermeldung zurück.
+     * decodes json for php usage
+     * @param string $json
+     * @param bool $assoc
+     * @return mixed
      */
     public static function decode(string $json, bool $assoc = false): mixed {
         if ($json === "") {
@@ -15,6 +17,7 @@ class Json {
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             error_log("[Json::decode] JSON Error: " . json_last_error_msg());
+
             return null;
         }
 
@@ -22,8 +25,10 @@ class Json {
     }
 
     /**
-     * Kodiert ein PHP-Array oder Objekt in einen JSON-String.
-     * UTF-8 sicher, pretty-print im DEV Mode.
+     * decodes php object/array to valid json
+     * @param mixed $data
+     * @param bool $pretty
+     * @return bool|string
      */
     public static function encode(mixed $data, bool $pretty = false): string {
         $options = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
@@ -36,6 +41,7 @@ class Json {
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             error_log("[Json::encode] JSON Error: " . json_last_error_msg());
+
             return "";
         }
 
@@ -43,7 +49,9 @@ class Json {
     }
 
     /**
-     * Überprüft, ob eine Zeichenkette valides JSON ist.
+     * is it valid json?
+     * @param string $json
+     * @return bool
      */
     public static function isJson(string $json): bool {
         if (!is_string($json) || trim($json) === "") return false;
@@ -54,26 +62,32 @@ class Json {
     }
 
     /**
-     * Wendet eine Callback-Funktion auf jedes Element eines Arrays oder Objekts an.
+     * loops through a array/object
+     * @param mixed $data
+     * @param callable $callback
+     * @return mixed
      */
     public static function loop(mixed $data, callable $callback): mixed {
         if (is_array($data)) {
             foreach ($data as $key => $value) {
                 $data[$key] = $callback($value, $key);
             }
-        }
 
-        elseif (is_object($data)) {
+        } else if (is_object($data)) {
             foreach ($data as $key => $value) {
                 $data->$key = $callback($value, $key);
             }
+
         }
 
         return $data;
     }
 
     /**
-     * Überprüft, ob ein Schlüssel in Array/Objekt existiert.
+     * checks if a element exists
+     * @param mixed $data
+     * @param string $key
+     * @return bool
      */
     public static function elementExists(mixed $data, string $key): bool {
         if (is_array($data)) {
@@ -88,7 +102,10 @@ class Json {
     }
 
     /**
-     * Ruft ein Element aus Array/Objekt ab — oder null.
+     * gets an element of a json
+     * @param mixed $data
+     * @param string $key
+     * @return mixed
      */
     public static function getElement(mixed $data, string $key): mixed {
         if (!self::elementExists($data, $key)) {
@@ -97,4 +114,5 @@ class Json {
 
         return is_array($data) ? $data[$key] : $data->$key;
     }
+
 }

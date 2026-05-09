@@ -13,7 +13,9 @@ $envFile = $envDir . '/.greenql.env.php';
 $legacyEnvFile = $root . '/.ENV/.env.php';
 
 if (!is_dir($root)) @mkdir($root, 0777, true);
+
 if (!is_dir($envDir)) @mkdir($envDir, 0777, true);
+
 if (!is_file($envFile)) {
     if (is_file($legacyEnvFile)) {
         @copy($legacyEnvFile, $envFile);
@@ -22,13 +24,9 @@ if (!is_file($envFile)) {
     if (!is_file($envFile)) {
         @file_put_contents($envFile, "<?php\nreturn [\n    'api_auth' => '',\n];\n");
     }
+
 }
 
-/**
- * Bereinigt Script-Pfade relativ zum .scripts-Ordner.
- * @param string $path Pfad.
- * @return string Rückgabewert.
- */
 function gbdbui_script_rel(string $path): string {
     $path = str_replace('\\', '/', trim($path));
     $path = preg_replace('#/+#', '/', $path) ?: '';
@@ -37,6 +35,7 @@ function gbdbui_script_rel(string $path): string {
 
     foreach (explode('/', $path) as $part) {
         if ($part === '' || $part === '.') continue;
+
         if ($part === '..') continue;
         $parts[] = preg_replace('/[^a-zA-Z0-9_\-.]/', '_', $part);
     }
@@ -44,26 +43,16 @@ function gbdbui_script_rel(string $path): string {
     return implode('/', $parts);
 }
 
-/**
- * Prueft ob ein relativer Script-Pfad im Root liegt.
- * @param string $root Root.
- * @param string $rel Relativer Pfad.
- * @return string Rückgabewert.
- */
 function gbdbui_script_abs(string $root, string $rel): string {
     return rtrim($root, '/') . '/' . gbdbui_script_rel($rel);
 }
 
-/**
- * Erstellt eine lesbare Script-Baumstruktur.
- * @param string $root Root.
- * @return array Rückgabewert.
- */
 function gbdbui_script_tree(string $root): array {
     $items = [];
 
     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $f) {
         $rel = ltrim(str_replace($root, '', $f->getPathname()), '/');
+
         if ($rel === '' || $rel === '.ENV' || str_starts_with($rel, '.ENV/')) continue;
 
         $items[] = [
@@ -77,32 +66,25 @@ function gbdbui_script_tree(string $root): array {
 
     usort($items, function (array $a, array $b): int {
         if ($a['is_dir'] !== $b['is_dir']) return $a['is_dir'] ? -1 : 1;
+
         return strnatcasecmp((string)$a['rel'], (string)$b['rel']);
     });
 
     return $items;
 }
 
-/**
- * Rendert einen GreenQL-Output-Wert lesbar.
- * @param mixed $value Wert.
- * @return string Rueckgabewert.
- */
 function gbdbui_gql_output_text(mixed $value): string {
     if (is_array($value) || is_object($value)) {
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '';
     }
 
     if (is_bool($value)) return $value ? 'true' : 'false';
+
     if ($value === null) return 'null';
+
     return (string)$value;
 }
 
-/**
- * Extrahiert normale OUTPUT-Ausgaben aus einem GreenQL-Run.
- * @param array $runResult Ergebnis.
- * @return array Rueckgabewert.
- */
 function gbdbui_gql_outputs(array $runResult): array {
     $out = [];
 
@@ -149,40 +131,47 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $msg = 'Syntaxfehler, nicht gespeichert: ' . $lint;
                 $msgType = 'bad';
             }
-        } elseif ($act === 'save') {
+
+        } else if ($act === 'save') {
             if ($targetRel === '') $targetRel = ($dir !== '' ? $dir . '/' : '') . 'new_script.gql';
+
             if (!str_ends_with(strtolower($targetRel), '.gql')) $targetRel .= '.gql';
 
             $target = gbdbui_script_abs($root, $targetRel);
+
             if (!is_dir(dirname($target))) @mkdir(dirname($target), 0777, true);
             @file_put_contents($target, (string)($_POST['content'] ?? ''), LOCK_EX);
             $rel = $targetRel;
             $dir = dirname($rel) === '.' ? '' : dirname($rel);
             $msg = 'Script gespeichert.';
-        } elseif ($act === 'mkdir') {
+        } else if ($act === 'mkdir') {
             $name = gbdbui_script_rel((string)($_POST['name'] ?? ''));
+
             if ($name !== '') {
                 $folder = gbdbui_script_abs($root, $name);
+
                 if (!is_dir($folder) && @mkdir($folder, 0777, true)) {
                     $msg = 'Ordner erstellt.';
                     $dir = $name;
-                } elseif (is_dir($folder)) {
+                } else if (is_dir($folder)) {
                     $msg = 'Ordner existiert bereits.';
                     $dir = $name;
                 } else {
                     $msg = 'Ordner konnte nicht erstellt werden.';
                     $msgType = 'bad';
                 }
+
             } else {
                 $msg = 'Ungültiger Ordnername.';
                 $msgType = 'bad';
             }
-        } elseif ($act === 'run' && $targetRel !== '' && is_file($target)) {
+
+        } else if ($act === 'run' && $targetRel !== '' && is_file($target)) {
             $runResult = GBDB::runFile($target, []);
             $msg = !empty($runResult['ok']) ? 'Script ausgeführt.' : 'Script-Ausführung fehlgeschlagen.';
             $msgType = !empty($runResult['ok']) ? 'ok' : 'bad';
             $rel = $targetRel;
-        } elseif ($act === 'delete' && $targetRel !== '' && is_file($target)) {
+        } else if ($act === 'delete' && $targetRel !== '' && is_file($target)) {
             if (@unlink($target)) {
                 $msg = 'Datei gelöscht.';
                 $rel = '';
@@ -190,7 +179,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $msg = 'Datei konnte nicht gelöscht werden.';
                 $msgType = 'bad';
             }
-        } elseif ($act === 'rename' && $targetRel !== '' && is_file($target)) {
+
+        } else if ($act === 'rename' && $targetRel !== '' && is_file($target)) {
             $newRel = gbdbui_script_rel((string)($_POST['new_name'] ?? ''));
 
             if ($newRel === '') {
@@ -219,16 +209,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         $msg = 'Datei konnte nicht umbenannt werden.';
                         $msgType = 'bad';
                     }
+
                 }
+
             }
-        } elseif ($act === 'move' && $targetRel !== '' && is_file($target)) {
+
+        } else if ($act === 'move' && $targetRel !== '' && is_file($target)) {
             $moveDir = gbdbui_script_rel((string)($_POST['move_dir'] ?? ''));
             $newRel = ($moveDir !== '' ? $moveDir . '/' : '') . basename($targetRel);
             $newTarget = gbdbui_script_abs($root, $newRel);
 
             if ($newRel === $targetRel) {
                 $msg = 'Datei liegt bereits in diesem Ordner.';
-            } elseif (is_file($newTarget)) {
+            } else if (is_file($newTarget)) {
                 $msg = 'Im Zielordner existiert bereits eine Datei mit diesem Namen.';
                 $msgType = 'bad';
             } else {
@@ -244,10 +237,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     $msg = 'Datei konnte nicht verschoben werden.';
                     $msgType = 'bad';
                 }
+
             }
-        } elseif ($act === 'rmdir') {
+
+        } else if ($act === 'rmdir') {
             $name = gbdbui_script_rel((string)($_POST['dir'] ?? ''));
             $folder = gbdbui_script_abs($root, $name);
+
             if ($name !== '' && is_dir($folder) && @rmdir($folder)) {
                 $msg = 'Ordner gelöscht.';
                 $dir = dirname($name) === '.' ? '' : dirname($name);
@@ -255,8 +251,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $msg = 'Ordner konnte nur gelöscht werden, wenn er leer ist.';
                 $msgType = 'bad';
             }
+
         }
+
     }
+
 }
 
 $items = gbdbui_script_tree($root);
@@ -265,12 +264,14 @@ $dirs = array_values(array_filter($items, fn($i) => $i['is_dir']));
 
 $content = '';
 $editorFile = $rel;
+
 if ($editEnv) {
     $content = is_file($envFile) ? (string)file_get_contents($envFile) : '';
     $editorFile = '.config/.greenql.env.php';
-} elseif ($rel !== '' && is_file(gbdbui_script_abs($root, $rel))) {
+} else if ($rel !== '' && is_file(gbdbui_script_abs($root, $rel))) {
     $content = (string)file_get_contents(gbdbui_script_abs($root, $rel));
 }
+
 ?>
 <!doctype html>
 <html lang="de">

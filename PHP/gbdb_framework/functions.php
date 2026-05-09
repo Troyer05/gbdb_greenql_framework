@@ -17,7 +17,9 @@ function test_param(array $params, array $body) {
         if (!isset($body[$p])) {
             resp(400, "Param '$p' not provided.");
         }
+
     }
+
 }
 
 function general_auth($body, $method) {
@@ -39,7 +41,6 @@ function general_auth($body, $method) {
     delete_token($body["token"]);
 }
 
-
 function GBDB_DB_ARCH(): string {
     if (class_exists('Vars') && method_exists('Vars', 'db_arch')) {
         return Vars::db_arch();
@@ -47,6 +48,7 @@ function GBDB_DB_ARCH(): string {
 
     if (defined('DB_ARCH')) {
         $arch = strtoupper((string)DB_ARCH);
+
         return in_array($arch, ['GBDB', 'SQL'], true) ? $arch : 'GBDB';
     }
 
@@ -59,6 +61,7 @@ function DB_DRIVER(array $ctx = []): string {
 
     if ($instance !== "" && class_exists("GBDB")) {
         GBDB::setInstance($instance);
+
         return "GBDB";
     }
 
@@ -87,36 +90,43 @@ function DB_GET($db, $table, $filter = false, $where = "", $is = "", array $ctx 
     }
 
     $driver = DB_DRIVER($ctx);
+
     return $driver::getData($db, $table, $filter, $where, $is);
 }
 
 function DB_PUT($db, $table, $data, array $ctx = []) {
     if (GBDB_DB_ARCH() === "SQL") {
         SQL::connect();
+
         return SQL::insert($table, $data);
     }
 
     $driver = DB_DRIVER($ctx);
+
     return $driver::insertData($db, $table, $data);
 }
 
 function DB_EDIT($db, $table, $where, $is, $data, array $ctx = []) {
     if (GBDB_DB_ARCH() === "SQL") {
         SQL::connect();
+
         return SQL::update($table, $data, $where, $is);
     }
 
     $driver = DB_DRIVER($ctx);
+
     return $driver::editData($db, $table, $where, $is, $data);
 }
 
 function DB_DELETE($db, $table, $where, $is, array $ctx = []) {
     if (GBDB_DB_ARCH() === "SQL") {
         SQL::connect();
+
         return SQL::delete($table, $where, $is);
     }
 
     $driver = DB_DRIVER($ctx);
+
     return $driver::deleteData($db, $table, $where, $is);
 }
 
@@ -127,6 +137,7 @@ function DB_QUERY($query, array $ctx = [], array $params = []) {
 
     if (isset($ctx["instance"]) && (string)$ctx["instance"] !== "" && class_exists("GBDB")) {
         GBDB::setInstance((string)$ctx["instance"]);
+
         return GBDB::query($query, $ctx, $params);
     }
 
@@ -150,9 +161,11 @@ function _token_file_path(): string {
         $p = $b . str_replace(["/", "\\"], DIRECTORY_SEPARATOR, $rel);
 
         $dir = dirname($p);
+
         if (is_dir($dir) || @mkdir($dir, 0775, true)) {
             return $p;
         }
+
     }
 
     return str_replace(["/", "\\"], DIRECTORY_SEPARATOR, $rel);
@@ -217,6 +230,7 @@ function read_tokens(): array {
     }
 
     $fp = @fopen($file, "rb");
+
     if (!$fp) return [];
 
     try {
@@ -228,9 +242,11 @@ function read_tokens(): array {
     }
 
     $json = _tkn_decrypt((string)$raw);
+
     if ($json === "") return [];
 
     $arr = json_decode($json, true);
+
     if (!is_array($arr)) return [];
 
     $out = [];
@@ -245,7 +261,9 @@ function read_tokens(): array {
                     "created" => $created
                 ];
             }
+
         }
+
     }
 
     return $out;
@@ -260,6 +278,7 @@ function add_token(string $token): void {
     }
 
     $fp = @fopen($file, "c+");
+
     if (!$fp) {
         resp(500, "Token storage not writable.");
     }
@@ -279,12 +298,14 @@ function add_token(string $token): void {
         foreach ($arr as $row) {
             if (!is_array($row) || empty($row["token"])) continue;
             $created = isset($row["created"]) ? (int)$row["created"] : time();
+
             if ($created + 300 >= time()) {
                 $clean[] = [
                     "token" => (string)$row["token"],
                     "created" => $created
                 ];
             }
+
         }
 
         $clean[] = [
@@ -302,6 +323,7 @@ function add_token(string $token): void {
     } finally {
         fclose($fp);
     }
+
 }
 
 function test_token(string $token): bool {
@@ -309,6 +331,7 @@ function test_token(string $token): bool {
         if (($row["token"] ?? "") === $token) {
             return true;
         }
+
     }
 
     return false;
@@ -328,6 +351,7 @@ function delete_token(string $token): void {
         if (($row["token"] ?? "") !== $token) {
             $tokens[] = $row;
         }
+
     }
 
     @file_put_contents($file, _tkn_encrypt(json_encode($tokens, JSON_UNESCAPED_UNICODE)), LOCK_EX);

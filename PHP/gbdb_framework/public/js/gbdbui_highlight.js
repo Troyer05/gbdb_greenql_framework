@@ -171,16 +171,50 @@
         return out;
     };
 
+    const gqlBuiltinFunctions = new Set(["add_data", "api_fetch", "audit_export", "audit_search", "base_exists", "bases", "call_api", "call_procedure", "copy_data", "count_data", "cursor", "data_exists", "define_db_role", "define_db_user", "define_policy", "define_procedure", "define_trigger", "define_view", "delayed_job", "delete_base", "delete_column", "delete_data", "delete_data_recursive", "delete_instance", "delete_media", "delete_table", "drop_base", "drop_instance", "drop_table", "edit_data", "editdata", "encryption_config", "enqueue_job", "env", "erase_data", "evaluate_policy", "exec_pattern", "execpattern", "execpattern", "fetch", "fetch_api", "fetch_data", "fresh_id", "fulltext_search", "fusion", "get_bases", "get_data", "get_instances", "get_tables", "get_view", "hash", "hash_adler32", "hash_crc32", "hash_md5", "hash_pass", "hash_sha256", "hash_sha512", "install_social_patterns", "instance_exists", "instances", "last_added", "last_data", "len", "load_pattern", "loadpattern", "loadpattern", "lock_data", "mark_pii_field", "monitor", "move_data", "new_column", "now", "page", "param", "plant_data", "prune_column", "put_blob", "queue_stats", "random_int", "recover", "refresh_view", "rename_base", "rename_instance", "rename_table", "reshape_data", "retry_failed_jobs", "rotate_key", "seed_data", "set_data_readonly", "signed_url", "social_schema_patterns", "soft_delete", "spark_id", "sprout_column", "table_exists", "tables", "tally_data", "transfer_data", "transfer_data_delete", "uni_random", "user_data_delete", "user_data_export", "user_data_redact", "uuid"]);
+    const gqlTypes = new Set(["any", "arr", "array", "blob", "blob_reference", "bool", "boolean", "date", "datetime", "datetype", "decimal", "double", "email", "enum", "float", "int", "integer", "json", "map", "mixed", "number", "obj", "object", "str", "string", "text", "time", "timestamp", "timetype", "ulid", "url", "uuid", "var"]);
+    const gqlImplementedFunctions = new Set(["now", "param", "env", "len", "fusion", "uuid", "uni_random", "spark_id", "fresh_id", "random_int", "hash", "hash_sha256", "hash_sha512", "hash_md5", "hash_adler32", "hash_crc32", "hash_pass", "loadpattern", "loadpattern", "load_pattern", "execpattern", "execpattern", "exec_pattern", "fetch_api", "api_fetch", "call_api", "get_instances", "instances", "get_bases", "bases", "get_tables", "tables", "instance_exists", "base_exists", "table_exists", "data_exists", "get_data", "fetch_data", "fetch", "count_data", "tally_data", "last_added", "last_data", "add_data", "plant_data", "seed_data", "edit_data", "editdata", "reshape_data", "delete_data", "erase_data", "delete_data_recursive", "transfer_data", "copy_data", "transfer_data_delete", "move_data", "set_data_readonly", "lock_data", "new_column", "sprout_column", "delete_column", "prune_column", "delete_instance", "drop_instance", "delete_base", "drop_base", "delete_table", "drop_table", "rename_instance", "rename_base", "rename_table", "monitor", "recover", "page", "cursor", "fulltext_search"]);
+    const gqlIdentityFunctions = new Set(["now", "param", "env", "len", "fusion", "uuid", "uni_random", "spark_id", "fresh_id", "random_int"]);
+    const gqlPatternFunctions = new Set(["loadpattern", "loadpattern", "load_pattern", "execpattern", "execpattern", "exec_pattern"]);
+    const gqlHashFunctions = new Set(["hash", "hash_sha256", "hash_sha512", "hash_md5", "hash_adler32", "hash_crc32", "hash_pass"]);
+    const gqlApiFunctions = new Set(["fetch_api", "api_fetch", "call_api"]);
+    const gqlInstanceFunctions = new Set(["get_instances", "instances", "get_bases", "bases", "get_tables", "tables", "instance_exists", "base_exists", "table_exists", "data_exists"]);
+    const gqlDataFunctions = new Set(["get_data", "fetch_data", "fetch", "count_data", "tally_data", "last_added", "last_data", "add_data", "plant_data", "seed_data", "edit_data", "editdata", "reshape_data", "delete_data", "erase_data", "delete_data_recursive", "transfer_data", "copy_data", "transfer_data_delete", "move_data", "set_data_readonly", "lock_data"]);
+    const gqlSchemaFunctions = new Set(["new_column", "sprout_column", "delete_column", "prune_column", "delete_instance", "drop_instance", "delete_base", "drop_base", "delete_table", "drop_table", "rename_instance", "rename_base", "rename_table"]);
+    const gqlAdvancedFunctions = new Set(["monitor", "recover", "page", "cursor", "fulltext_search"]);
+    const gqlDeclaredOnlyFunctions = new Set(["enqueue_job", "delayed_job", "retry_failed_jobs", "queue_stats", "define_trigger", "define_view", "refresh_view", "get_view", "define_procedure", "call_procedure", "define_db_user", "define_db_role", "define_policy", "evaluate_policy", "audit_export", "audit_search", "user_data_export", "user_data_delete", "user_data_redact", "mark_pii_field", "encryption_config", "rotate_key", "put_blob", "signed_url", "delete_media", "install_social_patterns", "social_schema_patterns", "soft_delete"]);
+
+    const gqlBuiltinClass = value => {
+        const lower = String(value || '').toLowerCase();
+        if (gqlIdentityFunctions.has(lower)) return 'tok-identity-fn';
+        if (gqlPatternFunctions.has(lower)) return 'tok-pattern-fn';
+        if (gqlHashFunctions.has(lower)) return 'tok-hash-fn';
+        if (gqlApiFunctions.has(lower)) return 'tok-api-fn';
+        if (gqlInstanceFunctions.has(lower)) return 'tok-instance-fn';
+        if (gqlDataFunctions.has(lower)) return 'tok-data-fn';
+        if (gqlSchemaFunctions.has(lower)) return 'tok-schema-fn';
+        if (gqlAdvancedFunctions.has(lower)) return 'tok-advanced-fn';
+        if (gqlDeclaredOnlyFunctions.has(lower)) return 'tok-declared-only-fn';
+        return gqlImplementedFunctions.has(lower) ? 'tok-builtin-fn' : 'tok-declared-only-fn';
+    };
+
+    const isGqlBuiltinFunction = value => gqlBuiltinFunctions.has(String(value || '').toLowerCase());
+    const isGqlType = value => gqlTypes.has(String(value || '').toLowerCase().replace(/^:/, ''));
+
     const gqlKeywordGroups = {
-        tx: new Set(['BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'PITR']),
-        instance: new Set(['USE', 'INSTANCE', 'INSTANCES', 'FORCE']),
-        structure: new Set(['ROOT', 'BRANCH', 'GROW', 'DROP', 'ALTER', 'EDIT', 'TABLE', 'BASE', 'COLUMN', 'DEFAULT', 'DESCRIBE', 'PARTITION', 'PARTITIONS', 'TENANT', 'TENANTS']),
-        index: new Set(['INDEX', 'UNINDEX', 'REINDEX', 'INDEXES', 'SUGGEST', 'SUGGESTIONS', 'AUTO', 'SHARD', 'SHARDS', 'REPLICA', 'REPLICAS', 'REPLICATION', 'CLUSTER', 'NODE', 'NODES', 'QUORUM']),
-        constraint: new Set(['CONSTRAINT', 'CONSTRAINTS', 'UNIQUE', 'REQUIRED']),
-        control: new Set(['IF', 'ELSE', 'FOR', 'MAP_OBJECT', 'ERROR', 'MSG', 'TRUE', 'FALSE', 'NULL', 'BACK', 'OUTPUT', 'LOG', 'CLEAR_LOG', 'DELETE_LOG_FILE', 'END_PROC', 'EXISTS', 'JOB', 'QUEUE', 'TRIGGER', 'EVENT', 'VIEW', 'MATERIALIZED', 'PROCEDURE', 'PERMISSION', 'POLICY', 'AUDIT', 'GDPR', 'BLOB', 'MEDIA', 'SOCIAL', 'SOFT_DELETE', 'FANOUT', 'MODERATION']),
-        query: new Set(['PICK', 'FROM', 'WHERE', 'SORT', 'ASC', 'DESC', 'LIMIT', 'SIZE', 'SEARCH', 'AFTER', 'COLUMNS', 'MAX', 'SEED', 'WITH', 'RESHAPE', 'ERASE', 'DELETE', 'IN', 'CALL', 'F', 'SHOW', 'CLASS', 'C', 'PUB', 'PRIV', 'AS', 'READONLY', 'READ_ONLY', 'WRITABLE', 'ROLE', 'PRIMARY', 'WORKER', 'FULL', 'COLD', 'ENCRYPTED', 'REMOTE', 'OFFSITE']),
-        health: new Set(['PACK', 'PEEK', 'CHECK', 'HEALTH', 'REPAIR', 'SNAPSHOT', 'META', 'EXPLAIN', 'MONITOR', 'RECOVER', 'PAGE', 'CURSOR', 'FULLTEXT', 'STATS', 'ANALYZE', 'BACKUP', 'RESTORE', 'ROTATE', 'RETENTION', 'VERIFY', 'HEARTBEAT', 'PROMOTE', 'FAILOVER']),
-        decl: new Set(['DECLARE', 'DECALRE', 'DELACE', 'PARAM', 'HASH', 'HASH_SHA256', 'HASH_SHA512', 'HASH_MD5', 'HASH_ADLER32', 'HASH_CRC32', 'LEN', 'ENV', 'FILE', 'INCLUDE', 'RUN', 'NOW', 'SET_LOGFILE', 'FETCH_API', 'API_FETCH', 'CALL_API', 'UNI_RANDOM', 'SPARK_ID', 'FRESH_ID', 'GET_INSTANCES', 'GET_BASES', 'GET_TABLES', 'FETCH_DATA', 'GET_DATA', 'COUNT_DATA', 'LAST_ADDED', 'ADD_DATA', 'EDIT_DATA', 'DELETE_DATA', 'NEW_COLUMN', 'DELETE_COLUMN', 'ENQUEUE_JOB', 'DELAYED_JOB', 'RETRY_FAILED_JOBS', 'QUEUE_STATS', 'DEFINE_TRIGGER', 'DEFINE_VIEW', 'REFRESH_VIEW', 'GET_VIEW', 'DEFINE_PROCEDURE', 'CALL_PROCEDURE', 'DEFINE_DB_USER', 'DEFINE_DB_ROLE', 'DEFINE_POLICY', 'EVALUATE_POLICY', 'AUDIT_EXPORT', 'AUDIT_SEARCH', 'USER_DATA_EXPORT', 'USER_DATA_DELETE', 'USER_DATA_REDACT', 'MARK_PII_FIELD', 'ENCRYPTION_CONFIG', 'ROTATE_KEY', 'PUT_BLOB', 'SIGNED_URL', 'DELETE_MEDIA', 'INSTALL_SOCIAL_PATTERNS', 'SOCIAL_SCHEMA_PATTERNS'])
+        "tx": new Set(["BEGIN", "COMMIT", "ROLLBACK", "TRANSACTION", "SAVEPOINT", "TIMEOUT", "TX", "TO"]),
+        "instance": new Set(["USE", "INSTANCE", "INSTANCES", "ROOT", "FORCE"]),
+        "structure": new Set(["BRANCH", "GROW", "DROP", "ALTER", "EDIT", "TABLE", "TABLES", "BASE", "BASES", "COLUMN", "COLUMNS", "CREATE", "RENAME", "INTO", "DEFAULT", "DESCRIBE", "TYPE", "TYPES", "WITH", "WITHOUT", "SHOW"]),
+        "index": new Set(["INDEX", "UNINDEX", "REINDEX", "INDEXES", "SUGGEST", "SUGGESTIONS", "AUTO", "PRIMARY", "COMPOSITE", "SORTED", "RANGE", "PREFIX", "FULLTEXT"]),
+        "constraint": new Set(["CONSTRAINT", "CONSTRAINTS", "UNIQUE", "REQUIRED", "NULLABLE", "NOT", "NOT_NULL", "FOREIGN", "KEY", "REFERENCES", "CASCADE", "RESTRICT", "SET", "SET_NULL", "RELATIONS"]),
+        "control": new Set(["IF", "ELSE", "FOR", "MAP_OBJECT", "ERROR", "MSG", "TRUE", "FALSE", "NULL", "BACK", "OUTPUT", "LOG", "CLEAR_LOG", "DELETE_LOG_FILE", "END_PROC", "EXISTS", "AS"]),
+        "query": new Set(["PICK", "FROM", "WHERE", "SORT", "ASC", "DESC", "LIMIT", "OFFSET", "SIZE", "SEARCH", "AFTER", "MAX", "MIN", "AVG", "SUM", "COUNT", "DISTINCT", "GROUP", "BY", "HAVING", "SEED", "RESHAPE", "ERASE", "DELETE", "IN", "CALL", "ON", "AND", "OR", "QUERY", "OPTIONS", "PREPARE", "EXECUTE", "INNER", "LEFT", "JOIN"]),
+        "health": new Set(["PACK", "PEEK", "CHECK", "HEALTH", "REPAIR", "SNAPSHOT", "META", "EXPLAIN", "MONITOR", "RECOVER", "PAGE", "CURSOR", "STATS", "ANALYZE", "BACKUP", "MIGRATE", "MIGRATE_TO_V2"]),
+        "cluster": new Set(["PARTITION", "PARTITIONS", "SHARD", "SHARDS", "REGISTER", "CLUSTER", "HEARTBEAT", "NODE", "BUCKETS", "ROLE", "REPLICA", "WORKER", "READONLY", "READ_ONLY", "WRITABLE", "TENANT", "USER", "HASH", "DATE"]),
+        "security": new Set(["GRANT", "REVOKE", "PUBLIC", "PRIVATE", "PROTECTED", "STATIC", "PUB", "PRIV"]),
+        "oop": new Set(["F", "FUNCTION", "C", "CLASS"]),
+        "file": new Set(["FILE", "INCLUDE", "RUN", "EXEC", "PATTERN", "SET_LOGFILE"]),
+        "decl": new Set(["DECLARE", "DECALRE", "DELACE"])
     };
 
     const gqlClassForWord = word => {
@@ -207,6 +241,13 @@
                 continue;
             }
 
+            if (ch === '/' && next === '*') {
+                const j = readBlockComment(src, i);
+                out += '<span class="tok-comment">' + escapeHtml(src.slice(i, j)) + '</span>';
+                i = j;
+                continue;
+            }
+
             if ((ch === '-' && next === '-') || (ch === '/' && next === '/')) {
                 const j = readLine(src, i);
                 out += '<span class="tok-comment">' + escapeHtml(src.slice(i, j)) + '</span>';
@@ -216,23 +257,125 @@
 
             if (ch === '"' || ch === "'") {
                 const j = readQuoted(src, i, ch);
-                out += '<span class="tok-string">' + escapeHtml(src.slice(i, j)) + '</span>';
+                const token = src.slice(i, j);
+                const after = src.slice(j).match(/^\s*:/);
+                out += '<span class="' + (after ? 'tok-field' : 'tok-string') + '">' + escapeHtml(token) + '</span>';
                 i = j;
                 continue;
             }
 
-            const assign = rest.match(/^([$]?[A-Za-z_][A-Za-z0-9_]*)\s*(?==)/);
-            if (assign) {
-                const cls = assign[1].startsWith('_') || assign[1].startsWith('$') ? 'tok-var' : 'tok-field';
-                out += '<span class="' + cls + '">' + escapeHtml(assign[1]) + '</span>';
-                i += assign[1].length;
+            const fileCommand = rest.match(/^(FILE)(\s*\.\s*)(INCLUDE|RUN|BACK)\b/i);
+            if (fileCommand) {
+                out += '<span class="tok-file">' + escapeHtml(fileCommand[1]) + '</span>';
+                out += '<span class="tok-op">' + escapeHtml(fileCommand[2]) + '</span>';
+                out += '<span class="tok-file">' + escapeHtml(fileCommand[3]) + '</span>';
+                i += fileCommand[0].length;
+                continue;
+            }
+
+            const typedDeclare = rest.match(/^(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?(\s+)?(DECLARE|DECALRE|DELACE)(\s+)(:)([A-Za-z_][A-Za-z0-9_]*)(\s+)([$]?[A-Za-z_][A-Za-z0-9_]*)/i);
+            if (typedDeclare) {
+                if (typedDeclare[1]) out += '<span class="tok-security">' + escapeHtml(typedDeclare[1]) + '</span>' + escapeHtml(typedDeclare[2] || '');
+                out += '<span class="tok-decl">' + escapeHtml(typedDeclare[3]) + '</span>' + escapeHtml(typedDeclare[4]);
+                out += '<span class="tok-op">:</span><span class="tok-type">' + escapeHtml(typedDeclare[6]) + '</span>' + escapeHtml(typedDeclare[7]);
+                out += '<span class="tok-var-decl">' + escapeHtml(typedDeclare[8]) + '</span>';
+                i += typedDeclare[0].length;
+                continue;
+            }
+
+            const plainDeclare = rest.match(/^(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?(\s+)?(DECLARE|DECALRE|DELACE)(\s+)([$]?[A-Za-z_][A-Za-z0-9_]*)/i);
+            if (plainDeclare) {
+                if (plainDeclare[1]) out += '<span class="tok-security">' + escapeHtml(plainDeclare[1]) + '</span>' + escapeHtml(plainDeclare[2] || '');
+                out += '<span class="tok-decl">' + escapeHtml(plainDeclare[3]) + '</span>' + escapeHtml(plainDeclare[4]);
+                out += '<span class="tok-var-decl">' + escapeHtml(plainDeclare[5]) + '</span>';
+                i += plainDeclare[0].length;
+                continue;
+            }
+
+            const fnDecl = rest.match(/^(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?(\s+)?(F|FUNCTION)(\s+)([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()/i);
+            if (fnDecl) {
+                if (fnDecl[1]) out += '<span class="tok-security">' + escapeHtml(fnDecl[1]) + '</span>' + escapeHtml(fnDecl[2] || '');
+                out += '<span class="tok-fn-key">' + escapeHtml(fnDecl[3]) + '</span>' + escapeHtml(fnDecl[4]);
+                out += '<span class="tok-fndef">' + escapeHtml(fnDecl[5]) + '</span>';
+                i += fnDecl[0].length;
+                continue;
+            }
+
+            const classDecl = rest.match(/^(C|CLASS)(\s+)([A-Za-z_][A-Za-z0-9_]*)(?!\s*[/(])/i);
+            if (classDecl) {
+                out += '<span class="tok-class-key">' + escapeHtml(classDecl[1]) + '</span>' + escapeHtml(classDecl[2]);
+                out += '<span class="tok-class-name">' + escapeHtml(classDecl[3]) + '</span>';
+                i += classDecl[0].length;
+                continue;
+            }
+
+            const classCall = rest.match(/^(CALL|CLASS)(\s+)([A-Za-z_][A-Za-z0-9_]*)(\s*\/\s*)([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()/i);
+            if (classCall) {
+                out += '<span class="tok-query">' + escapeHtml(classCall[1]) + '</span>' + escapeHtml(classCall[2]);
+                out += '<span class="tok-class-name">' + escapeHtml(classCall[3]) + '</span>';
+                out += '<span class="tok-op">' + escapeHtml(classCall[4]) + '</span>';
+                out += '<span class="tok-user-fn">' + escapeHtml(classCall[5]) + '</span>';
+                i += classCall[0].length;
+                continue;
+            }
+
+            const srvBridge = rest.match(/^(srv|SRV|Srv|secondserver|Secondserver|SecondServer)(\s*\/\s*)([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()/);
+            if (srvBridge) {
+                out += '<span class="tok-srv-namespace">' + escapeHtml(srvBridge[1]) + '</span>';
+                out += '<span class="tok-op">' + escapeHtml(srvBridge[2]) + '</span>';
+                out += '<span class="tok-srv-fn">' + escapeHtml(srvBridge[3]) + '</span>';
+                i += srvBridge[0].length;
+                continue;
+            }
+
+            const thisMember = rest.match(/^this\s*\.\s*_[A-Za-z][A-Za-z0-9_]*/i);
+            if (thisMember) {
+                out += '<span class="tok-this">' + escapeHtml(thisMember[0]) + '</span>';
+                i += thisMember[0].length;
+                continue;
+            }
+
+            const optionalVar = rest.match(/^\?([$]?[A-Za-z_][A-Za-z0-9_]*)/);
+            if (optionalVar) {
+                out += '<span class="tok-op">?</span><span class="tok-var">' + escapeHtml(optionalVar[1]) + '</span>';
+                i += optionalVar[0].length;
                 continue;
             }
 
             const constVar = rest.match(/^\$[A-Za-z_][A-Za-z0-9_]*/);
             if (constVar) {
-                out += '<span class="tok-var">' + escapeHtml(constVar[0]) + '</span>';
+                out += '<span class="tok-const">' + escapeHtml(constVar[0]) + '</span>';
                 i += constVar[0].length;
+                continue;
+            }
+
+            const normalVar = rest.match(/^_[A-Za-z_][A-Za-z0-9_]*/);
+            if (normalVar) {
+                out += '<span class="tok-var">' + escapeHtml(normalVar[0]) + '</span>';
+                i += normalVar[0].length;
+                continue;
+            }
+
+            const typedColon = rest.match(/^:([A-Za-z_][A-Za-z0-9_]*)/);
+            if (typedColon && isGqlType(typedColon[1])) {
+                out += '<span class="tok-op">:</span><span class="tok-type">' + escapeHtml(typedColon[1]) + '</span>';
+                i += typedColon[0].length;
+                continue;
+            }
+
+            const bareObjectKey = rest.match(/^[A-Za-z_][A-Za-z0-9_\-]*(?=\s*:)/);
+            if (bareObjectKey) {
+                out += '<span class="tok-field">' + escapeHtml(bareObjectKey[0]) + '</span>';
+                i += bareObjectKey[0].length;
+                continue;
+            }
+
+            const qualifiedName = rest.match(/^([A-Za-z0-9_\-]+)(\.)([A-Za-z0-9_\-]+)\b/);
+            if (qualifiedName) {
+                out += '<span class="tok-field">' + escapeHtml(qualifiedName[1]) + '</span>';
+                out += '<span class="tok-op">.</span>';
+                out += '<span class="tok-field">' + escapeHtml(qualifiedName[3]) + '</span>';
+                i += qualifiedName[0].length;
                 continue;
             }
 
@@ -240,13 +383,16 @@
             if (word) {
                 const value = word[0];
                 const cls = gqlClassForWord(value);
+                const isCall = src.slice(i + value.length).match(/^\s*\(/);
 
-                if (value.startsWith('_')) {
-                    out += '<span class="tok-var">' + escapeHtml(value) + '</span>';
-                } else if (/^(true|false|null|now)$/i.test(value)) {
+                if (/^(true|false|null|NOW)$/i.test(value) && !isCall) {
                     out += '<span class="tok-lit">' + escapeHtml(value) + '</span>';
-                } else if (src.slice(i + value.length).match(/^\s*\(/)) {
-                    out += '<span class="tok-fn">' + escapeHtml(value) + '</span>';
+                } else if (isCall && isGqlBuiltinFunction(value)) {
+                    out += '<span class="' + gqlBuiltinClass(value) + '">' + escapeHtml(value) + '</span>';
+                } else if (isCall) {
+                    out += '<span class="tok-user-fn">' + escapeHtml(value) + '</span>';
+                } else if (isGqlType(value)) {
+                    out += '<span class="tok-type">' + escapeHtml(value) + '</span>';
                 } else {
                     out += cls ? '<span class="' + cls + '">' + escapeHtml(value) + '</span>' : escapeHtml(value);
                 }
@@ -255,10 +401,17 @@
                 continue;
             }
 
-            const number = rest.match(/^\d+(?:\.\d+)?/);
+            const number = rest.match(/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/i);
             if (number) {
                 out += '<span class="tok-num">' + escapeHtml(number[0]) + '</span>';
                 i += number[0].length;
+                continue;
+            }
+
+            const multiOp = rest.match(/^(?:==|!=|>=|<=|~=|&&|\|\||\+\+|--)/);
+            if (multiOp) {
+                out += '<span class="tok-op">' + escapeHtml(multiOp[0]) + '</span>';
+                i += multiOp[0].length;
                 continue;
             }
 
@@ -274,7 +427,7 @@
                 continue;
             }
 
-            if ('=!<>:+-.,'.includes(ch)) {
+            if ('=!<>:+-/%.,|&~'.includes(ch)) {
                 out += '<span class="tok-op">' + escapeHtml(ch) + '</span>';
                 i++;
                 continue;
@@ -292,7 +445,6 @@
 
         return out;
     };
-
 
     const highlightJson = src => {
         let out = '';
@@ -343,6 +495,8 @@
 
         return out;
     };
+
+    window.GBDBUIHighlight = { php: highlightPhp, gql: highlightGql, json: highlightJson };
 
     const currentIndent = line => (line.match(/^\s*/) || [''])[0];
 

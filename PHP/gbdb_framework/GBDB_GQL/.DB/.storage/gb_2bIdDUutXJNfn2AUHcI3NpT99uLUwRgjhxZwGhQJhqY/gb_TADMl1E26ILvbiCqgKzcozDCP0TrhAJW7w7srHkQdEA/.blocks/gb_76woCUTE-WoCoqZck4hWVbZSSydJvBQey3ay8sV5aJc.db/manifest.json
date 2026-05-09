@@ -1,0 +1,15 @@
+{
+    "format": 4,
+    "source": "gb_76woCUTE-WoCoqZck4hWVbZSSydJvBQey3ay8sV5aJc.db",
+    "created_at": 1778363587,
+    "reason": "create_table",
+    "page_size": 8192,
+    "chunk_rows": 128,
+    "chunks": [],
+    "pages": 0,
+    "rows": 0,
+    "header_checksum": "9c2509ce913041e5e66eaaf1f5b8bd4889b6f93bb39990c6b790f53781c506b4",
+    "data_checksum": "9c2509ce913041e5e66eaaf1f5b8bd4889b6f93bb39990c6b790f53781c506b4",
+    "page_checksums": [],
+    "checksum": "195682c8669516c6f28ece9876ca775fe3e6dc2583dbf6c1ee899851d5a91130"
+}
