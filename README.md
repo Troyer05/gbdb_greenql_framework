@@ -52,7 +52,7 @@ The framework includes:
 GBDB is useful for projects such as:
 
 - admin panels
-- small to medium web applications
+- web applications
 - API backends
 - file-based CMS systems
 - IoT dashboards
@@ -60,7 +60,7 @@ GBDB is useful for projects such as:
 - museum or kiosk systems
 - multi-instance applications
 - self-hosted applications
-- lightweight SaaS prototypes
+- SaaS
 
 It is especially useful when you want full control over the project folder and do not want to depend on an external database server.
 
@@ -68,26 +68,40 @@ It is especially useful when you want full control over the project folder and d
 
 ## Project Structure
 
-A typical framework project contains:
-
 ```txt
-assets/
-└── php/
-    └── inc/
-        ├── .config/
-        │   └── _config.inc.php
-        ├── gbdb_framework/
-        │   ├── ENV.php
-        │   ├── gbdb.php
-        │   ├── core/
-        │   ├── plugins/
-        │   ├── public/
-        │   ├── dev/
-        │   ├── backend.php
-        │   ├── public_api.php
-        │   └── docs/
-        ├── Srv.php
-        └── functions.php
-
-assets/
-└── DB/
+PHP/
++- gbdb_framework/
+   +- .config/
+   |  +- .framework.env.php
+   |  +- .greenql.env.php
+   |
+   +- .logs/
+   +- core/
+   +- GBDB_QL/
+   |  +- .DB/
+   |  |  +- .scripts/
+   |  |  +- .storage/
+   |  |  +- .system/
+   |  |  +- .temp/
+   |  |
+   |  +- db_engine/
+   |  +- greenql/
+   |
+   +- json/
+   |  +- mRoot/
+   |  |  +- license.json
+   |  |
+   |  +- patterns/
+   |
+   +- plugins/
+   +- public/
+   |  +- css/
+   |  +- includes/
+   |  +- mail_templates/
+   |  +- public_api/
+   |  |  +- public_api_modules
+   |  |
+   |  +- js/
+   |
+   +- SRV/
+      +- srv_modules/
