@@ -8,13 +8,15 @@
     const template = String(window.GBDB_ENTERPRISE_PATTERN_TEMPLATE || '{}');
     const patterns = window.GBDB_ENTERPRISE_PATTERNS || {};
 
-    if (!textarea) return;
+    if (!textarea) { return;
+    }
 
     const dispatchInput = () => textarea.dispatchEvent(new Event('input', { bubbles: true }));
 
     const setEditor = (value, label) => {
         textarea.value = value;
-        if (title) title.textContent = label || 'Pattern Editor';
+        if (title) { title.textContent = label || 'Pattern Editor';
+        }
         dispatchInput();
         textarea.focus();
     };
@@ -32,13 +34,16 @@
     document.querySelectorAll('.enterprise-edit-pattern').forEach(button => {
         button.addEventListener('click', () => {
             const name = String(button.dataset.pattern || '');
-            if (!name || !patterns[name]) return;
+            if (!name || !patterns[name]) { return;
+            }
             setEditor(String(patterns[name]), 'Bearbeiten: ' + name + '.json');
         });
     });
 
-    if (formatBtn) formatBtn.addEventListener('click', formatJson);
-    if (resetBtn) resetBtn.addEventListener('click', () => setEditor(template, 'Template: new_pattern'));
+    if (formatBtn) { formatBtn.addEventListener('click', formatJson);
+    }
+    if (resetBtn) { resetBtn.addEventListener('click', () => setEditor(template, 'Template: new_pattern'));
+    }
 
     textarea.addEventListener('blur', () => {
         try {

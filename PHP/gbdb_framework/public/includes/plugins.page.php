@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/greenql_v2_helper.php';
 
@@ -9,8 +11,9 @@ gbdbui_require_tool('plugins');
 $dir = dirname(__DIR__, 2) . '/plugins';
 $disabled = $dir . '/.disabled';
 
-if (!is_dir($disabled))
-    @mkdir($disabled, 0777, true);
+if (!is_dir($disabled)) {
+    @mkdir($disabled, 0750, true);
+}
 $msg = '';
 $msgType = 'ok';
 
@@ -32,7 +35,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $msg = 'Nur .php Plugins erlaubt.';
                 $msgType = 'bad';
             }
-
         }
 
         if ($act === 'delete' && $file !== '' && str_ends_with($file, '.php')) {
@@ -50,41 +52,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             @rename($disabled . '/' . $file, $dir . '/' . $file);
             $msg = 'Plugin aktiviert.';
         }
-
     }
-
 }
 
 $plugins = [];
 
-foreach (glob($dir . '/*.php') ?: [] as $f)
+foreach (GBDBFilesystem::glob($dir . '/*.php') ?: [] as $f) {
     $plugins[] = ['file' => basename($f), 'active' => true, 'size' => filesize($f)];
+}
 
-foreach (glob($disabled . '/*.php') ?: [] as $f)
+foreach (GBDBFilesystem::glob($disabled . '/*.php') ?: [] as $f) {
     $plugins[] = ['file' => basename($f), 'active' => false, 'size' => filesize($f)];
+}
 usort($plugins, fn($a, $b) => strcmp((string) $a['file'], (string) $b['file']));
 ?>
-<!doctype html>
-<html lang="de">
+<?php gbdbui_layout_start('plugins', 'Plugins', 'Plugins hochladen, löschen, aktivieren und deaktivieren.', ['eyebrow' => 'System']); ?>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Plugins</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('plugins'); ?>
-    <main class="gbdbui-wide">
-        <section class="gbdbui-hero">
-            <p class="gbdbui-kicker">Extend</p>
-            <h1>Plugins</h1>
-            <p>Plugins verwalten: Upload, löschen, aktivieren und deaktivieren.</p>
-        </section>
-
-        <?php if ($msg): ?>
-            <div class="gbdbui-flash <?= gbdbui_e($msgType) ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
+        <?php if ($msg) : ?>
+            <div class="gbdbui-flash <?= gbdbui_e($msgType) ?>"><?= gbdbui_e($msg) ?></div><?php
+        endif; ?>
 
         <section class="gbdbui-page-grid">
             <div class="gbdbui-panel span-4">
@@ -112,7 +98,7 @@ usort($plugins, fn($a, $b) => strcmp((string) $a['file'], (string) $b['file']));
                     </div>
                     <span class="gbdbui-pill">/plugins</span>
                 </div>
-                <?php if ($plugins): ?>
+                <?php if ($plugins) : ?>
                     <div class="gbdbui-table-wrap">
                         <table class="gbdbui-table">
                             <thead>
@@ -124,7 +110,7 @@ usort($plugins, fn($a, $b) => strcmp((string) $a['file'], (string) $b['file']));
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($plugins as $p): ?>
+                                <?php foreach ($plugins as $p) : ?>
                                     <tr>
                                         <td><code><?= gbdbui_e($p['file']) ?></code></td>
                                         <td><span
@@ -148,12 +134,10 @@ usort($plugins, fn($a, $b) => strcmp((string) $a['file'], (string) $b['file']));
                             </tbody>
                         </table>
                     </div>
-                <?php else: ?>
+                <?php else : ?>
                     <div class="gbdbui-empty">Keine Plugins installiert.</div>
                 <?php endif; ?>
             </div>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

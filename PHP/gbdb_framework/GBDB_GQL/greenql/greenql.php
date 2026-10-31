@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 require_once __DIR__ . "/greenql_base.trait.php";
@@ -25,8 +26,14 @@ class GreenQL {
     use GreenQL_ExecutionTrait;
 }
 
-if (!class_exists("GreenQLv2", false)) { class_alias("GreenQL", "GreenQLv2"); }
+if (!class_exists("GreenQLv2", false)) {
+    class_alias("GreenQL", "GreenQLv2");
+}
 
-if (!class_exists("GreenQLv3", false)) { class_alias("GreenQL", "GreenQLv3"); }
+if (!class_exists("GreenQLv3", false)) {
+    class_alias("GreenQL", "GreenQLv3");
+}
 
-if (!class_exists("GreenQLv4", false)) { class_alias("GreenQL", "GreenQLv4"); }
+if (!class_exists("GreenQLv4", false)) {
+    class_alias("GreenQL", "GreenQLv4");
+}

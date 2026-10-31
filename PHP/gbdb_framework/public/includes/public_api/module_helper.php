@@ -1,7 +1,7 @@
 <?php
 
 class PublicAPI_ModuleHelper {
-    public static function rights(array $actions, string $action = ""): array {
+    public static function rights(array $actions, string $action = "") :array {
         if ($action == "") {
             return self::allRights($actions);
         }
@@ -9,7 +9,7 @@ class PublicAPI_ModuleHelper {
         return $actions[$action]["rights"] ?? [];
     }
 
-    public static function handle(string $class, array $actions, string $action, array $body, array $keyData): mixed {
+    public static function handle(string $class, array $actions, string $action, array $body, array $keyData) :mixed {
         if (!isset($actions[$action])) {
             return [
                 "status" => 404,
@@ -26,10 +26,10 @@ class PublicAPI_ModuleHelper {
             ];
         }
 
-        return $class::{$method}($body, $keyData);
+        return $class:: {$method}($body, $keyData);
     }
 
-    public static function requireParams(array $body, array $params): bool|array {
+    public static function requireParams(array $body, array $params) :bool|array {
         foreach ($params as $param) {
             if (!isset($body[$param])) {
                 return [
@@ -42,11 +42,11 @@ class PublicAPI_ModuleHelper {
         return true;
     }
 
-    public static function str(array $body, string $key, string $default = ""): string {
+    public static function str(array $body, string $key, string $default = "") :string {
         return (string) ($body[$key] ?? $default);
     }
 
-    public static function arr(array $body, string $key): array {
+    public static function arr(array $body, string $key) :array {
         if (!isset($body[$key]) || !is_array($body[$key])) {
             return [];
         }
@@ -54,7 +54,7 @@ class PublicAPI_ModuleHelper {
         return $body[$key];
     }
 
-    public static function rightsFromKey(array $keyData): array {
+    public static function rightsFromKey(array $keyData) :array {
         $rights = $keyData["rights"] ?? [];
 
         if (is_array($rights)) {
@@ -87,7 +87,7 @@ class PublicAPI_ModuleHelper {
         return $out;
     }
 
-    private static function allRights(array $actions): array {
+    private static function allRights(array $actions) :array {
         $rights = [];
 
         foreach ($actions as $action) {

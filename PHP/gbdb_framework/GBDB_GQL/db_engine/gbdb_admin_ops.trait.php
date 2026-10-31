@@ -1,11 +1,12 @@
 <?php
+
 declare(strict_types=1);
 
 trait GBDB_AdminOpsTrait {
     private static array $adminCache = [];
     private static array $adminCacheTags = [];
 
-    private static function adminOpsDir(string $suffix = "", bool $ensure = true): string {
+    private static function adminOpsDir(string $suffix = "", bool $ensure = true) :string {
         $base = self::dbRootPath(".system/admin_ops", true);
         $path = rtrim($base, "/") . ($suffix !== "" ? "/" . ltrim($suffix, "/") : "");
 
@@ -15,15 +16,14 @@ trait GBDB_AdminOpsTrait {
                 : dirname($path);
 
             if (!is_dir($dir)) {
-                @mkdir($dir, 0777, true);
+                @mkdir($dir, 0750, true);
             }
-
         }
 
         return $path;
     }
 
-    private static function adminLog(string $type, array $payload = []): bool {
+    private static function adminLog(string $type, array $payload = []) :bool {
         $entry = [
             "type" => $type,
             "instance" => self::getInstance(),
@@ -37,7 +37,7 @@ trait GBDB_AdminOpsTrait {
             && GBDBStorage::appendLine(self::adminOpsDir("logs/" . date("Y-m") . ".log", true), $json . "\n");
     }
 
-    private static function eachAdminTable(callable $callback, bool $allInstances = true): array {
+    private static function eachAdminTable(callable $callback, bool $allInstances = true) :array {
         $old = self::getInstance();
         $instances = $allInstances ? self::listInstances() : [$old];
 
@@ -54,9 +54,7 @@ trait GBDB_AdminOpsTrait {
                 foreach (self::listTables((string)$db) as $table) {
                     $out[] = $callback((string)$db, (string)$table, (string)$instance);
                 }
-
             }
-
         }
 
         self::setInstance($old);
@@ -72,7 +70,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function repairMode(bool $repair = false, array $options = []): array {
+    public static function repairMode(bool $repair = false, array $options = []) :array {
         $tables = self::eachAdminTable(function ($db, $table, $instance) use ($repair) {
             $checks = self::tableDeepCheck($db, $table);
             $fixed = false;
@@ -96,7 +94,6 @@ trait GBDB_AdminOpsTrait {
             if (!($row["checks"]["ok"] ?? false) && empty($row["repaired"])) {
                 $ok = false;
             }
-
         }
 
         $report = [
@@ -125,7 +122,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function tableDeepCheck(string $database, string $table): array {
+    public static function tableDeepCheck(string $database, string $table) :array {
         $checks = [
             "table_checksum" => self::verifyTableChecksum($database, $table),
             "row_checksum" => self::prepareRowChecksums($database, $table, false),
@@ -144,7 +141,6 @@ trait GBDB_AdminOpsTrait {
             if (is_array($check) && ($check["ok"] ?? true) === false) {
                 $ok = false;
             }
-
         }
 
         return [
@@ -163,7 +159,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifyTableChecksum(string $database, string $table, bool $updateMeta = false): array {
+    public static function verifyTableChecksum(string $database, string $table, bool $updateMeta = false) :array {
         $file = self::makePath($database, $table);
 
         if (!is_file($file)) {
@@ -204,7 +200,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareRowChecksums(string $database, string $table, bool $write = true): array {
+    public static function prepareRowChecksums(string $database, string $table, bool $write = true) :array {
         $file = self::makePath($database, $table);
 
         if (!is_file($file)) {
@@ -238,7 +234,6 @@ trait GBDB_AdminOpsTrait {
             if (!$write && isset($known[$id]) && !hash_equals((string)$known[$id], $sum)) {
                 $mismatch[] = $id;
             }
-
         }
 
         if ($write) {
@@ -271,7 +266,7 @@ trait GBDB_AdminOpsTrait {
         string $table,
         int $chunkSize = 500,
         bool $write = true
-    ): array {
+    ) :array {
         $file = self::makePath($database, $table);
 
         if (!is_file($file)) {
@@ -305,7 +300,6 @@ trait GBDB_AdminOpsTrait {
             if (isset($known[$page]) && !hash_equals((string)$known[$page], $sum)) {
                 $mismatch[] = $page;
             }
-
         }
 
         if ($write) {
@@ -332,7 +326,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifyIndexConsistency(string $database, string $table): array {
+    public static function verifyIndexConsistency(string $database, string $table) :array {
         return self::verifyIndexes($database, $table);
     }
 
@@ -344,7 +338,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifyForeignKeys(string $database, string $table): array {
+    public static function verifyForeignKeys(string $database, string $table) :array {
         if (!method_exists(static::class, "checkOrphans")) {
             return [
                 "ok" => true,
@@ -368,7 +362,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifySchemaCheck(string $database, string $table): array {
+    public static function verifySchemaCheck(string $database, string $table) :array {
         $keys = self::getKeys($database, $table);
         $schema = self::schemaTable($database, $table);
         $schemaCols = array_keys(is_array($schema["columns"] ?? null) ? $schema["columns"] : []);
@@ -390,7 +384,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifyWalCheck(string $database, string $table): array {
+    public static function verifyWalCheck(string $database, string $table) :array {
         $wal = self::appendFileForTable($database, $table) . ".wal";
 
         if (!is_file($wal)) {
@@ -418,7 +412,6 @@ trait GBDB_AdminOpsTrait {
             if (!is_array($data) || (empty($data["op"]) && empty($data["type"]))) {
                 $bad++;
             }
-
         }
 
         return [
@@ -437,13 +430,13 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifyLockCheck(string $database = "", string $table = ""): array {
+    public static function verifyLockCheck(string $database = "", string $table = "") :array {
         $files = [];
 
         if ($database !== "" && $table !== "") {
             $files[] = self::lockFileForTable($database, $table);
         } else {
-            $files = glob(Vars::DB_PATH() . "**/*.lock") ?: [];
+            $files = GBDBFilesystem::glob(Vars::DB_PATH() . "**/*.lock") ?: [];
         }
 
         $stale = [];
@@ -452,7 +445,6 @@ trait GBDB_AdminOpsTrait {
             if (is_file($file) && (int)@filemtime($file) < time() - 3600 && (int)@filesize($file) === 0) {
                 $stale[] = $file;
             }
-
         }
 
         return [
@@ -471,7 +463,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function verifyStorageCheck(string $database, string $table): array {
+    public static function verifyStorageCheck(string $database, string $table) :array {
         $file = self::makePath($database, $table);
 
         return is_file($file)
@@ -490,7 +482,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function repairIndex(string $database, string $table): array {
+    public static function repairIndex(string $database, string $table) :array {
         return self::repairIndexes($database, $table);
     }
 
@@ -502,7 +494,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function repairWal(string $database, string $table): array {
+    public static function repairWal(string $database, string $table) :array {
         return self::recoverTable($database, $table);
     }
 
@@ -514,7 +506,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function repairRelations(string $database, string $table): array {
+    public static function repairRelations(string $database, string $table) :array {
         return method_exists(static::class, "repairConstraints")
             ? self::repairConstraints($database, $table)
             : [
@@ -531,7 +523,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function repairReport(string $database = "", string $table = ""): array {
+    public static function repairReport(string $database = "", string $table = "") :array {
         $r = $database !== "" && $table !== ""
             ? self::tableDeepCheck($database, $table)
             : self::repairMode(false);
@@ -550,7 +542,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function isolateCorruptFiles(string $database, string $table, string $reason = "manual"): array {
+    public static function isolateCorruptFiles(string $database, string $table, string $reason = "manual") :array {
         $check = self::tableDeepCheck($database, $table);
 
         if (($check["ok"] ?? false) === true) {
@@ -569,18 +561,17 @@ trait GBDB_AdminOpsTrait {
         );
 
         if (!is_dir($target)) {
-            @mkdir($target, 0777, true);
+            @mkdir($target, 0750, true);
         }
 
         $copied = [];
 
-        foreach (glob(dirname($file) . "/" . basename($file) . "*") ?: [] as $src) {
+        foreach (GBDBFilesystem::glob(dirname($file) . "/" . basename($file) . "*") ?: [] as $src) {
             $dst = $target . "/" . basename($src);
 
             if (@copy($src, $dst)) {
                 $copied[] = $dst;
             }
-
         }
 
         self::writeJsonConfig($target . "/reason.json", [
@@ -603,7 +594,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function manualRecoveryTools(): array {
+    public static function manualRecoveryTools() :array {
         return [
             "ok" => true,
             "tools" => [
@@ -625,7 +616,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoCompact(array|string $options = [], ?string $table = null): array {
+    public static function autoCompact(array|string $options = [], ?string $table = null) :array {
         if (is_string($options)) {
             $db = $options;
 
@@ -660,7 +651,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoVacuum(array $o = []): array {
+    public static function autoVacuum(array $o = []) :array {
         return self::autoMaintenance(array_replace(["vacuum" => true], $o));
     }
 
@@ -671,7 +662,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoAnalyze(array $o = []): array {
+    public static function autoAnalyze(array $o = []) :array {
         return self::refreshStats($o);
     }
 
@@ -682,7 +673,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoIndexRebuild(array $o = []): array {
+    public static function autoIndexRebuild(array $o = []) :array {
         return self::autoMaintenance(array_replace(["index_rebuild" => true], $o));
     }
 
@@ -693,7 +684,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoIndexRepair(array $o = []): array {
+    public static function autoIndexRepair(array $o = []) :array {
         return self::autoMaintenance(array_replace(["index_repair" => true], $o));
     }
 
@@ -704,7 +695,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoJournalCleanup(array $o = []): array {
+    public static function autoJournalCleanup(array $o = []) :array {
         return self::cleanupJournals((int)($o["days"] ?? 7));
     }
 
@@ -715,7 +706,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoVersionCleanup(array $o = []): array {
+    public static function autoVersionCleanup(array $o = []) :array {
         return self::cleanupVersions((int)($o["days"] ?? 30));
     }
 
@@ -726,7 +717,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoOrphanCleanup(array $o = []): array {
+    public static function autoOrphanCleanup(array $o = []) :array {
         return self::autoMaintenance(array_replace(["orphan_cleanup" => true], $o));
     }
 
@@ -737,7 +728,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoStatsRefresh(array $o = []): array {
+    public static function autoStatsRefresh(array $o = []) :array {
         return self::refreshStats($o);
     }
 
@@ -748,7 +739,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoMaintenance(array $options = []): array {
+    public static function autoMaintenance(array $options = []) :array {
         $done = self::eachAdminTable(function ($db, $table, $instance) use ($options) {
             $ops = [];
 
@@ -798,7 +789,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function maintenanceScheduler(array $config = []): array {
+    public static function maintenanceScheduler(array $config = []) :array {
         $cfg = array_replace([
             "enabled" => true,
             "interval_minutes" => 60,
@@ -827,7 +818,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function maintenanceWindow(?string $start = null, ?string $end = null): array {
+    public static function maintenanceWindow(?string $start = null, ?string $end = null) :array {
         $cfg = self::readJsonConfig(self::adminOpsDir("maintenance/scheduler.json", true), []);
         $w = is_array($cfg["window"] ?? null)
             ? $cfg["window"]
@@ -859,8 +850,8 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function maintenanceLogs(int $limit = 100): array {
-        $files = glob(self::adminOpsDir("logs", true) . "/*.log") ?: [];
+    public static function maintenanceLogs(int $limit = 100) :array {
+        $files = GBDBFilesystem::glob(self::adminOpsDir("logs", true) . "/*.log") ?: [];
         rsort($files, SORT_NATURAL);
 
         $rows = [];
@@ -876,9 +867,7 @@ trait GBDB_AdminOpsTrait {
                 if (count($rows) >= $limit) {
                     break 2;
                 }
-
             }
-
         }
 
         return [
@@ -893,7 +882,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function maintenanceCli(): array {
+    public static function maintenanceCli() :array {
         return self::storeSystemPlan("maintenance_cli", [
             "type" => "maintenance_cli",
             "commands" => [
@@ -913,7 +902,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function maintenanceUi(): array {
+    public static function maintenanceUi() :array {
         return self::storeSystemPlan("maintenance_ui", [
             "type" => "maintenance_ui",
             "pages" => [
@@ -943,7 +932,7 @@ trait GBDB_AdminOpsTrait {
         string $table,
         string $column = "created_at",
         int $days = 365
-    ): array {
+    ) :array {
         $rows = self::getData($database, $table);
         $limit = time() - max(1, $days) * 86400;
         $deleted = 0;
@@ -960,7 +949,6 @@ trait GBDB_AdminOpsTrait {
             if ($ts > 0 && $ts < $limit && self::deleteData($database, $table, "id", $row["id"])) {
                 $deleted++;
             }
-
         }
 
         return [
@@ -978,7 +966,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function autoBackup(array $o = []): array {
+    public static function autoBackup(array $o = []) :array {
         return self::fullBackup((string)($o["target"] ?? ""));
     }
 
@@ -989,7 +977,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function dbHealth(bool $allInstances = true): array {
+    public static function dbHealth(bool $allInstances = true) :array {
         $r = self::repairMode(false, ["all_instances" => $allInstances]);
 
         return [
@@ -1007,7 +995,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function tableStats(string $database, string $table): array {
+    public static function tableStats(string $database, string $table) :array {
         $h = self::health($database, $table);
 
         return [
@@ -1028,7 +1016,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function indexStats(string $database, string $table): array {
+    public static function indexStats(string $database, string $table) :array {
         $v = self::verifyIndexes($database, $table);
 
         return [
@@ -1044,7 +1032,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function queryStats(): array {
+    public static function queryStats() :array {
         return self::readJsonConfig(self::adminOpsDir("metrics/query_stats.json", true), ["queries" => 0]);
     }
 
@@ -1056,7 +1044,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function walStats(string $database, string $table): array {
+    public static function walStats(string $database, string $table) :array {
         return self::verifyWalCheck($database, $table);
     }
 
@@ -1065,7 +1053,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function replicationStats(): array {
+    public static function replicationStats() :array {
         return method_exists(static::class, "replicaLag")
             ? self::replicaLag()
             : [
@@ -1079,8 +1067,8 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function backupStats(): array {
-        $dirs = glob(self::dbRootPath(".backups/*/*"), GLOB_ONLYDIR) ?: [];
+    public static function backupStats() :array {
+        $dirs = GBDBFilesystem::glob(self::dbRootPath(".backups/*/*"), GLOB_ONLYDIR) ?: [];
 
         return [
             "ok" => true,
@@ -1097,7 +1085,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function errorLog(string $message = "", array $context = []): array {
+    public static function errorLog(string $message = "", array $context = []) :array {
         if ($message !== "") {
             self::adminLog("error", [
                 "message" => $message,
@@ -1116,7 +1104,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function auditLog(string $action = "", array $payload = []): array {
+    public static function auditLog(string $action = "", array $payload = []) :array {
         if ($action !== "") {
             self::adminLog("audit", [
                 "action" => $action,
@@ -1150,7 +1138,7 @@ trait GBDB_AdminOpsTrait {
         int $rowsReturned = 0,
         bool $fullScan = false,
         int $memory = 0
-    ): void {
+    ) :void {
         $file = self::adminOpsDir("metrics/query_stats.json", true);
 
         $s = self::readJsonConfig($file, [
@@ -1191,7 +1179,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function performanceMetrics(): array {
+    public static function performanceMetrics() :array {
         $s = self::queryStats();
         $samples = is_array($s["samples"] ?? null) ? $s["samples"] : [];
         $times = array_map(fn($x) => (float)($x["ms"] ?? 0), $samples);
@@ -1229,7 +1217,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function opsPerMinute(): array {
+    public static function opsPerMinute() :array {
         $samples = self::queryStats()["samples"] ?? [];
         $min = time() - 60;
         $n = 0;
@@ -1238,7 +1226,6 @@ trait GBDB_AdminOpsTrait {
             if ((int)($s["ts"] ?? 0) >= $min) {
                 $n++;
             }
-
         }
 
         return [
@@ -1252,7 +1239,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return float result.
      */
-    public static function queryTimeAverage(): float {
+    public static function queryTimeAverage() :float {
         return (float)self::performanceMetrics()["query_time_avg"];
     }
 
@@ -1261,7 +1248,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function queryTimePercentiles(): array {
+    public static function queryTimePercentiles() :array {
         $m = self::performanceMetrics();
 
         return [
@@ -1275,7 +1262,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function memoryUsagePerQuery(): array {
+    public static function memoryUsagePerQuery() :array {
         return array_map(
             fn($x) => [
                 "memory" => (int)($x["memory"] ?? 0),
@@ -1290,7 +1277,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return int result.
      */
-    public static function rowsScanned(): int {
+    public static function rowsScanned() :int {
         return (int)(self::queryStats()["rows_scanned"] ?? 0);
     }
 
@@ -1299,7 +1286,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return int result.
      */
-    public static function rowsReturned(): int {
+    public static function rowsReturned() :int {
         return (int)(self::queryStats()["rows_returned"] ?? 0);
     }
 
@@ -1308,7 +1295,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return int result.
      */
-    public static function fullTableScanCount(): int {
+    public static function fullTableScanCount() :int {
         return (int)(self::queryStats()["full_scans"] ?? 0);
     }
 
@@ -1317,7 +1304,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return float result.
      */
-    public static function indexHitRate(): float {
+    public static function indexHitRate() :float {
         $s = self::queryStats();
         $q = max(1, (int)($s["queries"] ?? 0));
 
@@ -1329,7 +1316,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function dashboardData(): array {
+    public static function dashboardData() :array {
         return [
             "health" => self::dbHealth(false),
             "metrics" => self::performanceMetrics(),
@@ -1344,7 +1331,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function adminAlerts(): array {
+    public static function adminAlerts() :array {
         $alerts = [];
         $h = self::dbHealth(false);
 
@@ -1368,7 +1355,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function querySafety(array $o = []): array {
+    public static function querySafety(array $o = []) :array {
         return self::queryOptions($o);
     }
 
@@ -1379,7 +1366,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function setMaxExecutionTime(int $s): array {
+    public static function setMaxExecutionTime(int $s) :array {
         return self::queryOptions(["timeout" => $s]);
     }
 
@@ -1390,7 +1377,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function setMaxScanRows(int $rows): array {
+    public static function setMaxScanRows(int $rows) :array {
         $cfg = self::readJsonConfig(self::adminOpsDir("safety.json", true), []);
         $cfg["max_scan_rows"] = max(1, $rows);
 
@@ -1406,7 +1393,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function setMaxExportSize(int $bytes): array {
+    public static function setMaxExportSize(int $bytes) :array {
         $cfg = self::readJsonConfig(self::adminOpsDir("safety.json", true), []);
         $cfg["max_export_size"] = max(1024, $bytes);
 
@@ -1422,7 +1409,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function blockExpensiveQueries(bool $a = true): array {
+    public static function blockExpensiveQueries(bool $a = true) :array {
         return self::queryOptions(["block_full_scan" => $a]);
     }
 
@@ -1433,7 +1420,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function adminOnlyHeavyQueries(bool $a = true): array {
+    public static function adminOnlyHeavyQueries(bool $a = true) :array {
         $cfg = self::readJsonConfig(self::adminOpsDir("safety.json", true), []);
         $cfg["admin_only_heavy_queries"] = $a;
 
@@ -1449,7 +1436,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function querySandbox(array $c = []): array {
+    public static function querySandbox(array $c = []) :array {
         $cfg = array_replace([
             "enabled" => true,
             "readonly" => true,
@@ -1470,7 +1457,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function rateLimitQueryType(string $type, int $limit): array {
+    public static function rateLimitQueryType(string $type, int $limit) :array {
         $cfg = self::readJsonConfig(self::adminOpsDir("rate_limits.json", true), []);
         $cfg[self::safeSegment($type)] = max(1, $limit);
 
@@ -1479,7 +1466,7 @@ trait GBDB_AdminOpsTrait {
         return $cfg;
     }
 
-    private static function adminCacheKey(string $type, array $payload): string {
+    private static function adminCacheKey(string $type, array $payload) :string {
         return $type . ":" . hash(
             "sha256",
             self::getInstance() . "|" . json_encode($payload, JSON_UNESCAPED_UNICODE)
@@ -1496,7 +1483,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return bool result.
      */
-    public static function cacheSet(string $key, mixed $value, int $ttl = 60, array $tags = []): bool {
+    public static function cacheSet(string $key, mixed $value, int $ttl = 60, array $tags = []) :bool {
         self::$adminCache[$key] = [
             "value" => $value,
             "expires" => time() + max(1, $ttl),
@@ -1519,7 +1506,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function cacheGet(string $key, mixed $default = null): mixed {
+    public static function cacheGet(string $key, mixed $default = null) :mixed {
         if (isset(self::$adminCache[$key]) && (int)self::$adminCache[$key]["expires"] >= time()) {
             self::$adminCache[$key]["hits"]++;
 
@@ -1536,7 +1523,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return void result.
      */
-    public static function cacheInvalidate(string $key): void {
+    public static function cacheInvalidate(string $key) :void {
         unset(self::$adminCache[$key]);
 
         @unlink(self::adminOpsDir("cache/" . hash("sha256", $key) . ".json", true));
@@ -1549,7 +1536,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return int result.
      */
-    public static function cacheInvalidateTag(string $tag): int {
+    public static function cacheInvalidateTag(string $tag) :int {
         $n = 0;
 
         foreach (array_keys(self::$adminCacheTags[$tag] ?? []) as $key) {
@@ -1570,7 +1557,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function rowCache(string $db, string $table, mixed $id, int $ttl = 60): mixed {
+    public static function rowCache(string $db, string $table, mixed $id, int $ttl = 60) :mixed {
         $key = self::adminCacheKey("row", compact("db", "table", "id"));
         $v = self::cacheGet($key, null);
 
@@ -1597,7 +1584,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function tableMetaCache(string $db, string $table, int $ttl = 60): array {
+    public static function tableMetaCache(string $db, string $table, int $ttl = 60) :array {
         $key = self::adminCacheKey("meta", compact("db", "table"));
         $v = self::cacheGet($key, null);
 
@@ -1624,7 +1611,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function schemaCache(string $db, string $table, int $ttl = 60): array {
+    public static function schemaCache(string $db, string $table, int $ttl = 60) :array {
         $key = self::adminCacheKey("schema", compact("db", "table"));
         $v = self::cacheGet($key, null);
 
@@ -1651,7 +1638,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function indexCache(string $db, string $table, int $ttl = 60): array {
+    public static function indexCache(string $db, string $table, int $ttl = 60) :array {
         $key = self::adminCacheKey("index", compact("db", "table"));
         $v = self::cacheGet($key, null);
 
@@ -1679,7 +1666,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function queryResultCache(string $key, callable $cb, int $ttl = 60, array $tags = []): mixed {
+    public static function queryResultCache(string $key, callable $cb, int $ttl = 60, array $tags = []) :mixed {
         $v = self::cacheGet($key, null);
 
         if ($v !== null) {
@@ -1702,7 +1689,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function permissionCache(string $k, mixed $v = null, int $ttl = 300): mixed {
+    public static function permissionCache(string $k, mixed $v = null, int $ttl = 300) :mixed {
         if ($v !== null) {
             self::cacheSet("perm:" . $k, $v, $ttl, ["permissions"]);
         }
@@ -1719,7 +1706,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function fulltextCache(string $k, mixed $v = null, int $ttl = 300): mixed {
+    public static function fulltextCache(string $k, mixed $v = null, int $ttl = 300) :mixed {
         if ($v !== null) {
             self::cacheSet("fulltext:" . $k, $v, $ttl, ["fulltext"]);
         }
@@ -1736,7 +1723,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function counterCache(string $k, mixed $v = null, int $ttl = 300): mixed {
+    public static function counterCache(string $k, mixed $v = null, int $ttl = 300) :mixed {
         if ($v !== null) {
             self::cacheSet("counter:" . $k, $v, $ttl, ["counter"]);
         }
@@ -1751,7 +1738,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return int result.
      */
-    public static function cacheTtl(string $key): int {
+    public static function cacheTtl(string $key) :int {
         $v = self::$adminCache[$key] ?? null;
 
         return is_array($v)
@@ -1764,7 +1751,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function cacheStats(): array {
+    public static function cacheStats() :array {
         $hits = 0;
 
         foreach (self::$adminCache as $i) {
@@ -1775,7 +1762,7 @@ trait GBDB_AdminOpsTrait {
             "ok" => true,
             "entries" => count(self::$adminCache),
             "hits" => $hits,
-            "file_entries" => count(glob(self::adminOpsDir("cache", true) . "/*.json") ?: [])
+            "file_entries" => count(GBDBFilesystem::glob(self::adminOpsDir("cache", true) . "/*.json") ?: [])
         ];
     }
 
@@ -1784,7 +1771,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return float result.
      */
-    public static function cacheHitRate(): float {
+    public static function cacheHitRate() :float {
         $s = self::cacheStats();
 
         return min(1.0, (float)$s["hits"] / max(1, (int)$s["entries"]));
@@ -1797,7 +1784,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function cacheWarmup(array $items = []): array {
+    public static function cacheWarmup(array $items = []) :array {
         $done = 0;
 
         foreach ($items as $item) {
@@ -1806,7 +1793,6 @@ trait GBDB_AdminOpsTrait {
                 self::schemaCache($item["db"], $item["table"]);
                 $done++;
             }
-
         }
 
         return [
@@ -1820,17 +1806,16 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function cacheRepair(): array {
+    public static function cacheRepair() :array {
         $bad = 0;
 
-        foreach (glob(self::adminOpsDir("cache", true) . "/*.json") ?: [] as $file) {
+        foreach (GBDBFilesystem::glob(self::adminOpsDir("cache", true) . "/*.json") ?: [] as $file) {
             $d = json_decode((string)@file_get_contents($file), true);
 
             if (!is_array($d) || (int)($d["expires"] ?? 0) < time()) {
                 @unlink($file);
                 $bad++;
             }
-
         }
 
         return [
@@ -1844,7 +1829,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function apcuCachePrepared(): array {
+    public static function apcuCachePrepared() :array {
         return [
             "ok" => true,
             "available" => function_exists("apcu_fetch"),
@@ -1860,7 +1845,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function redisAdapterPrepared(array $c = []): array {
+    public static function redisAdapterPrepared(array $c = []) :array {
         self::writeJsonConfig(
             self::adminOpsDir("cache/redis.json", true),
             array_replace([
@@ -1887,7 +1872,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return bool result.
      */
-    public static function fileCacheSet(string $key, mixed $value, int $ttl = 60, array $tags = []): bool {
+    public static function fileCacheSet(string $key, mixed $value, int $ttl = 60, array $tags = []) :bool {
         $file = self::adminOpsDir("cache/" . hash("sha256", $key) . ".json", true);
         $json = json_encode([
             "key" => $key,
@@ -1907,7 +1892,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return mixed result.
      */
-    public static function fileCacheGet(string $key, mixed $default = null): mixed {
+    public static function fileCacheGet(string $key, mixed $default = null) :mixed {
         $file = self::adminOpsDir("cache/" . hash("sha256", $key) . ".json", true);
         $d = is_file($file)
             ? json_decode((string)@file_get_contents($file), true)
@@ -1925,7 +1910,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function cacheTests(): array {
+    public static function cacheTests() :array {
         self::cacheSet("__test", ["ok" => true], 5, ["test"]);
 
         $ok = is_array(self::cacheGet("__test"));
@@ -1954,7 +1939,7 @@ trait GBDB_AdminOpsTrait {
         mixed $id,
         string $column,
         int|float $step = 1
-    ): array {
+    ) :array {
         return self::atomicCounterChange($db, $table, $id, $column, $step);
     }
 
@@ -1975,7 +1960,7 @@ trait GBDB_AdminOpsTrait {
         mixed $id,
         string $column,
         int|float $step = 1
-    ): array {
+    ) :array {
         return self::atomicCounterChange($db, $table, $id, $column, -abs($step));
     }
 
@@ -1985,7 +1970,7 @@ trait GBDB_AdminOpsTrait {
         mixed $id,
         string $column,
         int|float $step
-    ): array {
+    ) :array {
         $row = self::getData($db, $table, true, "id", $id);
 
         if (!is_array($row) || empty($row)) {
@@ -2030,7 +2015,7 @@ trait GBDB_AdminOpsTrait {
         string $column,
         mixed $expected,
         mixed $newValue
-    ): array {
+    ) :array {
         $row = self::getData($db, $table, true, "id", $id);
 
         if (!is_array($row) || empty($row)) {
@@ -2066,7 +2051,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return bool result.
      */
-    public static function ensureCounterTable(string $db = "system", string $table = "counters"): bool {
+    public static function ensureCounterTable(string $db = "system", string $table = "counters") :bool {
         if (!in_array($db, self::listDBs(), true)) {
             self::createDatabase($db);
         }
@@ -2100,7 +2085,7 @@ trait GBDB_AdminOpsTrait {
         int|float $delta = 0,
         string $db = "system",
         string $table = "counters"
-    ): array {
+    ) :array {
         self::ensureCounterTable($db, $table);
 
         $key = self::safeSegment($scope) . ":" . self::safeSegment($name);
@@ -2135,7 +2120,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareShardedCounters(int $shards = 16): array {
+    public static function prepareShardedCounters(int $shards = 16) :array {
         $cfg = [
             "enabled" => true,
             "shards" => max(1, $shards),
@@ -2154,7 +2139,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareDistributedSafeCounters(array $c = []): array {
+    public static function prepareDistributedSafeCounters(array $c = []) :array {
         $cfg = array_replace([
             "enabled" => false,
             "driver" => "local-lock",
@@ -2174,7 +2159,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function likeCounter(string $o, int $d = 1): array {
+    public static function likeCounter(string $o, int $d = 1) :array {
         return self::counterValue("likes", $o, $d);
     }
 
@@ -2186,7 +2171,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function commentCounter(string $o, int $d = 1): array {
+    public static function commentCounter(string $o, int $d = 1) :array {
         return self::counterValue("comments", $o, $d);
     }
 
@@ -2198,7 +2183,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function viewCounter(string $o, int $d = 1): array {
+    public static function viewCounter(string $o, int $d = 1) :array {
         return self::counterValue("views", $o, $d);
     }
 
@@ -2210,7 +2195,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function followerCounter(string $o, int $d = 1): array {
+    public static function followerCounter(string $o, int $d = 1) :array {
         return self::counterValue("followers", $o, $d);
     }
 
@@ -2222,7 +2207,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function unreadCounter(string $o, int $d = 1): array {
+    public static function unreadCounter(string $o, int $d = 1) :array {
         return self::counterValue("unread", $o, $d);
     }
 
@@ -2234,7 +2219,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function counterRepair(string $db = "system", string $table = "counters"): array {
+    public static function counterRepair(string $db = "system", string $table = "counters") :array {
         self::ensureCounterTable($db, $table);
 
         $fixed = 0;
@@ -2254,7 +2239,6 @@ trait GBDB_AdminOpsTrait {
 
                 $fixed++;
             }
-
         }
 
         return [
@@ -2278,14 +2262,13 @@ trait GBDB_AdminOpsTrait {
         string $table,
         string $groupColumn,
         string $scope
-    ): array {
+    ) :array {
         $counts = [];
 
         foreach (self::getData($db, $table) ?: [] as $row) {
             if (is_array($row) && isset($row[$groupColumn])) {
                 $counts[(string)$row[$groupColumn]] = ($counts[(string)$row[$groupColumn]] ?? 0) + 1;
             }
-
         }
 
         foreach ($counts as $name => $value) {
@@ -2301,7 +2284,6 @@ trait GBDB_AdminOpsTrait {
                     $value
                 );
             }
-
         }
 
         return [
@@ -2318,7 +2300,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function cleanupJournals(int $days = 7): array {
+    public static function cleanupJournals(int $days = 7) :array {
         return self::cleanupFilesByAge(["*.wal", "*.journal"], $days);
     }
 
@@ -2329,11 +2311,11 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function cleanupVersions(int $days = 30): array {
+    public static function cleanupVersions(int $days = 30) :array {
         return self::cleanupFilesByAge(["*.old", "*.bak"], $days);
     }
 
-    private static function cleanupFilesByAge(array $patterns, int $days): array {
+    private static function cleanupFilesByAge(array $patterns, int $days) :array {
         $deleted = [];
         $limit = time() - max(1, $days) * 86400;
         $it = new RecursiveIteratorIterator(
@@ -2349,9 +2331,7 @@ trait GBDB_AdminOpsTrait {
                 if (fnmatch($pattern, $file->getFilename()) && (int)$file->getMTime() < $limit && @unlink($file->getPathname())) {
                     $deleted[] = $file->getPathname();
                 }
-
             }
-
         }
 
         return [
@@ -2368,7 +2348,7 @@ trait GBDB_AdminOpsTrait {
      *
      * @return array result.
      */
-    public static function refreshStats(array $o = []): array {
+    public static function refreshStats(array $o = []) :array {
         $tables = self::eachAdminTable(
             fn($db, $table, $instance) => [
                 "instance" => $instance,
@@ -2390,5 +2370,4 @@ trait GBDB_AdminOpsTrait {
 
         return $r;
     }
-
 }

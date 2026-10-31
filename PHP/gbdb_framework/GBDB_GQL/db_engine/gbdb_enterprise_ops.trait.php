@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 /**
@@ -7,7 +8,7 @@ declare(strict_types=1);
  * Admin-/CLI-/Developer-APIs, Doku- und Test-Helfer.
  */
 trait GBDB_EnterpriseOpsTrait {
-    private static function enterpriseConfig(string $name, array $data = [], bool $merge = true): array {
+    private static function enterpriseConfig(string $name, array $data = [], bool $merge = true) :array {
         $file = self::adminOpsDir('enterprise/' . self::safeSegment($name) . '.json', true);
         $old = $merge ? self::readJsonConfig($file, []) : [];
         $cfg = array_replace_recursive($old, $data, ['updated_at' => time()]);
@@ -21,15 +22,15 @@ trait GBDB_EnterpriseOpsTrait {
         return $cfg;
     }
 
-    private static function tokenHash(string $token): string {
+    private static function tokenHash(string $token) :string {
         return hash('sha256', $token);
     }
 
-    private static function makeSecretToken(string $prefix = 'gbdb'): string {
+    private static function makeSecretToken(string $prefix = 'gbdb') :string {
         return $prefix . '_' . bin2hex(random_bytes(24));
     }
 
-    private static function ensureEnterpriseTable(string $db, string $table, array $columns): bool {
+    private static function ensureEnterpriseTable(string $db, string $table, array $columns) :bool {
         if (!in_array($db, self::listDBs(), true)) {
             self::createDatabase($db);
         }
@@ -42,7 +43,6 @@ trait GBDB_EnterpriseOpsTrait {
             if ($col !== 'id' && !in_array($col, self::getKeys($db, $table), true)) {
                 self::addColumn($db, $table, (string)$col);
             }
-
         }
 
         return true;
@@ -52,27 +52,27 @@ trait GBDB_EnterpriseOpsTrait {
      * Enterprise Pattern Manager
      * ============================================================ */
 
-    private static function patternDir(): string {
+    private static function patternDir() :string {
         $dir = self::rootPath() . '/json/patterns';
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         return $dir;
     }
 
-    private static function normalizePatternName(string $name): string {
+    private static function normalizePatternName(string $name) :string {
         $name = Format::cleanString($name);
 
         return $name !== '' ? $name : 'pattern';
     }
 
-    private static function patternFile(string $name): string {
+    private static function patternFile(string $name) :string {
         return self::patternDir() . '/' . self::normalizePatternName($name) . '.json';
     }
 
-    private static function normalizePattern(array $pattern): array {
+    private static function normalizePattern(array $pattern) :array {
         $name = self::normalizePatternName((string)($pattern['name'] ?? 'pattern'));
         $out = [
             'name' => $name,
@@ -153,7 +153,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function patternTemplate(string $name = 'intranet'): array {
+    public static function patternTemplate(string $name = 'intranet') :array {
         $name = self::normalizePatternName($name);
 
         return [
@@ -184,10 +184,10 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function listPatterns(bool $includeInactive = true): array {
+    public static function listPatterns(bool $includeInactive = true) :array {
         $patterns = [];
 
-        foreach (glob(self::patternDir() . '/*.json') ?: [] as $file) {
+        foreach (GBDBFilesystem::glob(self::patternDir() . '/*.json') ?: [] as $file) {
             $data = json_decode((string)@file_get_contents($file), true);
 
             if (!is_array($data)) {
@@ -216,7 +216,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function getPattern(string $name): array {
+    public static function getPattern(string $name) :array {
         $file = self::patternFile($name);
 
         if (!is_file($file)) {
@@ -242,7 +242,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function savePattern(array $pattern): array {
+    public static function savePattern(array $pattern) :array {
         $pattern = self::normalizePattern($pattern);
         $json = json_encode($pattern, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -266,7 +266,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function deletePattern(string $name): array {
+    public static function deletePattern(string $name) :array {
         $file = self::patternFile($name);
         $ok = is_file($file) && @unlink($file);
 
@@ -284,7 +284,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function renamePattern(string $name, string $newName): array {
+    public static function renamePattern(string $name, string $newName) :array {
         $oldName = self::normalizePatternName($name);
         $newName = self::normalizePatternName($newName);
 
@@ -334,7 +334,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function setPatternActive(string $name, bool $active): array {
+    public static function setPatternActive(string $name, bool $active) :array {
         $loaded = self::getPattern($name);
 
         if (!($loaded['ok'] ?? false)) {
@@ -356,7 +356,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function installPattern(string $patternName, string $instanceName, bool $allowInactive = false): array {
+    public static function installPattern(string $patternName, string $instanceName, bool $allowInactive = false) :array {
         $loaded = self::getPattern($patternName);
 
         if (!($loaded['ok'] ?? false)) {
@@ -414,7 +414,6 @@ trait GBDB_EnterpriseOpsTrait {
                         if (!in_array($column, self::getKeys($base, $table), true)) {
                             self::addColumn($base, $table, $column);
                         }
-
                     }
 
                     if (!empty($tableDef['useDataTypes'])) {
@@ -439,11 +438,8 @@ trait GBDB_EnterpriseOpsTrait {
 
                         self::writeSchema($schema);
                     }
-
                 }
-
             }
-
         } finally {
             self::setInstance($old);
         }
@@ -473,7 +469,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function installIntranetPattern(string $database = 'intranet'): array {
+    public static function installIntranetPattern(string $database = 'intranet') :array {
         $tables = [
             'users' => ['uid', 'username', 'email', 'display_name', 'department_id', 'team_id', 'role_ids', 'active', 'sso_subject', 'manager_uid', 'created_at', 'updated_at'],
             'groups' => ['gid', 'name', 'description', 'member_uids', 'owner_uid', 'created_at', 'updated_at'],
@@ -505,40 +501,41 @@ trait GBDB_EnterpriseOpsTrait {
             if (!$exists && in_array($table, self::listTables($database), true)) {
                 $created[] = $table;
             }
-
         }
 
         $seeded = 0;
 
         if (empty(self::getData($database, 'roles') ?: [])) {
-            foreach ([
+            foreach (
+                [
                 ['rid' => 'role_admin', 'name' => 'Admin', 'description' => 'Full intranet administration', 'permission_ids' => 'perm_all', 'scope' => '*'],
                 ['rid' => 'role_editor', 'name' => 'Editor', 'description' => 'Create and maintain content', 'permission_ids' => 'perm_read,perm_write', 'scope' => 'content'],
                 ['rid' => 'role_reader', 'name' => 'Reader', 'description' => 'Read-only intranet access', 'permission_ids' => 'perm_read', 'scope' => 'content']
-            ] as $row) {
+                ] as $row
+            ) {
                 self::insertData($database, 'roles', $row + [
                     'created_at' => time(),
                     'updated_at' => time()
                 ]);
                 $seeded++;
             }
-
         }
 
         if (empty(self::getData($database, 'permissions') ?: [])) {
-            foreach ([
+            foreach (
+                [
                 ['pid' => 'perm_all', 'key' => '*', 'description' => 'All permissions', 'scope' => '*'],
                 ['pid' => 'perm_read', 'key' => 'read', 'description' => 'Read content and directory data', 'scope' => 'content'],
                 ['pid' => 'perm_write', 'key' => 'write', 'description' => 'Create and update content', 'scope' => 'content'],
                 ['pid' => 'perm_approve', 'key' => 'approve', 'description' => 'Approve workflows and documents', 'scope' => 'workflow']
-            ] as $row) {
+                ] as $row
+            ) {
                 self::insertData($database, 'permissions', $row + [
                     'created_at' => time(),
                     'updated_at' => time()
                 ]);
                 $seeded++;
             }
-
         }
 
         if (empty(self::getData($database, 'retention_rules') ?: [])) {
@@ -600,7 +597,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function intranetAudit(string $action, array $payload = [], string $database = 'intranet'): array {
+    public static function intranetAudit(string $action, array $payload = [], string $database = 'intranet') :array {
         self::installIntranetPattern($database);
 
         $id = self::insertData($database, 'audit_logs', [
@@ -629,7 +626,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function intranetDirectorySearch(string $query, string $database = 'intranet', int $limit = 50): array {
+    public static function intranetDirectorySearch(string $query, string $database = 'intranet', int $limit = 50) :array {
         self::installIntranetPattern($database);
 
         $q = mb_strtolower(trim($query));
@@ -653,7 +650,6 @@ trait GBDB_EnterpriseOpsTrait {
             if (count($out) >= max(1, $limit)) {
                 break;
             }
-
         }
 
         return [
@@ -680,7 +676,7 @@ trait GBDB_EnterpriseOpsTrait {
         string $subjectId,
         string $permission,
         string $database = 'intranet'
-    ): array {
+    ) :array {
         self::installIntranetPattern($database);
 
         $id = self::insertData($database, 'document_permissions', [
@@ -708,7 +704,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function defineRetentionRule(string $name, int $days, string $action = 'archive', string $database = 'intranet'): array {
+    public static function defineRetentionRule(string $name, int $days, string $action = 'archive', string $database = 'intranet') :array {
         self::installIntranetPattern($database);
 
         $id = self::insertData($database, 'retention_rules', [
@@ -738,7 +734,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareSsoAdapter(string $type, array $config = []): array {
+    public static function prepareSsoAdapter(string $type, array $config = []) :array {
         $type = strtolower(trim($type));
 
         if (!in_array($type, ['ldap', 'saml', 'oidc', 'oauth2'], true)) {
@@ -769,7 +765,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareLdapAdapter(array $config = []): array {
+    public static function prepareLdapAdapter(array $config = []) :array {
         return self::prepareSsoAdapter('ldap', $config);
     }
 
@@ -780,7 +776,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareSamlAdapter(array $config = []): array {
+    public static function prepareSamlAdapter(array $config = []) :array {
         return self::prepareSsoAdapter('saml', $config);
     }
 
@@ -791,7 +787,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareOidcAdapter(array $config = []): array {
+    public static function prepareOidcAdapter(array $config = []) :array {
         return self::prepareSsoAdapter('oidc', $config);
     }
 
@@ -802,7 +798,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareOAuth2Adapter(array $config = []): array {
+    public static function prepareOAuth2Adapter(array $config = []) :array {
         return self::prepareSsoAdapter('oauth2', $config);
     }
 
@@ -814,7 +810,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function externalUserSync(array $users, string $database = 'intranet'): array {
+    public static function externalUserSync(array $users, string $database = 'intranet') :array {
         self::installIntranetPattern($database);
 
         $done = 0;
@@ -863,7 +859,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function groupSync(array $groups, string $database = 'intranet'): array {
+    public static function groupSync(array $groups, string $database = 'intranet') :array {
         self::installIntranetPattern($database);
 
         $n = 0;
@@ -878,7 +874,6 @@ trait GBDB_EnterpriseOpsTrait {
 
                 $n++;
             }
-
         }
 
         return [
@@ -895,7 +890,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function departmentSync(array $departments, string $database = 'intranet'): array {
+    public static function departmentSync(array $departments, string $database = 'intranet') :array {
         self::installIntranetPattern($database);
 
         $n = 0;
@@ -910,7 +905,6 @@ trait GBDB_EnterpriseOpsTrait {
 
                 $n++;
             }
-
         }
 
         return [
@@ -926,7 +920,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function roleMapping(array $mapping): array {
+    public static function roleMapping(array $mapping) :array {
         return [
             'ok' => true,
             'mapping' => self::enterpriseConfig('sso_role_mapping', ['mapping' => $mapping])
@@ -943,7 +937,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function ssoAudit(string $provider, string $subject, string $action, array $payload = []): array {
+    public static function ssoAudit(string $provider, string $subject, string $action, array $payload = []) :array {
         return [
             'ok' => self::adminLog('sso_audit', compact('provider', 'subject', 'action', 'payload'))
         ];
@@ -962,7 +956,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function createServiceAccount(string $name, array $scopes = [], array $options = []): array {
+    public static function createServiceAccount(string $name, array $scopes = [], array $options = []) :array {
         $cfg = self::opsJson('auth/service_accounts.json', ['accounts' => []]);
         $id = self::nowId('svc');
         $cfg['accounts'][$id] = [
@@ -996,7 +990,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function createApiToken(string $subject, array $scopes = [], int $ttlSeconds = 2592000): array {
+    public static function createApiToken(string $subject, array $scopes = [], int $ttlSeconds = 2592000) :array {
         $plain = self::makeSecretToken('gbdbtok');
         $cfg = self::opsJson('auth/api_tokens.json', ['tokens' => []]);
         $id = self::nowId('tok');
@@ -1034,7 +1028,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function validateApiToken(string $token, string $scope = ''): array {
+    public static function validateApiToken(string $token, string $scope = '') :array {
         $hash = self::tokenHash($token);
         $cfg = self::opsJson('auth/api_tokens.json', ['tokens' => []]);
 
@@ -1051,7 +1045,6 @@ trait GBDB_EnterpriseOpsTrait {
                     'scopes' => $t['scopes'] ?? []
                 ];
             }
-
         }
 
         return [
@@ -1068,7 +1061,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function rotateApiToken(string $tokenId, int $ttlSeconds = 2592000): array {
+    public static function rotateApiToken(string $tokenId, int $ttlSeconds = 2592000) :array {
         $cfg = self::opsJson('auth/api_tokens.json', ['tokens' => []]);
 
         if (!isset($cfg['tokens'][$tokenId])) {
@@ -1102,7 +1095,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function registerSession(string $uid, array $device = [], int $ttlSeconds = 172800): array {
+    public static function registerSession(string $uid, array $device = [], int $ttlSeconds = 172800) :array {
         $cfg = self::opsJson('auth/sessions.json', ['sessions' => []]);
         $sid = self::nowId('sess');
         $cfg['sessions'][$sid] = [
@@ -1131,7 +1124,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function forceLogout(string $uid): array {
+    public static function forceLogout(string $uid) :array {
         $cfg = self::opsJson('auth/sessions.json', ['sessions' => []]);
         $n = 0;
 
@@ -1141,7 +1134,6 @@ trait GBDB_EnterpriseOpsTrait {
                 $s['forced_logout'] = true;
                 $n++;
             }
-
         }
 
         self::saveOpsJson('auth/sessions.json', $cfg);
@@ -1163,7 +1155,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function sessionList(string $uid = ''): array {
+    public static function sessionList(string $uid = '') :array {
         $cfg = self::opsJson('auth/sessions.json', ['sessions' => []]);
         $rows = array_values(array_filter($cfg['sessions'], fn($s) => $uid === '' || ($s['uid'] ?? '') === $uid));
 
@@ -1185,7 +1177,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantPolicy(string $tenant, array $policy = []): array {
+    public static function tenantPolicy(string $tenant, array $policy = []) :array {
         return [
             'ok' => true,
             'tenant' => self::safeSegment($tenant),
@@ -1205,7 +1197,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantQuotas(string $tenant, array $quotas = []): array {
+    public static function tenantQuotas(string $tenant, array $quotas = []) :array {
         return [
             'ok' => true,
             'tenant' => $tenant,
@@ -1230,7 +1222,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantRestore(string $tenant, string $backupPath): array {
+    public static function tenantRestore(string $tenant, string $backupPath) :array {
         $target = self::dbRootPath('.temp/tenant_restore_' . self::safeSegment($tenant) . '_' . date('Ymd_His'), true);
         $report = [
             'ok' => true,
@@ -1261,7 +1253,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantExport(string $tenant, string $target = ''): array {
+    public static function tenantExport(string $tenant, string $target = '') :array {
         return self::tenantBackup($tenant, $target);
     }
 
@@ -1273,7 +1265,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantDelete(string $tenant, bool $force = false): array {
+    public static function tenantDelete(string $tenant, bool $force = false) :array {
         $tenant = self::safeSegment($tenant);
 
         if (!$force && $tenant === 'default') {
@@ -1317,7 +1309,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareTenantMigration(string $tenant, string $targetShard, array $options = []): array {
+    public static function prepareTenantMigration(string $tenant, string $targetShard, array $options = []) :array {
         return self::storeSystemPlan('tenant_migration_' . self::safeSegment($tenant), [
             'type' => 'tenant_migration',
             'tenant' => $tenant,
@@ -1335,7 +1327,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantStorageStats(string $tenant = ''): array {
+    public static function tenantStorageStats(string $tenant = '') :array {
         $old = self::getInstance();
 
         if ($tenant !== '') {
@@ -1355,7 +1347,7 @@ trait GBDB_EnterpriseOpsTrait {
         ];
     }
 
-    private static function folderSize(string $path): int {
+    private static function folderSize(string $path) :int {
         $size = 0;
 
         if (!is_dir($path)) {
@@ -1370,7 +1362,6 @@ trait GBDB_EnterpriseOpsTrait {
             if ($f->isFile()) {
                 $size += (int)$f->getSize();
             }
-
         }
 
         return $size;
@@ -1384,7 +1375,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantAdminRoles(string $tenant, array $roles): array {
+    public static function tenantAdminRoles(string $tenant, array $roles) :array {
         return [
             'ok' => true,
             'roles' => self::enterpriseConfig('tenant_admin_roles_' . self::safeSegment($tenant), ['roles' => $roles])
@@ -1399,7 +1390,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function tenantEncryptionKeysPrepared(string $tenant, array $options = []): array {
+    public static function tenantEncryptionKeysPrepared(string $tenant, array $options = []) :array {
         return [
             'ok' => true,
             'config' => self::enterpriseConfig('tenant_encryption_' . self::safeSegment($tenant), array_replace([
@@ -1418,7 +1409,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function quotaLimits(array $limits = []): array {
+    public static function quotaLimits(array $limits = []) :array {
         $defaults = [
             'max_rows_per_table' => 100000,
             'max_storage_per_instance' => 1073741824,
@@ -1462,7 +1453,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function quotaCheck(string $database = '', string $table = ''): array {
+    public static function quotaCheck(string $database = '', string $table = '') :array {
         $limits = self::quotaLimits();
         $warnings = [];
         $errors = [];
@@ -1472,17 +1463,16 @@ trait GBDB_EnterpriseOpsTrait {
 
             if ($rows >= (int)$limits['max_rows_per_table']) {
                 $errors[] = 'max_rows_per_table';
-            } else if ($rows >= (int)($limits['max_rows_per_table'] * .8)) {
+            } elseif ($rows >= (int)($limits['max_rows_per_table'] * .8)) {
                 $warnings[] = 'max_rows_per_table_80';
             }
-
         }
 
         $storage = self::tenantStorageStats();
 
         if ($storage['bytes'] >= (int)$limits['max_storage_per_instance']) {
             $errors[] = 'max_storage_per_instance';
-        } else if ($storage['bytes'] >= (int)($limits['max_storage_per_instance'] * .8)) {
+        } elseif ($storage['bytes'] >= (int)($limits['max_storage_per_instance'] * .8)) {
             $warnings[] = 'max_storage_per_instance_80';
         }
 
@@ -1502,7 +1492,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function quotaDashboard(bool $includeTenants = false): array {
+    public static function quotaDashboard(bool $includeTenants = false) :array {
         $tenants = $includeTenants
             ? array_map(fn($i) => self::tenantStorageStats((string)$i), self::listInstances())
             : [];
@@ -1526,7 +1516,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function rateLimit(string $bucket, string $key, int $limit, int $windowSeconds = 60): array {
+    public static function rateLimit(string $bucket, string $key, int $limit, int $windowSeconds = 60) :array {
         $bucket = self::safeSegment($bucket);
         $hash = hash('sha256', $bucket . '|' . $key);
         $file = self::adminOpsDir('rate_runtime/' . $bucket . '_' . $hash . '.json', true);
@@ -1568,7 +1558,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function configureRateLimits(array $limits): array {
+    public static function configureRateLimits(array $limits) :array {
         return self::enterpriseConfig('rate_limits_policy', ['limits' => $limits]);
     }
 
@@ -1579,7 +1569,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function rateLimitLogs(int $limit = 100): array {
+    public static function rateLimitLogs(int $limit = 100) :array {
         return self::maintenanceLogs($limit);
     }
 
@@ -1597,7 +1587,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function exportRows(string $database, string $table, string $format = 'json', string $target = ''): array {
+    public static function exportRows(string $database, string $table, string $format = 'json', string $target = '') :array {
         $rows = self::getData($database, $table) ?: [];
         $format = strtolower($format);
         $target = $target !== ''
@@ -1608,15 +1598,13 @@ trait GBDB_EnterpriseOpsTrait {
 
         if ($format === 'json') {
             $payload = json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
-        } else if ($format === 'ndjson') {
+        } elseif ($format === 'ndjson') {
             foreach ($rows as $r) {
                 if (is_array($r) && !self::isHeaderRow($r)) {
                     $payload .= (json_encode($r, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . "\n";
                 }
-
             }
-
-        } else if ($format === 'csv') {
+        } elseif ($format === 'csv') {
             $keys = self::getKeys($database, $table);
             $fh = fopen('php://temp', 'r+');
 
@@ -1626,7 +1614,6 @@ trait GBDB_EnterpriseOpsTrait {
                 if (is_array($r) && !self::isHeaderRow($r)) {
                     fputcsv($fh, array_map(fn($k) => $r[$k] ?? '', $keys));
                 }
-
             }
 
             rewind($fh);
@@ -1662,7 +1649,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function importRows(string $database, string $table, string $file, string $format = 'json', bool $rollback = true): array {
+    public static function importRows(string $database, string $table, string $file, string $format = 'json', bool $rollback = true) :array {
         if (!is_file($file)) {
             return [
                 'ok' => false,
@@ -1676,17 +1663,15 @@ trait GBDB_EnterpriseOpsTrait {
         if ($format === 'json') {
             $d = json_decode((string)file_get_contents($file), true);
             $rows = is_array($d) ? $d : [];
-        } else if ($format === 'ndjson') {
+        } elseif ($format === 'ndjson') {
             foreach (file($file, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
                 $d = json_decode($line, true);
 
                 if (is_array($d)) {
                     $rows[] = $d;
                 }
-
             }
-
-        } else if ($format === 'csv') {
+        } elseif ($format === 'csv') {
             $fh = fopen($file, 'r');
 
             if (!$fh) {
@@ -1742,7 +1727,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function validateImportRows(string $database, string $table, array $rows): array {
+    public static function validateImportRows(string $database, string $table, array $rows) :array {
         $keys = self::getKeys($database, $table);
         $bad = [];
 
@@ -1763,9 +1748,7 @@ trait GBDB_EnterpriseOpsTrait {
                         'column' => $k
                     ];
                 }
-
             }
-
         }
 
         return [
@@ -1782,7 +1765,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function gbdbDump(string $target = ''): array {
+    public static function gbdbDump(string $target = '') :array {
         return self::fullBackup($target);
     }
 
@@ -1793,7 +1776,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function gbdbRestore(string $backupPath): array {
+    public static function gbdbRestore(string $backupPath) :array {
         return self::restoreTest($backupPath);
     }
 
@@ -1808,7 +1791,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function streamingImport(string $database, string $table, string $file, string $format = 'ndjson', int $chunkSize = 500): array {
+    public static function streamingImport(string $database, string $table, string $file, string $format = 'ndjson', int $chunkSize = 500) :array {
         return self::importRows($database, $table, $file, $format, true);
     }
 
@@ -1822,7 +1805,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function streamingExport(string $database, string $table, string $format = 'ndjson', string $target = ''): array {
+    public static function streamingExport(string $database, string $table, string $format = 'ndjson', string $target = '') :array {
         return self::exportRows($database, $table, $format, $target);
     }
 
@@ -1833,7 +1816,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function exportPermissions(array $rules = []): array {
+    public static function exportPermissions(array $rules = []) :array {
         return [
             'ok' => true,
             'config' => self::enterpriseConfig('export_permissions', ['rules' => $rules])
@@ -1847,7 +1830,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function exportLogs(int $limit = 100): array {
+    public static function exportLogs(int $limit = 100) :array {
         return self::maintenanceLogs($limit);
     }
 
@@ -1856,7 +1839,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function sqlErsatzFeatureMatrix(): array {
+    public static function sqlErsatzFeatureMatrix() :array {
         return [
             'greenql_basic_pick' => ['status' => 'stable', 'production_ready' => true, 'note' => 'PICK mit einfacher und komplexer WHERE-Filterung.'],
             'greenql_where_complex' => ['status' => 'beta', 'production_ready' => false, 'note' => 'AND, OR, NOT, Klammern, IN, BETWEEN, NULL und LIKE werden als AST geparst.'],
@@ -1886,7 +1869,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function sqlErsatzFeatureStatus(string $feature): array {
+    public static function sqlErsatzFeatureStatus(string $feature) :array {
         $matrix = self::sqlErsatzFeatureMatrix();
 
         return $matrix[$feature] ?? [
@@ -1904,7 +1887,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareSqlAdapter(string $type, array $config = []): array {
+    public static function prepareSqlAdapter(string $type, array $config = []) :array {
         $type = strtolower($type);
         $map = [
             'mysql' => 'mysql_import',
@@ -1956,7 +1939,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareMySQLImportAdapter(array $config = []): array {
+    public static function prepareMySQLImportAdapter(array $config = []) :array {
         return self::prepareSqlAdapter('mysql', $config);
     }
 
@@ -1967,7 +1950,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function preparePostgreSQLImportAdapter(array $config = []): array {
+    public static function preparePostgreSQLImportAdapter(array $config = []) :array {
         return self::prepareSqlAdapter('postgresql', $config);
     }
 
@@ -1978,7 +1961,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareSQLiteImportAdapter(array $config = []): array {
+    public static function prepareSQLiteImportAdapter(array $config = []) :array {
         return self::prepareSqlAdapter('sqlite', $config);
     }
 
@@ -1989,7 +1972,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareSqlCompatibilityLayer(array $config = []): array {
+    public static function prepareSqlCompatibilityLayer(array $config = []) :array {
         return self::prepareSqlAdapter('sql_compat', $config);
     }
 
@@ -2000,7 +1983,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function prepareSqlToGreenQLTranslator(array $config = []): array {
+    public static function prepareSqlToGreenQLTranslator(array $config = []) :array {
         return self::prepareSqlAdapter('sql_to_greenql', $config);
     }
 
@@ -2011,7 +1994,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function preparePdoLikeAdapter(array $config = []): array {
+    public static function preparePdoLikeAdapter(array $config = []) :array {
         return self::prepareSqlAdapter('pdo_like', $config);
     }
 
@@ -2024,7 +2007,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function adminUiData(): array {
+    public static function adminUiData() :array {
         return [
             'ok' => true,
             'dashboard' => self::dashboardData(),
@@ -2048,7 +2031,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function adminUiQueryPlan(string $greenql): array {
+    public static function adminUiQueryPlan(string $greenql) :array {
         return method_exists(static::class, 'explainGreenQL')
             ? self::explainGreenQL($greenql)
             : [
@@ -2066,7 +2049,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function cliCommand(string $command, array $args = []): array {
+    public static function cliCommand(string $command, array $args = []) :array {
         $cmd = strtolower(trim($command));
 
         return match ($cmd) {
@@ -2121,7 +2104,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function transactionApi(callable $callback): array {
+    public static function transactionApi(callable $callback) :array {
         self::begin();
 
         try {
@@ -2140,7 +2123,6 @@ trait GBDB_EnterpriseOpsTrait {
                 'error' => $e->getMessage()
             ];
         }
-
     }
 
     /**
@@ -2152,14 +2134,12 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return generator result.
      */
-    public static function cursorApi(string $database, string $table, int $chunkSize = 500): Generator {
+    public static function cursorApi(string $database, string $table, int $chunkSize = 500) :Generator {
         foreach (self::chunkedRows($database, $table, $chunkSize) as $chunk) {
             foreach ($chunk as $row) {
                 yield $row;
             }
-
         }
-
     }
 
     /**
@@ -2171,7 +2151,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function indexApi(string $database, string $table, string $column): array {
+    public static function indexApi(string $database, string $table, string $column) :array {
         $ok = self::createIndex($database, $table, $column);
 
         return [
@@ -2189,7 +2169,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function schemaApi(string $database, string $table, array $columns): array {
+    public static function schemaApi(string $database, string $table, array $columns) :array {
         self::ensureEnterpriseTable($database, $table, $columns);
 
         return [
@@ -2208,7 +2188,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function migrationApi(string $database, string $table, string $id, callable $cb): array {
+    public static function migrationApi(string $database, string $table, string $id, callable $cb) :array {
         return self::migrate($database, $table, $id, $cb);
     }
 
@@ -2220,7 +2200,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function backupApi(string $type = 'full', array $args = []): array {
+    public static function backupApi(string $type = 'full', array $args = []) :array {
         return $type === 'tenant'
             ? self::tenantBackup((string)($args['tenant'] ?? self::getInstance()), (string)($args['target'] ?? ''))
             : self::fullBackup((string)($args['target'] ?? ''));
@@ -2234,7 +2214,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function repairApi(string $database = '', string $table = ''): array {
+    public static function repairApi(string $database = '', string $table = '') :array {
         return $database !== '' && $table !== ''
             ? self::repairReport($database, $table)
             : self::repairMode(true);
@@ -2249,7 +2229,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function explainApi(string $database, string $table, array $where = []): array {
+    public static function explainApi(string $database, string $table, array $where = []) :array {
         return self::explain($database, $table, (string)($where['where'] ?? ''), $where['is'] ?? '');
     }
 
@@ -2258,7 +2238,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function statsApi(): array {
+    public static function statsApi() :array {
         return self::dashboardData();
     }
 
@@ -2270,7 +2250,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function policyApi(string $name, array $rules = []): array {
+    public static function policyApi(string $name, array $rules = []) :array {
         return self::definePolicy($name, $rules);
     }
 
@@ -2284,7 +2264,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function eventApi(string $event, string $db, string $table, array $payload = []): array {
+    public static function eventApi(string $event, string $db, string $table, array $payload = []) :array {
         return self::runDataTriggers($event, $db, $table, $payload);
     }
 
@@ -2296,7 +2276,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function queueApi(string $action, array $payload = []): array {
+    public static function queueApi(string $action, array $payload = []) :array {
         return $action === 'enqueue'
             ? [
                 'ok' => true,
@@ -2312,7 +2292,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function mediaApi(array $payload = []): array {
+    public static function mediaApi(array $payload = []) :array {
         return [
             'ok' => true,
             'job' => self::backgroundMediaProcessing($payload)
@@ -2329,7 +2309,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function searchApi(string $database, string $table, string $query, array $columns = []): array {
+    public static function searchApi(string $database, string $table, string $query, array $columns = []) :array {
         return self::fulltextSearch($database, $table, $query, $columns);
     }
 
@@ -2342,7 +2322,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function cacheApi(string $action, string $key = '', mixed $value = null): array {
+    public static function cacheApi(string $action, string $key = '', mixed $value = null) :array {
         if ($action === 'set') {
             return ['ok' => self::fileCacheSet($key, $value, 300)];
         }
@@ -2370,7 +2350,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function documentationIndex(): array {
+    public static function documentationIndex() :array {
         $dir = self::rootPath() . '/../../docs';
 
         if (!is_dir($dir)) {
@@ -2379,7 +2359,7 @@ trait GBDB_EnterpriseOpsTrait {
 
         $docs = [];
 
-        foreach (glob($dir . '/*.md') ?: [] as $file) {
+        foreach (GBDBFilesystem::glob($dir . '/*.md') ?: [] as $file) {
             $docs[] = 'docs/' . basename($file);
         }
 
@@ -2396,7 +2376,7 @@ trait GBDB_EnterpriseOpsTrait {
      *
      * @return array result.
      */
-    public static function enterpriseSelfTest(): array {
+    public static function enterpriseSelfTest() :array {
         $tests = [
             'quota' => self::quotaCheck(),
             'rate' => self::rateLimit('selftest', 'local', 100, 60),
@@ -2411,7 +2391,6 @@ trait GBDB_EnterpriseOpsTrait {
             if (is_array($t) && ($t['ok'] ?? true) === false) {
                 $ok = false;
             }
-
         }
 
         return [
@@ -2419,5 +2398,4 @@ trait GBDB_EnterpriseOpsTrait {
             'tests' => $tests
         ];
     }
-
 }

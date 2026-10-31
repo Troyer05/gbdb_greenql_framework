@@ -1,3 +1,6 @@
+# Warning: The Code is updated but not the documentations
+## But they will come soon.....
+
 # GBDB Framework / SecondServer Module
 
 The **GBDB Framework** is a lightweight PHP framework built around a file-based database engine, a custom query language called **GreenQL**, a remote backend interface called **SecondServer**, and a modular public API system.

@@ -17,9 +17,7 @@ function test_param(array $params, array $body) {
         if (!isset($body[$p])) {
             resp(400, "Param '$p' not provided.");
         }
-
     }
-
 }
 
 function general_auth($body, $method) {
@@ -30,7 +28,7 @@ function general_auth($body, $method) {
     test_param(["sauth"], $body);
     test_param(["token"], $body);
 
-    if ($body["sauth"] != hash('sha256', Vars::srvp_static_key())) {
+    if (strlen(Vars::srvp_static_key()) < 32 || !hash_equals(hash('sha256', Vars::srvp_static_key()), (string) $body['sauth'])) {
         resp(401, "Static auth failed.");
     }
 
@@ -41,7 +39,7 @@ function general_auth($body, $method) {
     delete_token($body["token"]);
 }
 
-function GBDB_DB_ARCH(): string {
+function GBDB_DB_ARCH() :string {
     if (class_exists('Vars') && method_exists('Vars', 'db_arch')) {
         return Vars::db_arch();
     }
@@ -55,7 +53,7 @@ function GBDB_DB_ARCH(): string {
     return 'GBDB';
 }
 
-function DB_DRIVER(array $ctx = []): string {
+function DB_DRIVER(array $ctx = []) :string {
     $cleaner = class_exists("GreenQL") ? ["GreenQL", "cleanName"] : null;
     $instance = $cleaner ? $cleaner((string)($ctx["instance"] ?? "")) : preg_replace('/[^a-zA-Z0-9_\-]/', '', (string)($ctx["instance"] ?? ""));
 
@@ -68,7 +66,7 @@ function DB_DRIVER(array $ctx = []): string {
     return "GBDB";
 }
 
-function DB_CTX_FROM_BODY(array $body): array {
+function DB_CTX_FROM_BODY(array $body) :array {
     $ctx = isset($body["ctx"]) && is_array($body["ctx"]) ? $body["ctx"] : [];
 
     if (isset($body["instance"]) && (string)$body["instance"] !== "") {
@@ -83,7 +81,7 @@ function DB_GET($db, $table, $filter = false, $where = "", $is = "", array $ctx 
         SQL::connect();
 
         if ($filter) {
-            return SQL::select($table, "*", $where, "'$is'");
+            return SQL::select($table, "*", $where, $is);
         }
 
         return SQL::select($table);
@@ -144,38 +142,15 @@ function DB_QUERY($query, array $ctx = [], array $params = []) {
     return class_exists("GreenQL") ? GreenQL::run($query, $ctx, $params) : GBDB::query($query, $ctx, $params);
 }
 
-function _token_file_path(): string {
-    $rel = "GBDB_GQL/.DB/.temp/_srvtkns.cry";
-
-    $bases = [];
-
-    foreach (["_ROOT", "ROOT", "BASE_PATH", "APP_ROOT"] as $c) {
-        if (defined($c)) $bases[] = constant($c);
-    }
-
-    if (!empty($_SERVER["DOCUMENT_ROOT"])) $bases[] = rtrim($_SERVER["DOCUMENT_ROOT"], "/\\") . DIRECTORY_SEPARATOR;
-    $bases[] = __DIR__ . DIRECTORY_SEPARATOR;
-
-    foreach ($bases as $b) {
-        $b = rtrim($b, "/\\") . DIRECTORY_SEPARATOR;
-        $p = $b . str_replace(["/", "\\"], DIRECTORY_SEPARATOR, $rel);
-
-        $dir = dirname($p);
-
-        if (is_dir($dir) || @mkdir($dir, 0775, true)) {
-            return $p;
-        }
-
-    }
-
-    return str_replace(["/", "\\"], DIRECTORY_SEPARATOR, $rel);
+function _token_file_path() :string {
+    return Vars::data_root() . '/.temp/_srvtkns.cry';
 }
 
-function _tkn_key(): string {
+function _tkn_key() :string {
     return hash("sha256", Vars::srvp_static_key(), true);
 }
 
-function _tkn_encrypt(string $plain): string {
+function _tkn_encrypt(string $plain) :string {
     if (!function_exists("openssl_encrypt")) {
         return "PLAIN:" . $plain;
     }
@@ -193,10 +168,12 @@ function _tkn_encrypt(string $plain): string {
     return "GBDBTKN1:" . base64_encode($iv . $tag . $cipher);
 }
 
-function _tkn_decrypt(string $raw): string {
+function _tkn_decrypt(string $raw) :string {
     $raw = trim($raw);
 
-    if ($raw === "") return "";
+    if ($raw === "") {
+        return "";
+    }
 
     if (str_starts_with($raw, "PLAIN:")) {
         return substr($raw, 6);
@@ -206,12 +183,16 @@ function _tkn_decrypt(string $raw): string {
         return $raw;
     }
 
-    if (!function_exists("openssl_decrypt")) return "";
+    if (!function_exists("openssl_decrypt")) {
+        return "";
+    }
 
     $b64 = substr($raw, 9);
     $blob = base64_decode($b64, true);
 
-    if ($blob === false || strlen($blob) < 29) return "";
+    if ($blob === false || strlen($blob) < 29) {
+        return "";
+    }
 
     $iv = substr($blob, 0, 12);
     $tag = substr($blob, 12, 16);
@@ -222,7 +203,7 @@ function _tkn_decrypt(string $raw): string {
     return ($plain === false) ? "" : $plain;
 }
 
-function read_tokens(): array {
+function read_tokens() :array {
     $file = _token_file_path();
 
     if (!file_exists($file)) {
@@ -231,7 +212,9 @@ function read_tokens(): array {
 
     $fp = @fopen($file, "rb");
 
-    if (!$fp) return [];
+    if (!$fp) {
+        return [];
+    }
 
     try {
         @flock($fp, LOCK_SH);
@@ -243,11 +226,15 @@ function read_tokens(): array {
 
     $json = _tkn_decrypt((string)$raw);
 
-    if ($json === "") return [];
+    if ($json === "") {
+        return [];
+    }
 
     $arr = json_decode($json, true);
 
-    if (!is_array($arr)) return [];
+    if (!is_array($arr)) {
+        return [];
+    }
 
     $out = [];
 
@@ -261,15 +248,13 @@ function read_tokens(): array {
                     "created" => $created
                 ];
             }
-
         }
-
     }
 
     return $out;
 }
 
-function add_token(string $token): void {
+function add_token(string $token) :void {
     $file = _token_file_path();
     $dir = dirname($file);
 
@@ -291,12 +276,16 @@ function add_token(string $token): void {
         $json = _tkn_decrypt((string)$raw);
         $arr = json_decode($json, true);
 
-        if (!is_array($arr)) $arr = [];
+        if (!is_array($arr)) {
+            $arr = [];
+        }
 
         $clean = [];
 
         foreach ($arr as $row) {
-            if (!is_array($row) || empty($row["token"])) continue;
+            if (!is_array($row) || empty($row["token"])) {
+                continue;
+            }
             $created = isset($row["created"]) ? (int)$row["created"] : time();
 
             if ($created + 300 >= time()) {
@@ -305,7 +294,6 @@ function add_token(string $token): void {
                     "created" => $created
                 ];
             }
-
         }
 
         $clean[] = [
@@ -323,36 +311,54 @@ function add_token(string $token): void {
     } finally {
         fclose($fp);
     }
-
 }
 
-function test_token(string $token): bool {
+function test_token(string $token) :bool {
     foreach (read_tokens() as $row) {
         if (($row["token"] ?? "") === $token) {
             return true;
         }
-
     }
 
     return false;
 }
 
-function delete_token(string $token): void {
+function delete_token(string $token) :void {
     $file = _token_file_path();
-    $dir = dirname($file);
 
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0775, true);
+    if (!file_exists($file)) {
+        return;
     }
 
-    $tokens = [];
+    // Wie add_token(): Lesen und Schreiben unter einem Lock. file_put_contents(..., LOCK_EX) lehnt gbdbdata:// ab,
+    // dadurch blieb ein verbrauchter Einmal-Token bisher bis zum Ablauf gültig.
+    $fp = @fopen($file, "c+");
 
-    foreach (read_tokens() as $row) {
-        if (($row["token"] ?? "") !== $token) {
-            $tokens[] = $row;
+    if (!$fp) {
+        resp(500, "Token storage not writable.");
+    }
+
+    try {
+        @flock($fp, LOCK_EX);
+        rewind($fp);
+
+        $rows = json_decode(_tkn_decrypt((string)stream_get_contents($fp)), true);
+        $tokens = [];
+
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (is_array($row) && ($row["token"] ?? "") !== $token) {
+                $tokens[] = $row;
+            }
         }
 
-    }
+        $payload = _tkn_encrypt(json_encode($tokens, JSON_UNESCAPED_UNICODE));
 
-    @file_put_contents($file, _tkn_encrypt(json_encode($tokens, JSON_UNESCAPED_UNICODE)), LOCK_EX);
+        ftruncate($fp, 0);
+        rewind($fp);
+        fwrite($fp, $payload);
+        fflush($fp);
+        @flock($fp, LOCK_UN);
+    } finally {
+        fclose($fp);
+    }
 }

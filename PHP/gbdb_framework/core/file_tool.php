@@ -6,7 +6,7 @@ class FileTool {
      * @param string $path
      * @return bool
      */
-    public static function exists(string $path): bool {
+    public static function exists(string $path) :bool {
         return is_file($path);
     }
 
@@ -15,7 +15,7 @@ class FileTool {
      * @param string $path
      * @return bool|string
      */
-    public static function read(string $path): string {
+    public static function read(string $path) :string {
         if (!is_file($path)) {
             return '';
         }
@@ -31,7 +31,7 @@ class FileTool {
      * @param string $content
      * @return bool
      */
-    public static function write(string $path, string $content): bool {
+    public static function write(string $path, string $content) :bool {
         self::ensureDir(dirname($path));
 
         $tmp = $path . '.' . uniqid('tmp_', true);
@@ -61,7 +61,7 @@ class FileTool {
      * @param string $path
      * @return array
      */
-    public static function readJson(string $path): array {
+    public static function readJson(string $path) :array {
         if (!is_file($path)) {
             return [];
         }
@@ -84,7 +84,7 @@ class FileTool {
      * @param array $data
      * @return bool
      */
-    public static function writeJson(string $path, array $data): bool {
+    public static function writeJson(string $path, array $data) :bool {
         self::ensureDir(dirname($path));
 
         $json = json_encode(
@@ -106,7 +106,7 @@ class FileTool {
      * @param string $path
      * @return bool
      */
-    public static function delete(string $path): bool {
+    public static function delete(string $path) :bool {
         return is_file($path) ? @unlink($path) : false;
     }
 
@@ -116,7 +116,7 @@ class FileTool {
      * @param string $dest
      * @return void
      */
-    public static function copyDir(string $src, string $dest): void {
+    public static function copyDir(string $src, string $dest) :void {
         if (!is_dir($src)) {
             return;
         }
@@ -126,7 +126,9 @@ class FileTool {
         $items = scandir($src);
 
         foreach ($items as $item) {
-            if ($item === '.' || $item === '..') continue;
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
 
             $srcPath  = rtrim($src, '/') . '/' . $item;
             $destPath = rtrim($dest, '/') . '/' . $item;
@@ -137,11 +139,8 @@ class FileTool {
                 if (!copy($srcPath, $destPath)) {
                     error_log("[FileTool] Failed copying file {$srcPath}");
                 }
-
             }
-
         }
-
     }
 
     /**
@@ -150,20 +149,18 @@ class FileTool {
      * @param int $days
      * @return void
      */
-    public static function deleteOldFiles(string $dir, int $days): void {
+    public static function deleteOldFiles(string $dir, int $days) :void {
         if (!is_dir($dir)) {
             return;
         }
 
         $limit = time() - ($days * 86400);
 
-        foreach (glob(rtrim($dir, '/') . '/*') as $file) {
+        foreach (GBDBFilesystem::glob(rtrim($dir, '/') . '/*') as $file) {
             if (is_file($file) && filemtime($file) < $limit) {
                 @unlink($file);
             }
-
         }
-
     }
 
     /**
@@ -171,7 +168,7 @@ class FileTool {
      * @param string $dir
      * @return float
      */
-    public static function dirSize(string $dir): float {
+    public static function dirSize(string $dir) :float {
         if (!is_dir($dir)) {
             return 0.0;
         }
@@ -182,7 +179,6 @@ class FileTool {
             if ($file->isFile()) {
                 $size += $file->getSize();
             }
-
         }
 
         return round($size / 1048576, 2);
@@ -194,7 +190,7 @@ class FileTool {
      * @param string $ext
      * @return array
      */
-    public static function listFiles(string $dir, string $ext = ''): array {
+    public static function listFiles(string $dir, string $ext = '') :array {
         if (!is_dir($dir)) {
             return [];
         }
@@ -202,19 +198,23 @@ class FileTool {
         $result = [];
 
         foreach (scandir($dir) as $f) {
-            if ($f === '.' || $f === '..') continue;
+            if ($f === '.' || $f === '..') {
+                continue;
+            }
 
             $full = rtrim($dir, '/') . '/' . $f;
 
-            if (!is_file($full)) continue;
+            if (!is_file($full)) {
+                continue;
+            }
 
             if ($ext === '' || str_ends_with($f, $ext)) {
                 $result[] = $f;
             }
-
         }
 
-        sort($result); // deterministisch
+        sort($result);
+        // deterministisch
 
         return $result;
     }
@@ -225,7 +225,7 @@ class FileTool {
      * @param string $dest
      * @return bool
      */
-    public static function backupDir(string $src, string $dest): bool {
+    public static function backupDir(string $src, string $dest) :bool {
         if (!is_dir($src)) {
             return false;
         }
@@ -241,14 +241,12 @@ class FileTool {
      * @return void
      */
 
-    private static function ensureDir(string $dir): void {
+    private static function ensureDir(string $dir) :void {
         if (!is_dir($dir)) {
-            if (!@mkdir($dir, 0777, true)) {
+            if (!@mkdir($dir, 0750, true)) {
                 error_log("[FileTool] Failed to create directory: {$dir}");
             }
-
         }
-
     }
 
     /**
@@ -256,14 +254,13 @@ class FileTool {
      * @param string $path
      * @return string[]
      */
-    public static function listDirs(string $path): array {
+    public static function listDirs(string $path) :array {
         if (!is_dir($path)) {
             return [];
         }
 
-        $dirs = glob(rtrim($path, '/') . "/*", GLOB_ONLYDIR);
+        $dirs = GBDBFilesystem::glob(rtrim($path, '/') . "/*", GLOB_ONLYDIR);
 
         return array_map("basename", $dirs ?: []);
     }
-
 }

@@ -9,9 +9,13 @@ class DatabaseBridge {
      * @param string $driver
      * @return void
      */
-    public static function setDriver(string $driver): void {
+    public static function setDriver(string $driver) :void {
         $driver = strtoupper(trim($driver));
         self::$driver = in_array($driver, ["GBDB", "SQL"], true) ? $driver : "";
+
+        if (GBDBConfig::flag('failover', 'enabled') && self::$driver !== '') {
+            GBDB::switchBackend(strtolower(self::$driver));
+        }
     }
 
     /**
@@ -19,17 +23,16 @@ class DatabaseBridge {
      * @param string $instance
      * @return void
      */
-    public static function setInstance(string $instance): void {
+    public static function setInstance(string $instance) :void {
         self::$instance = trim($instance);
 
         if (self::$instance !== "" && class_exists("GBDB")) {
             self::$driver = "GBDB";
             GBDB::setInstance(self::$instance);
         }
-
     }
 
-    private static function driver(): string {
+    private static function driver() :string {
         if (self::$driver !== "") {
             return self::$driver;
         }
@@ -45,31 +48,28 @@ class DatabaseBridge {
         return "GBDB";
     }
 
-    private static function isSQL(): bool {
-        return self::driver() === "SQL";
+    private static function isSQL() :bool {
+        return !GBDBConfig::flag('failover', 'enabled') && self::driver() === 'SQL';
     }
 
-    private static function isGBDB(): bool {
-        return self::driver() === "GBDB";
+    private static function isGBDB() :bool {
+        return GBDBConfig::flag('failover', 'enabled') || self::driver() === 'GBDB';
     }
 
-    private static function ensureSQL(): void {
+    private static function ensureSQL() :void {
         if (self::isSQL()) {
             try {
                 SQL::connect();
             } catch (Throwable $e) {
                 error_log("[DatabaseBridge] SQL connection failed: " . $e->getMessage());
             }
-
         }
-
     }
 
-    private static function ensureGBDB(): void {
+    private static function ensureGBDB() :void {
         if (self::isGBDB() && self::$instance !== "" && class_exists("GBDB")) {
             GBDB::setInstance(self::$instance);
         }
-
     }
 
     /**
@@ -81,7 +81,7 @@ class DatabaseBridge {
      * @param mixed $is
      * @return mixed
      */
-    public static function get(string $db, string $table, bool $filter = false, string $where = "", mixed $is = ""): mixed {
+    public static function get(string $db, string $table, bool $filter = false, string $where = "", mixed $is = "") :mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -107,7 +107,6 @@ class DatabaseBridge {
 
             return [];
         }
-
     }
 
     /**
@@ -117,7 +116,7 @@ class DatabaseBridge {
      * @param array $data
      * @return bool|int
      */
-    public static function insert(string $db, string $table, array $data): mixed {
+    public static function insert(string $db, string $table, array $data) :mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -137,7 +136,6 @@ class DatabaseBridge {
 
             return false;
         }
-
     }
 
     /**
@@ -148,7 +146,7 @@ class DatabaseBridge {
      * @param mixed $is
      * @return bool
      */
-    public static function delete(string $db, string $table, string $where, mixed $is): mixed {
+    public static function delete(string $db, string $table, string $where, mixed $is) :mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -168,7 +166,6 @@ class DatabaseBridge {
 
             return false;
         }
-
     }
 
     /**
@@ -180,7 +177,7 @@ class DatabaseBridge {
      * @param array $data
      * @return bool
      */
-    public static function update(string $db, string $table, string $where, mixed $is, array $data): mixed {
+    public static function update(string $db, string $table, string $where, mixed $is, array $data) :mixed {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -200,7 +197,6 @@ class DatabaseBridge {
 
             return false;
         }
-
     }
 
     /**
@@ -208,7 +204,7 @@ class DatabaseBridge {
      * @param string $name
      * @return bool
      */
-    public static function createDatabase(string $name): bool {
+    public static function createDatabase(string $name) :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -227,7 +223,7 @@ class DatabaseBridge {
      * @param string $name
      * @return bool
      */
-    public static function deleteDatabase(string $name): bool {
+    public static function deleteDatabase(string $name) :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -248,7 +244,7 @@ class DatabaseBridge {
      * @param array $columns
      * @return bool
      */
-    public static function createTable(string $db, string $table, array $columns): bool {
+    public static function createTable(string $db, string $table, array $columns) :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -268,7 +264,7 @@ class DatabaseBridge {
      * @param string $table
      * @return bool
      */
-    public static function deleteTable(string $db, string $table): bool {
+    public static function deleteTable(string $db, string $table) :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -290,7 +286,7 @@ class DatabaseBridge {
      * @param mixed $default
      * @return bool
      */
-    public static function addColumn(string $db, string $table, string $column, mixed $default = ""): bool {
+    public static function addColumn(string $db, string $table, string $column, mixed $default = "") :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -311,7 +307,7 @@ class DatabaseBridge {
      * @param string $column
      * @return bool
      */
-    public static function createIndex(string $db, string $table, string $column): bool {
+    public static function createIndex(string $db, string $table, string $column) :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -325,7 +321,7 @@ class DatabaseBridge {
      * starts transaction
      * @return bool
      */
-    public static function begin(): bool {
+    public static function begin() :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -339,7 +335,7 @@ class DatabaseBridge {
      * saves transaction
      * @return bool
      */
-    public static function commit(): bool {
+    public static function commit() :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -353,7 +349,7 @@ class DatabaseBridge {
      * deletes transaction
      * @return bool
      */
-    public static function rollback(): bool {
+    public static function rollback() :bool {
         if (self::isGBDB()) {
             self::ensureGBDB();
 
@@ -362,5 +358,4 @@ class DatabaseBridge {
 
         return !self::isSQL() && GBDB::rollback();
     }
-
 }

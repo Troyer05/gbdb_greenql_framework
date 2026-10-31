@@ -1,7 +1,6 @@
 <?php
 
 trait GBDB_MaintenanceTrait {
-
     /**
      * handles compact table.
      *
@@ -10,7 +9,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function compactTable(string $database, string $table): bool {
+    public static function compactTable(string $database, string $table) :bool {
         $file = self::makePath($database, $table);
 
         if (!file_exists($file)) {
@@ -40,6 +39,12 @@ trait GBDB_MaintenanceTrait {
                 return false;
             }
 
+            // The checkpoint is durable before old WAL entries are discarded.
+            // Clearing WAL before the append log also tolerates a crash between both writes.
+            if (!GBDBStorage::atomicWrite($appendFile . '.wal', '')) {
+                return false;
+            }
+
             if (!GBDBStorage::atomicWrite($appendFile, "")) {
                 return false;
             }
@@ -63,7 +68,6 @@ trait GBDB_MaintenanceTrait {
                 if (isset($row["id"])) {
                     $maxId = max($maxId, (int)$row["id"]);
                 }
-
             }
 
             $meta["rows"] = $rows;
@@ -95,10 +99,12 @@ trait GBDB_MaintenanceTrait {
      *
      * @return string result.
      */
-    public static function snapshot(string $database, string $table, string $reason = "manual"): string {
+    public static function snapshot(string $database, string $table, string $reason = "manual") :string {
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return "";
+        if (!is_file($file)) {
+            return "";
+        }
 
         $extras = [
             self::metaFileForTable($database, $table),
@@ -129,18 +135,24 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createIndex(string $database, string $table, string|array $column, string $type = 'single', array $options = []): bool {
+    public static function createIndex(string $database, string $table, string|array $column, string $type = 'single', array $options = []) :bool {
         $columns = is_array($column) ? $column : [$column];
         $columns = array_values(array_filter(array_map(fn($c) => Format::cleanString((string)$c), $columns), fn($c) => $c !== '' && $c !== 'id'));
         $type = strtolower(trim($type));
 
-        if ($type === '') $type = count($columns) > 1 ? 'composite' : 'single';
+        if ($type === '') {
+            $type = count($columns) > 1 ? 'composite' : 'single';
+        }
 
-        if (empty($columns)) return false;
+        if (empty($columns)) {
+            return false;
+        }
 
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return false;
+        if (!is_file($file)) {
+            return false;
+        }
 
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
@@ -149,18 +161,28 @@ trait GBDB_MaintenanceTrait {
         $res = self::withTableLock($lockFile, function () use ($file, $metaFile, $appendFile, $columns, $type, $options) {
             $base = self::ini($file);
 
-            if (empty($base) || !isset($base[0]) || !is_array($base[0])) return false;
+            if (empty($base) || !isset($base[0]) || !is_array($base[0])) {
+                return false;
+            }
             $full = self::applyOps($base, self::readAppendOps($appendFile));
             $header = $full[0] ?? [];
 
-            if (!is_array($header)) return false;
+            if (!is_array($header)) {
+                return false;
+            }
 
-            foreach ($columns as $col) if (!array_key_exists($col, $header)) return false;
+            foreach ($columns as $col) {
+                if (!array_key_exists($col, $header)) {
+                    return false;
+                }
+            }
 
             $name = (string)($options['name'] ?? GBDBStorage::indexName($type, $columns));
             $definition = GBDBStorage::normalizeIndexDefinition($name, $type, $columns, $options);
 
-            if (!GBDBStorage::writeAdvancedIndex($file, $definition, $full)) return false;
+            if (!GBDBStorage::writeAdvancedIndex($file, $definition, $full)) {
+                return false;
+            }
 
             if (count($columns) === 1 && in_array($type, ['single', 'unique', 'sorted', 'range', 'prefix', 'primary'], true)) {
                 GBDBStorage::writeIndex($file, $columns[0], $full);
@@ -168,23 +190,36 @@ trait GBDB_MaintenanceTrait {
 
             $meta = self::readMeta($metaFile);
 
-            if (!isset($meta['indexes']) || !is_array($meta['indexes'])) $meta['indexes'] = [];
+            if (!isset($meta['indexes']) || !is_array($meta['indexes'])) {
+                $meta['indexes'] = [];
+            }
 
-            if (!isset($meta['index_definitions']) || !is_array($meta['index_definitions'])) $meta['index_definitions'] = [];
+            if (!isset($meta['index_definitions']) || !is_array($meta['index_definitions'])) {
+                $meta['index_definitions'] = [];
+            }
 
-            foreach ($columns as $col) if (!in_array($col, $meta['indexes'], true)) $meta['indexes'][] = $col;
+            foreach ($columns as $col) {
+                if (!in_array($col, $meta['indexes'], true)) {
+                    $meta['indexes'][] = $col;
+                }
+            }
             sort($meta['indexes'], SORT_NATURAL | SORT_FLAG_CASE);
             $meta['index_definitions'][$definition['name']] = $definition;
 
-            if (!isset($meta['constraints']) || !is_array($meta['constraints'])) $meta['constraints'] = [];
+            if (!isset($meta['constraints']) || !is_array($meta['constraints'])) {
+                $meta['constraints'] = [];
+            }
 
             if (!empty($definition['unique'])) {
                 foreach ($columns as $col) {
-                    if (!isset($meta['constraints'][$col]) || !is_array($meta['constraints'][$col])) $meta['constraints'][$col] = [];
+                    if (!isset($meta['constraints'][$col]) || !is_array($meta['constraints'][$col])) {
+                        $meta['constraints'][$col] = [];
+                    }
 
-                    if (count($columns) === 1) $meta['constraints'][$col]['unique'] = true;
+                    if (count($columns) === 1) {
+                        $meta['constraints'][$col]['unique'] = true;
+                    }
                 }
-
             }
 
             $meta['checksum'] = GBDBStorage::checksum($full);
@@ -207,7 +242,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createPrimaryIndex(string $database, string $table, string $column = 'id'): bool {
+    public static function createPrimaryIndex(string $database, string $table, string $column = 'id') :bool {
         return self::createIndex($database, $table, $column === 'id' ? self::firstUserColumn($database, $table) : $column, 'primary', ['unique' => true]);
     }
 
@@ -220,7 +255,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createUniqueIndex(string $database, string $table, string|array $columns): bool {
+    public static function createUniqueIndex(string $database, string $table, string|array $columns) :bool {
         return self::createIndex($database, $table, $columns, 'unique', ['unique' => true]);
     }
 
@@ -233,7 +268,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createCompositeIndex(string $database, string $table, array $columns): bool {
+    public static function createCompositeIndex(string $database, string $table, array $columns) :bool {
         return self::createIndex($database, $table, $columns, 'composite');
     }
 
@@ -246,7 +281,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createSortedIndex(string $database, string $table, string|array $columns): bool {
+    public static function createSortedIndex(string $database, string $table, string|array $columns) :bool {
         return self::createIndex($database, $table, $columns, 'sorted', ['sorted' => true]);
     }
 
@@ -259,7 +294,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createRangeIndex(string $database, string $table, string $column): bool {
+    public static function createRangeIndex(string $database, string $table, string $column) :bool {
         return self::createIndex($database, $table, $column, 'range', ['sorted' => true]);
     }
 
@@ -272,7 +307,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createPrefixIndex(string $database, string $table, string $column): bool {
+    public static function createPrefixIndex(string $database, string $table, string $column) :bool {
         return self::createIndex($database, $table, $column, 'prefix', ['prefix' => true]);
     }
 
@@ -285,14 +320,20 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function createFulltextIndex(string $database, string $table, array $columns = []): bool {
-        if (empty($columns)) $columns = array_values(array_filter(self::getKeys($database, $table), fn($k) => $k !== 'id'));
+    public static function createFulltextIndex(string $database, string $table, array $columns = []) :bool {
+        if (empty($columns)) {
+            $columns = array_values(array_filter(self::getKeys($database, $table), fn($k) => $k !== 'id'));
+        }
 
         return self::createIndex($database, $table, $columns, 'fulltext', ['fulltext' => true]);
     }
 
-    private static function firstUserColumn(string $database, string $table): string {
-        foreach (self::getKeys($database, $table) as $key) if ($key !== 'id') return (string)$key;
+    private static function firstUserColumn(string $database, string $table) :string {
+        foreach (self::getKeys($database, $table) as $key) {
+            if ($key !== 'id') {
+                return (string)$key;
+            }
+        }
 
         return '';
     }
@@ -306,11 +347,13 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function dropIndex(string $database, string $table, string $column): bool {
+    public static function dropIndex(string $database, string $table, string $column) :bool {
         $column = Format::cleanString($column);
         $file = self::makePath($database, $table);
 
-        if ($column === '' || !is_file($file)) return false;
+        if ($column === '' || !is_file($file)) {
+            return false;
+        }
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
 
@@ -325,13 +368,16 @@ trait GBDB_MaintenanceTrait {
                     @unlink(GBDBStorage::advancedIndexFile($file, (string)$name));
                     unset($defs[$name]);
                 }
-
             }
 
             $meta['index_definitions'] = $defs;
             $still = [];
 
-            foreach ($defs as $def) foreach ((array)($def['columns'] ?? []) as $col) $still[$col] = true;
+            foreach ($defs as $def) {
+                foreach ((array)($def['columns'] ?? []) as $col) {
+                    $still[$col] = true;
+                }
+            }
             $meta['indexes'] = array_keys($still);
             GBDBStorage::deleteIndex($file, $column);
             GBDBStorage::writeAdvancedIndexMeta($file, $defs);
@@ -348,10 +394,12 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function listIndexes(string $database, string $table): array {
+    public static function listIndexes(string $database, string $table) :array {
         $meta = self::readMeta(self::metaFileForTable($database, $table));
 
-        if (!empty($meta['index_definitions']) && is_array($meta['index_definitions'])) return $meta['index_definitions'];
+        if (!empty($meta['index_definitions']) && is_array($meta['index_definitions'])) {
+            return $meta['index_definitions'];
+        }
 
         return array_values($meta['indexes'] ?? []);
     }
@@ -364,10 +412,12 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function rebuildIndexes(string $database, string $table): bool {
+    public static function rebuildIndexes(string $database, string $table) :bool {
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return false;
+        if (!is_file($file)) {
+            return false;
+        }
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
         $appendFile = self::appendFileForTable($database, $table);
@@ -383,7 +433,9 @@ trait GBDB_MaintenanceTrait {
 
             $base = self::ini($file);
 
-            if (empty($base) || !isset($base[0]) || !is_array($base[0])) return false;
+            if (empty($base) || !isset($base[0]) || !is_array($base[0])) {
+                return false;
+            }
             $full = self::applyOps($base, self::readAppendOps($appendFile));
 
             if (empty($defs)) {
@@ -391,7 +443,6 @@ trait GBDB_MaintenanceTrait {
                     $column = (string)$column;
                     $defs[GBDBStorage::indexName('single', [$column])] = GBDBStorage::normalizeIndexDefinition('', 'single', [$column]);
                 }
-
             }
 
             foreach ($defs as $name => $definition) {
@@ -399,7 +450,9 @@ trait GBDB_MaintenanceTrait {
                 GBDBStorage::writeAdvancedIndex($file, $definition, $full);
                 $cols = (array)($definition['columns'] ?? []);
 
-                if (count($cols) === 1) GBDBStorage::writeIndex($file, $cols[0], $full);
+                if (count($cols) === 1) {
+                    GBDBStorage::writeIndex($file, $cols[0], $full);
+                }
             }
 
             $meta['index_definitions'] = $defs;
@@ -420,7 +473,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function repairIndexes(string $database, string $table): array {
+    public static function repairIndexes(string $database, string $table) :array {
         $before = self::verifyIndexes($database, $table);
         $ok = self::rebuildIndexes($database, $table);
         $after = self::verifyIndexes($database, $table);
@@ -436,7 +489,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function verifyIndexes(string $database, string $table): array {
+    public static function verifyIndexes(string $database, string $table) :array {
         $file = self::makePath($database, $table);
         $meta = self::readMeta(self::metaFileForTable($database, $table));
         $defs = is_array($meta['index_definitions'] ?? null) ? $meta['index_definitions'] : [];
@@ -445,10 +498,15 @@ trait GBDB_MaintenanceTrait {
         foreach ($defs as $name => $definition) {
             $idx = GBDBStorage::readAdvancedIndex($file, (string)$name);
 
-            if (empty($idx)) { $errors[] = 'index_missing:' . $name; continue; }
+            if (empty($idx)) {
+                $errors[] = 'index_missing:' . $name;
+                continue;
+            }
             $map = is_array($idx['map'] ?? null) ? $idx['map'] : [];
 
-            if (!hash_equals((string)($idx['checksum'] ?? ''), GBDBStorage::checksum($map))) $errors[] = 'index_checksum_mismatch:' . $name;
+            if (!hash_equals((string)($idx['checksum'] ?? ''), GBDBStorage::checksum($map))) {
+                $errors[] = 'index_checksum_mismatch:' . $name;
+            }
         }
 
         return ['ok' => empty($errors), 'errors' => $errors, 'indexes' => array_keys($defs)];
@@ -462,7 +520,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function health(string $database, string $table): array {
+    public static function health(string $database, string $table) :array {
         $file = self::makePath($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
         $appendFile = self::appendFileForTable($database, $table);
@@ -487,9 +545,13 @@ trait GBDB_MaintenanceTrait {
         $ids = [];
 
         foreach ($full as $i => $row) {
-            if (!is_array($row)) continue;
+            if (!is_array($row)) {
+                continue;
+            }
 
-            if ($i === 0 && self::isHeaderRow($row)) continue;
+            if ($i === 0 && self::isHeaderRow($row)) {
+                continue;
+            }
             $rows++;
 
             if (!isset($row["id"])) {
@@ -543,7 +605,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function repairTable(string $database, string $table): bool {
+    public static function repairTable(string $database, string $table) :bool {
         self::snapshot($database, $table, "before_repair");
 
         if (!self::compactTable($database, $table)) {
@@ -577,7 +639,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function meta(string $database, string $table): array {
+    public static function meta(string $database, string $table) :array {
         return self::readMeta(self::metaFileForTable($database, $table));
     }
 
@@ -591,14 +653,18 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function addConstraint(string $database, string $table, string $column, string $type): bool {
+    public static function addConstraint(string $database, string $table, string $column, string $type) :bool {
         $column = Format::cleanString($column);
         $type = strtolower(Format::cleanString($type));
         $file = self::makePath($database, $table);
 
-        if ($column === "" || $column === "id" || !is_file($file)) return false;
+        if ($column === "" || $column === "id" || !is_file($file)) {
+            return false;
+        }
 
-        if (!in_array($type, ["unique", "required"], true)) return false;
+        if (!in_array($type, ["unique", "required"], true)) {
+            return false;
+        }
 
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
@@ -607,9 +673,13 @@ trait GBDB_MaintenanceTrait {
         $res = self::withTableLock($lockFile, function () use ($file, $metaFile, $appendFile, $column, $type) {
             $base = self::ini($file);
 
-            if (empty($base) || !isset($base[0]) || !is_array($base[0])) return false;
+            if (empty($base) || !isset($base[0]) || !is_array($base[0])) {
+                return false;
+            }
 
-            if (!array_key_exists($column, $base[0])) return false;
+            if (!array_key_exists($column, $base[0])) {
+                return false;
+            }
 
             $full = self::applyOps($base, self::readAppendOps($appendFile));
             $meta = self::readMeta($metaFile);
@@ -622,14 +692,17 @@ trait GBDB_MaintenanceTrait {
             $constraints[$column][$type] = true;
 
             foreach ($full as $i => $row) {
-                if (!is_array($row)) continue;
+                if (!is_array($row)) {
+                    continue;
+                }
 
-                if ($i === 0 && self::isHeaderRow($row)) continue;
+                if ($i === 0 && self::isHeaderRow($row)) {
+                    continue;
+                }
 
                 if (!GBDBStorage::validateConstraints($full, $row, $constraints, isset($row["id"]) ? (int)$row["id"] : null)) {
                     return false;
                 }
-
             }
 
             $meta["constraints"] = $constraints;
@@ -637,7 +710,9 @@ trait GBDB_MaintenanceTrait {
             if ($type === "unique") {
                 $idx = $meta["indexes"] ?? [];
 
-                if (!in_array($column, $idx, true)) $idx[] = $column;
+                if (!in_array($column, $idx, true)) {
+                    $idx[] = $column;
+                }
                 sort($idx, SORT_NATURAL | SORT_FLAG_CASE);
                 $meta["indexes"] = $idx;
                 GBDBStorage::writeIndex($file, $column, $full);
@@ -661,14 +736,18 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function dropConstraint(string $database, string $table, string $column, string $type): bool {
+    public static function dropConstraint(string $database, string $table, string $column, string $type) :bool {
         $column = Format::cleanString($column);
         $type = strtolower(Format::cleanString($type));
         $file = self::makePath($database, $table);
 
-        if ($column === "" || !is_file($file)) return false;
+        if ($column === "" || !is_file($file)) {
+            return false;
+        }
 
-        if (!in_array($type, ["unique", "required"], true)) return false;
+        if (!in_array($type, ["unique", "required"], true)) {
+            return false;
+        }
 
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
@@ -702,7 +781,7 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function listConstraints(string $database, string $table): array {
+    public static function listConstraints(string $database, string $table) :array {
         $meta = self::readMeta(self::metaFileForTable($database, $table));
 
         return $meta["constraints"] ?? [];
@@ -716,14 +795,16 @@ trait GBDB_MaintenanceTrait {
      *
      * @return array result.
      */
-    public static function vacuum(string $database, string $table): array {
+    public static function vacuum(string $database, string $table) :array {
         if (!self::compactTable($database, $table)) {
             return ["ok" => false, "error" => "compact_failed"];
         }
 
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return ["ok" => false, "error" => "table_not_found"];
+        if (!is_file($file)) {
+            return ["ok" => false, "error" => "table_not_found"];
+        }
 
         $rows = self::ini($file);
         $meta = self::readMeta(self::metaFileForTable($database, $table));
@@ -747,10 +828,14 @@ trait GBDB_MaintenanceTrait {
      *
      * @return bool result.
      */
-    public static function restoreSnapshot(string $database, string $table, string $snapshotId): bool {
+    public static function restoreSnapshot(string $database, string $table, string $snapshotId) :bool {
+        self::guardGdpStructure('restore_snapshot', $database, $table);
+
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return false;
+        if (!is_file($file)) {
+            return false;
+        }
 
         $lockFile = self::lockFileForTable($database, $table);
 
@@ -760,5 +845,4 @@ trait GBDB_MaintenanceTrait {
 
         return (bool)$res;
     }
-
 }

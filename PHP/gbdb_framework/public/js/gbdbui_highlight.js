@@ -46,7 +46,8 @@
     const phpClassForWord = word => {
         const lower = word.toLowerCase();
         for (const [name, set] of Object.entries(phpKeywordGroups)) {
-            if (set.has(lower)) return 'tok-php-' + name;
+            if (set.has(lower)) { return 'tok-php-' + name;
+            }
         }
         return '';
     };
@@ -113,7 +114,7 @@
                 continue;
             }
 
-            const objectMember = rest.match(/^-&gt;[A-Za-z_][A-Za-z0-9_]*/);
+            const objectMember = rest.match(/^->[A-Za-z_][A-Za-z0-9_]*/);
             if (objectMember) {
                 out += '<span class="tok-field">' + escapeHtml(objectMember[0]) + '</span>';
                 i += objectMember[0].length;
@@ -186,15 +187,24 @@
 
     const gqlBuiltinClass = value => {
         const lower = String(value || '').toLowerCase();
-        if (gqlIdentityFunctions.has(lower)) return 'tok-identity-fn';
-        if (gqlPatternFunctions.has(lower)) return 'tok-pattern-fn';
-        if (gqlHashFunctions.has(lower)) return 'tok-hash-fn';
-        if (gqlApiFunctions.has(lower)) return 'tok-api-fn';
-        if (gqlInstanceFunctions.has(lower)) return 'tok-instance-fn';
-        if (gqlDataFunctions.has(lower)) return 'tok-data-fn';
-        if (gqlSchemaFunctions.has(lower)) return 'tok-schema-fn';
-        if (gqlAdvancedFunctions.has(lower)) return 'tok-advanced-fn';
-        if (gqlDeclaredOnlyFunctions.has(lower)) return 'tok-declared-only-fn';
+        if (gqlIdentityFunctions.has(lower)) { return 'tok-identity-fn';
+        }
+        if (gqlPatternFunctions.has(lower)) { return 'tok-pattern-fn';
+        }
+        if (gqlHashFunctions.has(lower)) { return 'tok-hash-fn';
+        }
+        if (gqlApiFunctions.has(lower)) { return 'tok-api-fn';
+        }
+        if (gqlInstanceFunctions.has(lower)) { return 'tok-instance-fn';
+        }
+        if (gqlDataFunctions.has(lower)) { return 'tok-data-fn';
+        }
+        if (gqlSchemaFunctions.has(lower)) { return 'tok-schema-fn';
+        }
+        if (gqlAdvancedFunctions.has(lower)) { return 'tok-advanced-fn';
+        }
+        if (gqlDeclaredOnlyFunctions.has(lower)) { return 'tok-declared-only-fn';
+        }
         return gqlImplementedFunctions.has(lower) ? 'tok-builtin-fn' : 'tok-declared-only-fn';
     };
 
@@ -220,7 +230,8 @@
     const gqlClassForWord = word => {
         const upper = word.toUpperCase();
         for (const [cls, set] of Object.entries(gqlKeywordGroups)) {
-            if (set.has(upper)) return 'tok-' + cls;
+            if (set.has(upper)) { return 'tok-' + cls;
+            }
         }
         return '';
     };
@@ -273,9 +284,11 @@
                 continue;
             }
 
-            const typedDeclare = rest.match(/^(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?(\s+)?(DECLARE|DECALRE|DELACE)(\s+)(:)([A-Za-z_][A-Za-z0-9_]*)(\s+)([$]?[A-Za-z_][A-Za-z0-9_]*)/i);
+            // Leerraum vor DECLARE/F gehört nur zum Treffer, wenn ein Modifier davorsteht; sonst ginge der Zeilenumbruch verloren.
+            const typedDeclare = rest.match(/^(?:(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)(\s+))?(DECLARE|DECALRE|DELACE)(\s+)(:)([A-Za-z_][A-Za-z0-9_]*)(\s+)([$]?[A-Za-z_][A-Za-z0-9_]*)/i);
             if (typedDeclare) {
-                if (typedDeclare[1]) out += '<span class="tok-security">' + escapeHtml(typedDeclare[1]) + '</span>' + escapeHtml(typedDeclare[2] || '');
+                if (typedDeclare[1]) { out += '<span class="tok-security">' + escapeHtml(typedDeclare[1]) + '</span>' + escapeHtml(typedDeclare[2] || '');
+                }
                 out += '<span class="tok-decl">' + escapeHtml(typedDeclare[3]) + '</span>' + escapeHtml(typedDeclare[4]);
                 out += '<span class="tok-op">:</span><span class="tok-type">' + escapeHtml(typedDeclare[6]) + '</span>' + escapeHtml(typedDeclare[7]);
                 out += '<span class="tok-var-decl">' + escapeHtml(typedDeclare[8]) + '</span>';
@@ -283,18 +296,20 @@
                 continue;
             }
 
-            const plainDeclare = rest.match(/^(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?(\s+)?(DECLARE|DECALRE|DELACE)(\s+)([$]?[A-Za-z_][A-Za-z0-9_]*)/i);
+            const plainDeclare = rest.match(/^(?:(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)(\s+))?(DECLARE|DECALRE|DELACE)(\s+)([$]?[A-Za-z_][A-Za-z0-9_]*)/i);
             if (plainDeclare) {
-                if (plainDeclare[1]) out += '<span class="tok-security">' + escapeHtml(plainDeclare[1]) + '</span>' + escapeHtml(plainDeclare[2] || '');
+                if (plainDeclare[1]) { out += '<span class="tok-security">' + escapeHtml(plainDeclare[1]) + '</span>' + escapeHtml(plainDeclare[2] || '');
+                }
                 out += '<span class="tok-decl">' + escapeHtml(plainDeclare[3]) + '</span>' + escapeHtml(plainDeclare[4]);
                 out += '<span class="tok-var-decl">' + escapeHtml(plainDeclare[5]) + '</span>';
                 i += plainDeclare[0].length;
                 continue;
             }
 
-            const fnDecl = rest.match(/^(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)?(\s+)?(F|FUNCTION)(\s+)([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()/i);
+            const fnDecl = rest.match(/^(?:(PUB|PRIV|PUBLIC|PRIVATE|PROTECTED)(\s+))?(F|FUNCTION)(\s+)([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()/i);
             if (fnDecl) {
-                if (fnDecl[1]) out += '<span class="tok-security">' + escapeHtml(fnDecl[1]) + '</span>' + escapeHtml(fnDecl[2] || '');
+                if (fnDecl[1]) { out += '<span class="tok-security">' + escapeHtml(fnDecl[1]) + '</span>' + escapeHtml(fnDecl[2] || '');
+                }
                 out += '<span class="tok-fn-key">' + escapeHtml(fnDecl[3]) + '</span>' + escapeHtml(fnDecl[4]);
                 out += '<span class="tok-fndef">' + escapeHtml(fnDecl[5]) + '</span>';
                 i += fnDecl[0].length;
@@ -443,6 +458,7 @@
             i++;
         }
 
+
         return out;
     };
 
@@ -496,85 +512,291 @@
         return out;
     };
 
-    window.GBDBUIHighlight = { php: highlightPhp, gql: highlightGql, json: highlightJson };
+    // Einrückung für "Auto-Einrücken" im PHP-Editor: Klammerebenen zählen, Strings und Kommentare ignorieren.
+    const formatPhp = source => {
+        const lines = source.replace(/\r\n?/g, '\n').split('\n');
+        const out = [];
+        let level = 0;
+        let inBlockComment = false;
 
-    const currentIndent = line => (line.match(/^\s*/) || [''])[0];
+        for (const raw of lines) {
+            const trimmed = raw.trim();
 
+            if (trimmed === '') {
+                out.push('');
+                continue;
+            }
+
+            if (inBlockComment) {
+                out.push('    '.repeat(level) + trimmed);
+                if (trimmed.includes('*/')) {
+                    inBlockComment = false;
+                }
+                continue;
+            }
+
+            if (trimmed.startsWith('/*') && !trimmed.includes('*/')) {
+                out.push('    '.repeat(level) + trimmed);
+                inBlockComment = true;
+                continue;
+            }
+
+            if (/^(\}|\]|\)|case\b|default\b)/i.test(trimmed)) {
+                level = Math.max(0, level - 1);
+            }
+
+            out.push('    '.repeat(level) + trimmed);
+
+            const clean = trimmed
+                .replace(/'(?:\\.|[^'\\])*'/g, "''")
+                .replace(/"(?:\\.|[^"\\])*"/g, '""')
+                .replace(/\/\/.*$/g, '')
+                .replace(/#.*$/g, '');
+            const opens = (clean.match(/[({[]/g) || []).length;
+            const closes = (clean.match(/[)}\]]/g) || []).length;
+            level = Math.max(0, level + opens - closes);
+
+            if (/^(case\b|default\b)/i.test(trimmed)) {
+                level++;
+            }
+        }
+
+        return out.join('\n');
+    };
+
+    const formatJson = source => JSON.stringify(JSON.parse(source || '{}'), null, 4);
+
+    const highlighters = { php: highlightPhp, gql: highlightGql, json: highlightJson };
+    const formatters = { php: formatPhp, json: formatJson };
+    const EDITOR_SELECTOR = '.gbdbui-highlight-editor, .editor-shell, .gbdbui-code-wrap';
+    const INDENT = '    ';
+
+    const lineStartOf = (value, pos) => value.lastIndexOf('\n', pos - 1) + 1;
+
+    /*
+     * Overlay-Editor: Die Textarea liegt transparent über einem <pre>, das denselben Text eingefärbt zeigt.
+     * Damit Cursor und Farben deckungsgleich bleiben, zeigt das <pre> exakt den Textarea-Inhalt
+     * (bei Abweichung unformatiert) und wird per transform statt eigener Scrollposition mitbewegt.
+     */
     function bindEditor(box) {
         const pre = box.querySelector('pre');
         const textarea = box.querySelector('textarea');
-        const lang = String(box.dataset.lang || 'gql').toLowerCase();
-        if (!pre || !textarea) return;
 
-        const highlight = lang === 'php' ? highlightPhp : (lang === 'json' ? highlightJson : highlightGql);
+        if (!pre || !textarea || box.dataset.editorReady === '1') {
+            return;
+        }
+
+        box.dataset.editorReady = '1';
+        const lang = String(box.dataset.lang || 'gql').toLowerCase();
+        const highlight = highlighters[lang] || highlightGql;
+        const code = document.createElement('code');
+        let tabLeavesEditor = false;
+        pre.textContent = '';
+        pre.appendChild(code);
+
+        const syncScroll = () => {
+            code.style.transform = 'translate(' + (-textarea.scrollLeft) + 'px, ' + (-textarea.scrollTop) + 'px)';
+        };
 
         const paint = () => {
-            pre.innerHTML = highlight(textarea.value) + '\n';
-            pre.scrollTop = textarea.scrollTop;
-            pre.scrollLeft = textarea.scrollLeft;
+            const value = textarea.value;
+            // Der abschließende Umbruch hält eine leere letzte Zeile im <pre> genauso hoch wie in der Textarea.
+            code.innerHTML = highlight(value) + '\n';
+
+            if (code.textContent !== value + '\n') {
+                code.textContent = value + '\n';
+            }
+
+            syncScroll();
         };
 
-        const autoIndent = event => {
+        // Über execCommand bleibt die native Rückgängig-Funktion (Strg + Z) erhalten.
+        const replaceRange = (start, end, text, selectStart, selectEnd) => {
+            if (document.activeElement !== textarea) {
+                textarea.focus({ preventScroll: true });
+            }
+
+            textarea.setSelectionRange(start, end);
+            let native = false;
+
+            try {
+                native = document.execCommand(text === '' ? 'delete' : 'insertText', false, text);
+            } catch (error) {
+                native = false;
+            }
+
+            if (!native || textarea.value.slice(start, start + text.length) !== text) {
+                textarea.setRangeText(text, start, textarea.selectionEnd, 'end');
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            const caret = selectStart === undefined ? start + text.length : selectStart;
+            textarea.setSelectionRange(caret, selectEnd === undefined ? caret : selectEnd);
+        };
+
+        const indentLines = outdent => {
+            const value = textarea.value;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+
+            if (!outdent && !value.slice(start, end).includes('\n')) {
+                replaceRange(start, end, INDENT);
+                return;
+            }
+
+            const blockStart = lineStartOf(value, start);
+            // Endet die Auswahl am Anfang einer Zeile, bleibt diese Zeile unverändert.
+            const lastPos = end > start && value[end - 1] === '\n' ? end - 1 : end;
+            const lineEnd = value.indexOf('\n', lastPos);
+            const blockEnd = lineEnd === -1 ? value.length : lineEnd;
+            const original = value.slice(blockStart, blockEnd);
+            let firstShift = 0;
+            let totalShift = 0;
+
+            const changed = original.split('\n').map((line, index) => {
+                if (outdent) {
+                    const removed = (line.match(/^(?: {1,4}|\t)/) || [''])[0].length;
+                    firstShift = index === 0 ? -removed : firstShift;
+                    totalShift -= removed;
+
+                    return line.slice(removed);
+                }
+
+                if (line.trim() === '') {
+                    return line;
+                }
+
+                firstShift = index === 0 ? INDENT.length : firstShift;
+                totalShift += INDENT.length;
+
+                return INDENT + line;
+            }).join('\n');
+
+            if (changed === original) {
+                return;
+            }
+
+            const newStart = start === blockStart ? blockStart : Math.max(blockStart, start + firstShift);
+            const newEnd = start === end ? newStart : Math.max(newStart, end + totalShift);
+            replaceRange(blockStart, blockEnd, changed, newStart, newEnd);
+        };
+
+        const insertNewline = () => {
+            const value = textarea.value;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const line = value.slice(lineStartOf(value, start), start);
+            const after = value.slice(end);
+            const indent = (line.match(/^[ \t]*/) || [''])[0];
+            const opens = lang === 'php' ? /[{[(][ \t]*$/ : /[{[][ \t]*$/;
+            const closes = lang === 'php' ? /^[ \t]*[}\])]/ : /^[ \t]*[}\]]/;
+
+            if (!opens.test(line)) {
+                replaceRange(start, end, '\n' + indent);
+                return;
+            }
+
+            const inner = indent + INDENT;
+
+            if (closes.test(after)) {
+                // Zwischen einem Klammerpaar: Cursor eingerückt, schließende Klammer auf eigener Zeile.
+                replaceRange(start, end, '\n' + inner + '\n' + indent, start + 1 + inner.length);
+                return;
+            }
+
+            replaceRange(start, end, '\n' + inner);
+        };
+
+        const closeBracket = key => {
+            const value = textarea.value;
+            const start = textarea.selectionStart;
+            const lineStart = lineStartOf(value, start);
+            const line = value.slice(lineStart, start);
+
+            if (textarea.selectionEnd !== start || !/^[ \t]+$/.test(line)) {
+                return false;
+            }
+
+            replaceRange(lineStart, start, line.replace(/(?: {1,4}|\t)$/, '') + key);
+
+            return true;
+        };
+
+        textarea.addEventListener('keydown', event => {
+            if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) {
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                // Escape gibt die Tabulatortaste einmalig für die Navigation frei.
+                tabLeavesEditor = true;
+                return;
+            }
+
             if (event.key === 'Tab') {
+                if (tabLeavesEditor) {
+                    tabLeavesEditor = false;
+                    return;
+                }
+
                 event.preventDefault();
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-
-                if (start !== end && textarea.value.slice(start, end).includes('\n')) {
-                    const before = textarea.value.slice(0, start);
-                    const selected = textarea.value.slice(start, end);
-                    const after = textarea.value.slice(end);
-                    const indented = selected.split('\n').map(line => line === '' ? line : '    ' + line).join('\n');
-                    textarea.value = before + indented + after;
-                    textarea.selectionStart = start;
-                    textarea.selectionEnd = start + indented.length;
-                } else {
-                    textarea.setRangeText('    ', start, end, 'end');
-                }
-
-                paint();
+                indentLines(event.shiftKey);
                 return;
             }
 
-            if (event.key === '}') {
-                const pos = textarea.selectionStart;
-                const before = textarea.value.slice(0, pos);
-                const lineStart = before.lastIndexOf('\n') + 1;
-                const line = before.slice(lineStart);
+            tabLeavesEditor = false;
 
-                if (/^\s*$/.test(line)) {
-                    event.preventDefault();
-                    const base = currentIndent(line).replace(/ {1,4}$/, '');
-                    textarea.setRangeText(base + '}', lineStart, pos, 'end');
-                    paint();
-                }
-
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                insertNewline();
                 return;
             }
 
-            if (event.key !== 'Enter') return;
-
-            event.preventDefault();
-            const pos = textarea.selectionStart;
-            const before = textarea.value.slice(0, pos);
-            const after = textarea.value.slice(textarea.selectionEnd);
-            const line = before.split('\n').pop() || '';
-            let indent = currentIndent(line);
-            const opens = lang === 'php' ? /(?:\{|\[|\()\s*$/.test(line) : /(?:\{|\[)\s*$/.test(line);
-            const closesNext = lang === 'php' ? /^\s*(?:\}|\]|\))/.test(after) : /^\s*(?:\}|\])/.test(after);
-
-            if (opens) indent += '    ';
-            if (closesNext) indent = indent.replace(/ {1,4}$/, '');
-
-            textarea.setRangeText('\n' + indent, pos, textarea.selectionEnd, 'end');
-            paint();
-        };
+            if ((event.key === '}' || event.key === ']') && closeBracket(event.key)) {
+                event.preventDefault();
+            }
+        });
 
         textarea.addEventListener('input', paint);
-        textarea.addEventListener('keydown', autoIndent);
-        textarea.addEventListener('scroll', paint);
+        textarea.addEventListener('scroll', syncScroll);
+        // Vom Browser wiederhergestellte Formularwerte (Zurück-Navigation) neu einfärben.
+        window.addEventListener('pageshow', paint);
         paint();
+
+        box.gbdbEditor = {
+            format: () => {
+                const formatter = formatters[lang];
+
+                if (formatter) {
+                    const formatted = formatter(textarea.value);
+
+                    if (formatted !== textarea.value) {
+                        replaceRange(0, textarea.value.length, formatted, 0);
+                    }
+                }
+            }
+        };
     }
 
-    document.querySelectorAll('.gbdbui-highlight-editor').forEach(bindEditor);
+    window.GBDBUIHighlight = { php: highlightPhp, gql: highlightGql, json: highlightJson, formatPhp: formatPhp, bind: bindEditor };
+
+    document.querySelectorAll(EDITOR_SELECTOR).forEach(bindEditor);
+
+    document.querySelectorAll('[data-editor-format]').forEach(button => {
+        button.addEventListener('click', () => {
+            const target = document.getElementById(String(button.dataset.editorFormat || ''));
+            const box = target ? target.closest(EDITOR_SELECTOR) : null;
+
+            if (box && box.gbdbEditor) {
+                try {
+                    box.gbdbEditor.format();
+                } catch (error) {
+                    box.classList.add('is-invalid');
+                    window.setTimeout(() => box.classList.remove('is-invalid'), 900);
+                }
+
+                target.focus();
+            }
+        });
+    });
 }());

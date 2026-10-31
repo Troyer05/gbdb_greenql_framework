@@ -1,7 +1,6 @@
 <?php
 
 trait GBDB_QueryTrait {
-
     /**
      * handles query options.
      *
@@ -9,7 +8,7 @@ trait GBDB_QueryTrait {
      *
      * @return array result.
      */
-    public static function queryOptions(array $options = []): array {
+    public static function queryOptions(array $options = []) :array {
         if (isset($options['timeout'])) {
             self::$queryTimeout = max(1, (int)$options['timeout']);
         }
@@ -42,7 +41,7 @@ trait GBDB_QueryTrait {
      *
      * @return bool result.
      */
-    public static function prepareQuery(string $name, string $script): bool {
+    public static function prepareQuery(string $name, string $script) :bool {
         $name = Format::cleanString($name);
 
         if ($name === '' || trim($script) === '') {
@@ -63,7 +62,7 @@ trait GBDB_QueryTrait {
      *
      * @return array result.
      */
-    public static function executePreparedQuery(string $name, array $params = [], array $ctx = []): array {
+    public static function executePreparedQuery(string $name, array $params = [], array $ctx = []) :array {
         $name = Format::cleanString($name);
 
         if (!isset(self::$preparedQueries[$name])) {
@@ -88,7 +87,7 @@ trait GBDB_QueryTrait {
      *
      * @return string result.
      */
-    public static function bindQueryParams(string $script, array $params): string {
+    public static function bindQueryParams(string $script, array $params) :string {
         return preg_replace_callback('/:([a-zA-Z_][a-zA-Z0-9_]*)/', function ($m) use ($params) {
             $key = (string)$m[1];
 
@@ -102,7 +101,7 @@ trait GBDB_QueryTrait {
         }, $script) ?? $script;
     }
 
-    private static function queryCacheKey2(string $type, array $payload): string {
+    private static function queryCacheKey2(string $type, array $payload) :string {
         return $type . ':' . hash(
             'sha256',
             self::getInstance() . '|' . json_encode($payload, JSON_UNESCAPED_UNICODE)
@@ -114,7 +113,7 @@ trait GBDB_QueryTrait {
      *
      * @return void result.
      */
-    public static function clearQueryCache(): void {
+    public static function clearQueryCache() :void {
         self::$queryCache = [];
     }
 
@@ -137,7 +136,7 @@ trait GBDB_QueryTrait {
         string $leftKey,
         string $rightKey,
         array $options = []
-    ): array {
+    ) :array {
         return self::join($database, $leftTable, $rightTable, $leftKey, $rightKey, 'inner', $options);
     }
 
@@ -160,7 +159,7 @@ trait GBDB_QueryTrait {
         string $leftKey,
         string $rightKey,
         array $options = []
-    ): array {
+    ) :array {
         return self::join($database, $leftTable, $rightTable, $leftKey, $rightKey, 'left', $options);
     }
 
@@ -185,7 +184,7 @@ trait GBDB_QueryTrait {
         string $rightKey,
         string $type = 'inner',
         array $options = []
-    ): array {
+    ) :array {
         $started = microtime(true);
         $memoryStart = memory_get_usage(true);
         $type = strtolower($type) === 'left' ? 'left' : 'inner';
@@ -273,13 +272,11 @@ trait GBDB_QueryTrait {
                 foreach ($matches as $rrow) {
                     $rows[] = self::projectJoinRow($lrow, $rrow, $prefixLeft, $prefixRight, $select);
                 }
-
             }
 
             if (count($rows) >= $limit) {
                 break;
             }
-
         }
 
         $keys = [];
@@ -288,7 +285,6 @@ trait GBDB_QueryTrait {
             foreach (array_keys($row) as $key) {
                 $keys[$key] = true;
             }
-
         }
 
         $result = [
@@ -330,7 +326,7 @@ trait GBDB_QueryTrait {
         string $leftKey,
         string $rightKey,
         string $type = 'inner'
-    ): array {
+    ) :array {
         return [
             'type' => strtolower($type) === 'left' ? 'left' : 'inner',
             'left_table' => $leftTable,
@@ -345,7 +341,7 @@ trait GBDB_QueryTrait {
         ];
     }
 
-    private static function projectJoinRow(array $left, array $right, string $prefixLeft, string $prefixRight, array $select): array {
+    private static function projectJoinRow(array $left, array $right, string $prefixLeft, string $prefixRight, array $select) :array {
         $all = [];
 
         foreach ($left as $key => $value) {
@@ -366,7 +362,6 @@ trait GBDB_QueryTrait {
             if (array_key_exists((string)$key, $all)) {
                 $out[(string)$key] = $all[(string)$key];
             }
-
         }
 
         return $out;
@@ -379,7 +374,7 @@ trait GBDB_QueryTrait {
      *
      * @return array result.
      */
-    public static function subquery(callable $query): array {
+    public static function subquery(callable $query) :array {
         $started = microtime(true);
         $result = $query();
 
@@ -410,7 +405,7 @@ trait GBDB_QueryTrait {
      *
      * @return array result.
      */
-    public static function streamQuery(string $database, string $table, callable $callback, int $chunkSize = 500): array {
+    public static function streamQuery(string $database, string $table, callable $callback, int $chunkSize = 500) :array {
         $rows = self::getData($database, $table);
 
         if (!is_array($rows)) {
@@ -441,7 +436,7 @@ trait GBDB_QueryTrait {
      *
      * @return bool result.
      */
-    public static function allowFullScan(string $database, string $table, string $where = ''): bool {
+    public static function allowFullScan(string $database, string $table, string $where = '') :bool {
         if (!self::$queryBlockFullScan) {
             return true;
         }
@@ -455,5 +450,4 @@ trait GBDB_QueryTrait {
 
         return in_array($where, $indexes, true);
     }
-
 }

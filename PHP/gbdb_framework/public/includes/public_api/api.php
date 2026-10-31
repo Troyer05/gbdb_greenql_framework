@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 require_once __DIR__ . "/module_helper.php";
 
 class PublicAPI {
@@ -24,7 +26,20 @@ class PublicAPI {
      *
      * @return void
      */
-    public static function init(): void {
+    public static function init() :void {
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: no-store');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+            header('Allow: POST');
+            self::respond(405, 'POST required');
+        }
+
+        if (!GBDBRateLimiter::allow('public-api', (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), 600, 60)) {
+            header('Retry-After: 60');
+            self::respond(429, 'rate limit exceeded');
+        }
+
         self::readBody();
         self::parseAction();
         self::loadModules();
@@ -45,7 +60,7 @@ class PublicAPI {
      * @param string $table
      * @return void
      */
-    public static function setLogTable(string $table): void {
+    public static function setLogTable(string $table) :void {
         $table = Format::cleanString($table);
 
         if ($table == "") {
@@ -54,7 +69,7 @@ class PublicAPI {
 
         self::$logTable = $table;
 
-        self::withSystemInstance(function () use ($table): void {
+        self::withSystemInstance(function () use ($table) :void {
             if (!GBDB::exists(self::LOG_BASE, $table)) {
                 GBDB::createTable(self::LOG_BASE, $table, [
                     "datetime",
@@ -71,8 +86,8 @@ class PublicAPI {
      * @param array $sys
      * @return void
      */
-    public static function log(string $log, array $sys = []): void {
-        self::withSystemInstance(function () use ($log, $sys): void {
+    public static function log(string $log, array $sys = []) :void {
+        self::withSystemInstance(function () use ($log, $sys) :void {
             if (empty($sys)) {
                 if (self::$logTable == "") {
                     self::$logTable = self::LOG_DEFAULT_TABLE;
@@ -120,7 +135,7 @@ class PublicAPI {
      * @param mixed $data
      * @return never
      */
-    public static function respond(int $status, mixed $data): never {
+    public static function respond(int $status, mixed $data) :never {
         http_response_code($status);
 
         header("Content-Type: application/json; charset=utf-8");
@@ -134,24 +149,46 @@ class PublicAPI {
         exit;
     }
 
-    private static function readBody(): void {
-        $raw = file_get_contents("php://input");
+    private static function readBody() :void {
+        if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 4194304) {
+            self::respond(413, 'request body too large');
+        }
+
+        $raw = file_get_contents('php://input', false, null, 0, 4194305);
+
+        if ($raw !== false && strlen($raw) > 4194304) {
+            self::respond(413, 'request body too large');
+        }
         $body = json_decode($raw ?: "{}", true);
 
         if (!is_array($body)) {
             self::respond(400, "invalid json body");
         }
 
+        foreach (['do', 'module', 'action', 'key', 'auth_key'] as $name) {
+            if (isset($body[$name]) && !is_string($body[$name])) {
+                self::respond(400, $name . ' must be a string');
+            }
+        }
+
         self::$body = $body;
     }
 
-    private static function parseAction(): void {
-        $do = Format::cleanString((string) (self::$body["do"] ?? ""));
+    private static function parseAction() :void {
+        if (isset(self::$body['do']) && !is_string(self::$body['do'])) {
+            self::respond(400, 'do must be a string');
+        }
+
+        $do = trim((string) (self::$body['do'] ?? ''));
 
         if ($do == "") {
             self::$module = Format::cleanString((string) (self::$body["module"] ?? ""));
             self::$action = Format::cleanString((string) (self::$body["action"] ?? ""));
         } else {
+            if (!preg_match('/^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/D', $do)) {
+                self::respond(400, 'invalid module.action');
+            }
+
             $parts = explode(".", $do, 2);
 
             self::$module = Format::cleanString((string) ($parts[0] ?? ""));
@@ -167,7 +204,7 @@ class PublicAPI {
         }
     }
 
-    private static function loadModules(): void {
+    private static function loadModules() :void {
         if (!is_dir(self::MODULES_DIR)) {
             self::respond(500, "public api modules directory not found");
         }
@@ -197,7 +234,7 @@ class PublicAPI {
         }
     }
 
-    private static function loadModuleFile(string $file): void {
+    private static function loadModuleFile(string $file) :void {
         $before = get_declared_classes();
 
         require_once $file;
@@ -232,22 +269,32 @@ class PublicAPI {
         }
     }
 
-    private static function auth(): void {
-        $key = (string) (self::$body["key"] ?? "");
+    private static function auth() :void {
+        $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        $bearer = preg_match('/^Bearer\s+(\S+)$/iD', $authorization, $matches) ? $matches[1] : '';
+        $key = trim((string) (self::$body['key'] ?? self::$body['auth_key'] ?? $bearer));
 
         if ($key == "") {
             self::respond(401, "missing api key");
         }
 
-        $rows = self::withSystemInstance(function () use ($key): array {
+        $rows = self::withSystemInstance(function () use ($key) :array {
             return GBDB::getData(self::KEY_BASE, self::KEY_TABLE, true, "key", $key);
         });
 
-        if (empty($rows) || !isset($rows[0])) {
+        if (empty($rows)) {
             self::respond(401, "invalid api key");
         }
 
-        $data = $rows[0];
+        if (isset($rows[0]) && is_array($rows[0])) {
+            $data = $rows[0];
+        } else {
+            $data = $rows;
+        }
+
+        if (!hash_equals((string) ($data['key'] ?? ''), $key)) {
+            self::respond(401, "invalid api key");
+        }
 
         if ((string) ($data["active"] ?? "0") != "1") {
             self::respond(403, "api key inactive");
@@ -260,7 +307,7 @@ class PublicAPI {
         self::$keyData = $data;
     }
 
-    private static function dispatch(): void {
+    private static function dispatch() :void {
         if (!isset(self::$modules[self::$module])) {
             self::respond(404, "module not found");
         }
@@ -269,7 +316,12 @@ class PublicAPI {
 
         self::checkRights($class);
 
-        $result = $class::handle(self::$action, self::$body, self::$keyData);
+        // Client-supplied instance names must never reach the internal key and user store.
+        try {
+            $result = GBDB::sandboxInstances(static fn() :mixed => $class::handle(self::$action, self::$body, self::$keyData));
+        } catch (GBDBInstanceAccessDenied $exception) {
+            self::respond(403, 'instance not accessible');
+        }
 
         if (is_array($result) && isset($result["status"])) {
             self::respond((int) $result["status"], $result["data"] ?? null);
@@ -278,7 +330,7 @@ class PublicAPI {
         self::respond(200, $result);
     }
 
-    private static function checkRights(string $class): void {
+    private static function checkRights(string $class) :void {
         $required = self::moduleRights($class);
 
         if (empty($required)) {
@@ -312,7 +364,7 @@ class PublicAPI {
         }
     }
 
-    private static function moduleRights(string $class): array {
+    private static function moduleRights(string $class) :array {
         $method = new ReflectionMethod($class, "requiresRights");
         $count = $method->getNumberOfParameters();
 
@@ -329,7 +381,7 @@ class PublicAPI {
         return $rights;
     }
 
-    private static function keyRights(): array {
+    private static function keyRights() :array {
         $raw = self::$keyData["rights"] ?? [];
 
         if (is_array($raw)) {
@@ -362,7 +414,7 @@ class PublicAPI {
         return $rights;
     }
 
-    private static function hasRight(array $rights, string $right): bool {
+    private static function hasRight(array $rights, string $right) :bool {
         if (isset($rights["admin"]) && $rights["admin"] === true) {
             return true;
         }
@@ -398,17 +450,7 @@ class PublicAPI {
         return false;
     }
 
-    private static function withSystemInstance(callable $callback): mixed {
-        $oldInstance = GBDB::getInstance();
-
-        GBDB::setInstance(self::INSTANCE);
-
-        try {
-            return $callback();
-        } finally {
-            if ($oldInstance != "") {
-                GBDB::setInstance($oldInstance);
-            }
-        }
+    private static function withSystemInstance(callable $callback) :mixed {
+        return GBDB::trustedInstance(self::INSTANCE, $callback);
     }
 }

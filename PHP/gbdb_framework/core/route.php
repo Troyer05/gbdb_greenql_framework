@@ -1,7 +1,6 @@
 <?php
 
 class Route {
-
     private static array $routes = [];
     private static array $middlewares = [];
     private static $notFoundHandler = null;
@@ -13,10 +12,10 @@ class Route {
      * @param callable $mw
      * @return Route
      */
-    public static function middleware(callable $mw): self {
+    public static function middleware(callable $mw) :self {
         self::$currentMiddleware[] = $mw;
 
-        return new self;
+        return new self();
     }
 
     /**
@@ -25,7 +24,7 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function get(string $path, callable $callback): void {
+    public static function get(string $path, callable $callback) :void {
         self::addRoute("GET", $path, $callback);
     }
 
@@ -35,7 +34,7 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function post(string $path, callable $callback): void {
+    public static function post(string $path, callable $callback) :void {
         self::addRoute("POST", $path, $callback);
     }
 
@@ -45,7 +44,7 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function put(string $path, callable $callback): void {
+    public static function put(string $path, callable $callback) :void {
         self::addRoute("PUT", $path, $callback);
     }
 
@@ -55,7 +54,7 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function delete(string $path, callable $callback): void {
+    public static function delete(string $path, callable $callback) :void {
         self::addRoute("DELETE", $path, $callback);
     }
 
@@ -65,7 +64,7 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function patch(string $path, callable $callback): void {
+    public static function patch(string $path, callable $callback) :void {
         self::addRoute("PATCH", $path, $callback);
     }
 
@@ -74,7 +73,7 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function notFound(callable $callback): void {
+    public static function notFound(callable $callback) :void {
         self::$notFoundHandler = $callback;
     }
 
@@ -83,11 +82,11 @@ class Route {
      * @param callable $callback
      * @return void
      */
-    public static function methodNotAllowed(callable $callback): void {
+    public static function methodNotAllowed(callable $callback) :void {
         self::$methodNotAllowedHandler = $callback;
     }
 
-    private static function addRoute(string $method, string $path, callable $callback): void {
+    private static function addRoute(string $method, string $path, callable $callback) :void {
         self::$routes[$method][$path] = [
             "callback" => $callback,
             "middleware" => self::$currentMiddleware
@@ -100,7 +99,7 @@ class Route {
      * route dispatcher
      * @return void
      */
-    public static function dispatch(): void {
+    public static function dispatch() :void {
         $method = $_SERVER["REQUEST_METHOD"] ?? "GET";
         $uri = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
 
@@ -108,7 +107,6 @@ class Route {
 
         foreach (self::$routes as $routeMethod => $routes) {
             foreach ($routes as $path => $data) {
-
                 $regex = self::makePattern($path);
 
                 if (preg_match($regex, $uri, $matches)) {
@@ -124,7 +122,6 @@ class Route {
                         if ($mw() === false) {
                             return;
                         }
-
                     }
 
                     $response = call_user_func_array($data["callback"], $matches);
@@ -139,9 +136,7 @@ class Route {
 
                     return;
                 }
-
             }
-
         }
 
         if (!empty($allowedForUri)) {
@@ -167,7 +162,7 @@ class Route {
         echo "404 - Route nicht gefunden";
     }
 
-    private static function makePattern(string $path): string {
+    private static function makePattern(string $path) :string {
         // Optional param: {id?}
         $path = preg_replace('/\{([^\/\}]+)\?\}/', '(?:\/([^\/]+))?', $path);
 
@@ -176,5 +171,4 @@ class Route {
 
         return "@^" . str_replace('/', '\/', $path) . "$@";
     }
-
 }

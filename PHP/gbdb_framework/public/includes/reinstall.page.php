@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/greenql_v2_helper.php';
 
@@ -12,39 +14,22 @@ $ok = false;
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!GreenQLUIv2Helper::checkCsrf((string) ($_POST['csrf'] ?? ''))) {
         $msg = 'Ungültiger CSRF Token.';
-    } else if ((string) ($_POST['confirm1'] ?? '') === 'DATEN LÖSCHEN' && (string) ($_POST['confirm2'] ?? '') === 'ICH VERSTEHE DAS RISIKO') {
+    } elseif ((string) ($_POST['confirm1'] ?? '') === 'DATEN LÖSCHEN' && (string) ($_POST['confirm2'] ?? '') === 'ICH VERSTEHE DAS RISIKO') {
         gbdbui_delete_tree(Vars::DB_PATH());
-        @mkdir(Vars::DB_PATH(), 0777, true);
+        @mkdir(Vars::DB_PATH(), 0750, true);
         $msg = 'GBDB Daten wurden gelöscht und der DB-Ordner wurde neu angelegt.';
         $ok = true;
     } else {
         $msg = 'Bestätigungen stimmen nicht. Nichts gelöscht.';
     }
-
 }
 
 ?>
-<!doctype html>
-<html lang="de">
+<?php gbdbui_layout_start('reinstall', 'Re-Install', 'Gefahrenbereich: löscht alle GBDB-Daten erst nach zwei ausdrücklichen Bestätigungen.', ['eyebrow' => 'System']); ?>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Re-Install</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('reinstall'); ?>
-    <main class="gbdbui-wide">
-        <section class="gbdbui-hero">
-            <p class="gbdbui-kicker">Danger</p>
-            <h1>Re-Install</h1>
-            <p>Gefahrenbereich: löscht alle GBDB-Daten erst nach zwei expliziten Warnbestätigungen.</p>
-        </section>
-
-        <?php if ($msg): ?>
-            <div class="gbdbui-flash <?= $ok ? 'ok' : 'bad' ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
+        <?php if ($msg) : ?>
+            <div class="gbdbui-flash <?= $ok ? 'ok' : 'bad' ?>"><?= gbdbui_e($msg) ?></div><?php
+        endif; ?>
 
         <section class="gbdbui-page-grid">
             <div class="gbdbui-panel gbdbui-danger-zone span-7">
@@ -86,7 +71,5 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 <p class="gbdbui-help">Datenpfad: <code><?= gbdbui_e(Vars::DB_PATH()) ?></code></p>
             </div>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

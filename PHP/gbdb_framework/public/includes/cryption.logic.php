@@ -1,39 +1,28 @@
 <?php
+
 $EXT_PLAIN = '.json';
 $EXT_ENC = '.db';
 $GBDB_ROOT = rtrim(Vars::DB_PATH(), "/") . "/";
 $GBDB_PARENT = rtrim(dirname(rtrim($GBDB_ROOT, "/")), "/") . "/";
 
-function h(string $s): string {
+function h(string $s) :string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
-function ensure_dir(string $dir): void {
-    if (!is_dir($dir))
-        @mkdir($dir, 0777, true);
-}
-
-function atomic_write(string $file, string $payload): bool {
-    $dir = dirname($file);
-
-    ensure_dir($dir);
-
-    $tmp = $file . '.' . uniqid('tmp_', true);
-
-    if (@file_put_contents($tmp, $payload, LOCK_EX) === false)
-
-        return false;
-
-    if (!@rename($tmp, $file)) {
-        @unlink($tmp);
-
-        return false;
+function ensure_dir(string $dir) :void {
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0750, true);
     }
-
-    return true;
 }
 
-function name_token(string $plain, string $ns = 'g'): string {
+function atomic_write(string $file, string $payload) :bool {
+    ensure_dir(dirname($file));
+
+    // file_put_contents(..., LOCK_EX) lehnt gbdbdata:// ab; GBDBStorage sperrt per flock und schreibt auf beiden Speichern.
+    return GBDBStorage::atomicWrite($file, $payload);
+}
+
+function name_token(string $plain, string $ns = 'g') :string {
     $key = (string) Vars::cryptKey();
     $data = $ns . '|' . $plain;
     $raw = hash_hmac('sha256', $data, $key, true);
@@ -43,67 +32,67 @@ function name_token(string $plain, string $ns = 'g'): string {
     return 'gb_' . $safe;
 }
 
-function json_pretty_flags(): int {
+function json_pretty_flags() :int {
     return Vars::jpretty();
 }
 
-function read_plain_json(string $file): array {
+function read_plain_json(string $file) :array {
     $raw = @file_get_contents($file);
 
-    if ($raw === false)
-
+    if ($raw === false) {
         return [];
+    }
     $arr = json_decode($raw, true);
 
     return is_array($arr) ? $arr : [];
 }
 
-function read_enc_db(string $file): array {
+function read_enc_db(string $file) :array {
     $raw = @file_get_contents($file);
 
-    if ($raw === false)
-
+    if ($raw === false) {
         return [];
+    }
     $decoded = Crypt::decode($raw);
 
-    if ($decoded === null)
-
+    if ($decoded === null) {
         return [];
+    }
     $arr = json_decode($decoded, true);
 
     return is_array($arr) ? $arr : [];
 }
 
-function write_plain_json(string $file, array $data): bool {
+function write_plain_json(string $file, array $data) :bool {
     $json = json_encode($data, json_pretty_flags());
 
-    if ($json === false)
-
+    if ($json === false) {
         return false;
+    }
 
     return atomic_write($file, $json);
 }
 
-function write_enc_db(string $file, array $data): bool {
+function write_enc_db(string $file, array $data) :bool {
     $json = json_encode($data, json_pretty_flags());
 
-    if ($json === false)
-
+    if ($json === false) {
         return false;
+    }
     $payload = Crypt::encode($json);
 
     return atomic_write($file, $payload);
 }
 
-function db_index_filename(string $extEnc): string {
+function db_index_filename(string $extEnc) :string {
     return name_token('__db_index__', 'meta') . $extEnc;
 }
 
-function table_index_filename(string $extEnc): string {
+function table_index_filename(string $extEnc) :string {
     return name_token('__table_index__', 'meta') . $extEnc;
 }
 
-function build_index_table(array $mapPlainToToken): array {
+function build_index_table(array $mapPlainToToken) :array {
     $db = [];
     $db[] = ["id" => -1, "plain" => "-header-", "token" => "-header-"];
     $id = 0;
@@ -115,10 +104,10 @@ function build_index_table(array $mapPlainToToken): array {
     return $db;
 }
 
-function parse_index_table(array $table): array {
-    if (empty($table) || !isset($table[0]) || !is_array($table[0]))
-
+function parse_index_table(array $table) :array {
+    if (empty($table) || !isset($table[0]) || !is_array($table[0])) {
         return [];
+    }
 
     unset($table[0]);
 
@@ -126,135 +115,148 @@ function parse_index_table(array $table): array {
     $map = [];
 
     foreach ($table as $r) {
-        if (!is_array($r))
+        if (!is_array($r)) {
             continue;
+        }
 
-        if (!isset($r['plain'], $r['token']))
+        if (!isset($r['plain'], $r['token'])) {
             continue;
+        }
 
         $p = (string) $r['plain'];
         $t = (string) $r['token'];
 
-        if ($p !== '' && $t !== '')
+        if ($p !== '' && $t !== '') {
             $map[$p] = $t;
+        }
     }
 
     return $map;
 }
 
-function rrmdir(string $dir): void {
-    if (!is_dir($dir))
-
+function rrmdir(string $dir) :void {
+    if (!is_dir($dir)) {
         return;
+    }
 
     foreach (scandir($dir) as $f) {
-        if ($f === '.' || $f === '..')
+        if ($f === '.' || $f === '..') {
             continue;
+        }
         $p = $dir . '/' . $f;
 
-        if (is_dir($p))
+        if (is_dir($p)) {
             rrmdir($p);
-        else
+        } else {
             @unlink($p);
+        }
     }
 
     @rmdir($dir);
 }
 
-function meta_filename_plain(string $tblPlain, string $extPlain): string {
+function meta_filename_plain(string $tblPlain, string $extPlain) :string {
     return "__meta__" . $tblPlain . $extPlain;
 }
 
-function append_filename_plain(string $tblPlain, string $extPlain): string {
+function append_filename_plain(string $tblPlain, string $extPlain) :string {
     return "__append__" . $tblPlain . $extPlain;
 }
 
-function meta_filename_enc(string $tblToken, string $extEnc): string {
+function meta_filename_enc(string $tblToken, string $extEnc) :string {
     return name_token('__meta__|' . $tblToken, 'meta') . $extEnc;
 }
 
-function append_filename_enc(string $tblToken, string $extEnc): string {
+function append_filename_enc(string $tblToken, string $extEnc) :string {
     return name_token('__append__|' . $tblToken, 'meta') . $extEnc;
 }
 
-function looks_like_meta_or_append_or_idx(string $file, string $extPlain, string $extEnc): bool {
-    if (str_starts_with($file, "__meta__") && str_ends_with($file, $extPlain))
-
+function looks_like_meta_or_append_or_idx(string $file, string $extPlain, string $extEnc) :bool {
+    if (str_starts_with($file, "__meta__") && str_ends_with($file, $extPlain)) {
         return true;
+    }
 
-    if (str_starts_with($file, "__append__") && str_ends_with($file, $extPlain))
-
+    if (str_starts_with($file, "__append__") && str_ends_with($file, $extPlain)) {
         return true;
+    }
 
-    if (str_starts_with($file, "__idx__"))
-
+    if (str_starts_with($file, "__idx__")) {
         return true;
+    }
 
-    if (str_starts_with($file, "__idxa__"))
-
+    if (str_starts_with($file, "__idxa__")) {
         return true;
+    }
 
-    if (str_ends_with($file, ".lock"))
-
+    if (str_ends_with($file, ".lock")) {
         return true;
+    }
 
     return false;
 }
 
-function detect_state(string $gbdbRoot, string $extEnc, string $extPlain): string {
+function detect_state(string $gbdbRoot, string $extEnc, string $extPlain) :string {
     $encIdx = $gbdbRoot . db_index_filename($extEnc);
 
-    if (is_file($encIdx))
-
+    if (is_file($encIdx)) {
         return 'encrypted';
+    }
 
     foreach (@scandir($gbdbRoot) ?: [] as $d) {
-        if ($d === '.' || $d === '..')
+        if ($d === '.' || $d === '..') {
             continue;
+        }
 
         $p = $gbdbRoot . $d;
 
-        if (!is_dir($p))
+        if (!is_dir($p)) {
             continue;
-
-        foreach (@scandir($p) ?: [] as $f) {
-            if ($f === '.' || $f === '..')
-                continue;
-
-            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc))
-                continue;
-
-            if (str_ends_with($f, $extPlain))
-
-                return 'plain';
         }
 
+        foreach (@scandir($p) ?: [] as $f) {
+            if ($f === '.' || $f === '..') {
+                continue;
+            }
+
+            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc)) {
+                continue;
+            }
+
+            if (str_ends_with($f, $extPlain)) {
+                return 'plain';
+            }
+        }
     }
 
     return 'unknown';
 }
 
-function dump_plain(string $gbdbRoot, string $extPlain, string $extEnc): array {
+function dump_plain(string $gbdbRoot, string $extPlain, string $extEnc) :array {
     $out = [];
 
     foreach (scandir($gbdbRoot) as $dbDir) {
-        if ($dbDir === '.' || $dbDir === '..')
+        if ($dbDir === '.' || $dbDir === '..') {
             continue;
+        }
         $dbPath = $gbdbRoot . $dbDir;
 
-        if (!is_dir($dbPath))
+        if (!is_dir($dbPath)) {
             continue;
+        }
         $tables = [];
 
         foreach (scandir($dbPath) as $f) {
-            if ($f === '.' || $f === '..')
+            if ($f === '.' || $f === '..') {
                 continue;
+            }
 
-            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc))
+            if (looks_like_meta_or_append_or_idx($f, $extPlain, $extEnc)) {
                 continue;
+            }
 
-            if (!str_ends_with($f, $extPlain))
+            if (!str_ends_with($f, $extPlain)) {
                 continue;
+            }
 
             $tablePlain = substr($f, 0, -strlen($extPlain));
             $tables[$tablePlain] = read_plain_json($dbPath . '/' . $f);
@@ -266,13 +268,13 @@ function dump_plain(string $gbdbRoot, string $extPlain, string $extEnc): array {
     return $out;
 }
 
-function dump_encrypted(string $gbdbRoot, string $extEnc): array {
+function dump_encrypted(string $gbdbRoot, string $extEnc) :array {
     $out = [];
     $dbIdxFile = $gbdbRoot . db_index_filename($extEnc);
 
-    if (!is_file($dbIdxFile))
-
+    if (!is_file($dbIdxFile)) {
         return [];
+    }
 
     $dbIdxTable = read_enc_db($dbIdxFile);
     $dbMap = parse_index_table($dbIdxTable);
@@ -280,8 +282,9 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
     foreach ($dbMap as $dbPlain => $dbToken) {
         $dbPath = $gbdbRoot . $dbToken . '/';
 
-        if (!is_dir($dbPath))
+        if (!is_dir($dbPath)) {
             continue;
+        }
 
         $tblIdxFile = $dbPath . table_index_filename($extEnc);
 
@@ -297,8 +300,9 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
         foreach ($tblMap as $tblPlain => $tblToken) {
             $tblFile = $dbPath . $tblToken . $extEnc;
 
-            if (!is_file($tblFile))
+            if (!is_file($tblFile)) {
                 continue;
+            }
             $tables[$tblPlain] = read_enc_db($tblFile);
         }
 
@@ -308,21 +312,24 @@ function dump_encrypted(string $gbdbRoot, string $extEnc): array {
     return $out;
 }
 
-function compute_meta_from_table(array $table): array {
+function compute_meta_from_table(array $table) :array {
     $maxId = 0;
     $rows = 0;
 
     foreach ($table as $i => $r) {
-        if (!is_array($r))
+        if (!is_array($r)) {
             continue;
+        }
 
-        if ($i === 0 && isset($r["id"]) && (int) $r["id"] === -1)
+        if ($i === 0 && isset($r["id"]) && (int) $r["id"] === -1) {
             continue;
+        }
 
         $rows++;
 
-        if (isset($r["id"]))
+        if (isset($r["id"])) {
             $maxId = max($maxId, (int) $r["id"]);
+        }
     }
 
     return [
@@ -335,7 +342,7 @@ function compute_meta_from_table(array $table): array {
     ];
 }
 
-function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc): array {
+function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc) :array {
     $log = [];
 
     ensure_dir($targetRoot);
@@ -404,13 +411,12 @@ function write_encrypted_schema(string $targetRoot, array $dump, string $extEnc)
 
             $log[] = "✅ Encoded: {$dbPlain}/{$tblPlain}";
         }
-
     }
 
     return $log;
 }
 
-function write_plain_schema(string $targetRoot, array $dump, string $extPlain): array {
+function write_plain_schema(string $targetRoot, array $dump, string $extPlain) :array {
     $log = [];
 
     ensure_dir($targetRoot);
@@ -428,15 +434,13 @@ function write_plain_schema(string $targetRoot, array $dump, string $extPlain): 
             } else {
                 $log[] = "✅ Decoded: {$dbPlain}/{$tblPlain}";
             }
-
         }
-
     }
 
     return $log;
 }
 
-function swap_with_backup(string $gbdbRoot, string $parent, string $tmpRoot): string {
+function swap_with_backup(string $gbdbRoot, string $parent, string $tmpRoot) :string {
     $ts = date('Ymd_His');
     $backup = rtrim($parent, "/") . "/GBDB_backup_" . $ts;
     $currentPath = rtrim($gbdbRoot, "/");
@@ -445,7 +449,6 @@ function swap_with_backup(string $gbdbRoot, string $parent, string $tmpRoot): st
         if (!@rename($currentPath, $backup)) {
             return "❌ Backup fehlgeschlagen (rename): {$currentPath} -> {$backup}";
         }
-
     }
 
     if (!@rename(rtrim($tmpRoot, "/"), $currentPath)) {
@@ -464,16 +467,22 @@ $action = $_POST['action'] ?? '';
 $confirm = ($_POST['confirm'] ?? '') === 'yes';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    if (!$confirm) {
+    if (!GreenQLUIv2Helper::checkCsrf((string) ($_POST['csrf'] ?? ''))) {
+        $errors[] = 'Ungültiger Sicherheits-Token.';
+    } elseif (!GBDBConfig::flag('legacy', 'crypto_conversion')) {
+        $errors[] = 'Der enthaltene Altformat-Konverter unterstützt keine instanzfähigen GBDB-Full-Bestände. Für diese ist er gesperrt; Daten exportieren und in einer frisch konfigurierten Installation importieren.';
+    } elseif (GBDB::listInstances(true) !== []) {
+        $errors[] = 'Instanzfähiger Datenbestand erkannt. Der Altformat-Konverter darf diesen Bestand nicht überschreiben.';
+    } elseif (!$confirm) {
         $errors[] = "Bitte bestätige die Checkbox (Backup + Umstellung).";
-    } else if ($action !== 'encrypt' && $action !== 'decrypt') {
+    } elseif ($action !== 'encrypt' && $action !== 'decrypt') {
         $errors[] = "Ungültige Aktion.";
     } else {
-
         $tmpRoot = $GBDB_PARENT . "GBDB__tmp_migrate__/";
 
-        if (is_dir($tmpRoot))
+        if (is_dir($tmpRoot)) {
             rrmdir($tmpRoot);
+        }
 
         ensure_dir($tmpRoot);
 
@@ -482,7 +491,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $logs[] = "Quelle gelesen (plain): " . count($dump) . " DB(s)";
             $logs = array_merge($logs, write_encrypted_schema($tmpRoot, $dump, $EXT_ENC));
             $logs[] = swap_with_backup($GBDB_ROOT, $GBDB_PARENT, $tmpRoot);
-            $logs[] = "⚠️ Danach .framework.env.php: crypt_data() auf TRUE setzen (manuell).";
+            $logs[] = "⚠️ Danach .framework.env.php: SECURITY[crypt_data] auf true setzen (manuell).";
         }
 
         if ($action === 'decrypt') {
@@ -490,13 +499,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $logs[] = "Quelle gelesen (encrypted): " . count($dump) . " DB(s)";
             $logs = array_merge($logs, write_plain_schema($tmpRoot, $dump, $EXT_PLAIN));
             $logs[] = swap_with_backup($GBDB_ROOT, $GBDB_PARENT, $tmpRoot);
-            $logs[] = "⚠️ Danach .framework.env.php: crypt_data() auf FALSE setzen (manuell).";
+            $logs[] = "⚠️ Danach .framework.env.php: SECURITY[crypt_data] auf false setzen (manuell).";
         }
 
-        if (is_dir($tmpRoot))
+        if (is_dir($tmpRoot)) {
             rrmdir($tmpRoot);
+        }
     }
-
 }
-
-?>

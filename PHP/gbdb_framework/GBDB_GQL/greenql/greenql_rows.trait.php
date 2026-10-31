@@ -1,7 +1,6 @@
 <?php
 
 trait GreenQL_RowsTrait {
-
     /**
      * handles row match.
      *
@@ -11,31 +10,49 @@ trait GreenQL_RowsTrait {
      *
      * @return bool result.
      */
-    public static function rowMatch(array $row, ?array $where, ?callable $comparator = null): bool {
-        if ($where === null) return true;
+    public static function rowMatch(array $row, ?array $where, ?callable $comparator = null) :bool {
+        if ($where === null) {
+            return true;
+        }
 
         $type = (string)($where['type'] ?? 'condition');
 
-        if ($type === 'invalid') return false;
+        if ($type === 'invalid') {
+            return false;
+        }
 
-        if ($type === 'and') return self::rowMatch($row, $where['left'] ?? null, $comparator) && self::rowMatch($row, $where['right'] ?? null, $comparator);
+        if ($type === 'and') {
+            return self::rowMatch($row, $where['left'] ?? null, $comparator) && self::rowMatch($row, $where['right'] ?? null, $comparator);
+        }
 
-        if ($type === 'or') return self::rowMatch($row, $where['left'] ?? null, $comparator) || self::rowMatch($row, $where['right'] ?? null, $comparator);
+        if ($type === 'or') {
+            return self::rowMatch($row, $where['left'] ?? null, $comparator) || self::rowMatch($row, $where['right'] ?? null, $comparator);
+        }
 
-        if ($type === 'not') return !self::rowMatch($row, $where['expr'] ?? null, $comparator);
+        if ($type === 'not') {
+            return !self::rowMatch($row, $where['expr'] ?? null, $comparator);
+        }
 
         $field = (string)($where['field'] ?? '');
         $op = strtoupper((string)($where['op'] ?? '='));
         $value = $where['value'] ?? null;
         $left = $field !== '' && array_key_exists($field, $row) ? $row[$field] : null;
 
-        if ($op === 'IN') return is_array($value) && in_array($left, $value, false);
+        if ($op === 'IN') {
+            return is_array($value) && in_array($left, $value, false);
+        }
 
-        if ($op === 'BETWEEN') return is_array($value) && count($value) >= 2 && $left >= $value[0] && $left <= $value[1];
+        if ($op === 'BETWEEN') {
+            return is_array($value) && count($value) >= 2 && $left >= $value[0] && $left <= $value[1];
+        }
 
-        if ($op === 'IS NULL') return $left === null || $left === '';
+        if ($op === 'IS NULL') {
+            return $left === null || $left === '';
+        }
 
-        if ($op === 'IS NOT NULL') return !($left === null || $left === '');
+        if ($op === 'IS NOT NULL') {
+            return !($left === null || $left === '');
+        }
 
         if ($op === 'LIKE') {
             $pattern = '/^' . str_replace(['%', '_'], ['.*', '.'], preg_quote((string)$value, '/')) . '$/iu';
@@ -50,31 +67,24 @@ trait GreenQL_RowsTrait {
         switch ($op) {
             case "=":
             case "==":
-
                 return $left == $value;
 
             case "!=":
-
                 return $left != $value;
 
             case ">":
-
                 return $left > $value;
 
             case "<":
-
                 return $left < $value;
 
             case ">=":
-
                 return $left >= $value;
 
             case "<=":
-
                 return $left <= $value;
 
             case "~=":
-
                 return mb_stripos((string)$left, (string)$value) !== false;
         }
 
@@ -91,7 +101,7 @@ trait GreenQL_RowsTrait {
      *
      * @return void result.
      */
-    public static function sortRows(array &$rows, ?string $field, string $dir = "ASC", ?callable $sorter = null): void {
+    public static function sortRows(array &$rows, ?string $field, string $dir = "ASC", ?callable $sorter = null) :void {
         if ($field === null || $field === "") {
             return;
         }
@@ -124,7 +134,7 @@ trait GreenQL_RowsTrait {
      *
      * @return array result.
      */
-    public static function getRows(string $db, string $table): array {
+    public static function getRows(string $db, string $table) :array {
         $driver = self::db();
         $rows = $driver::getData($db, $table);
 
@@ -139,7 +149,7 @@ trait GreenQL_RowsTrait {
      *
      * @return array result.
      */
-    public static function getTableKeys(string $db, string $table): array {
+    public static function getTableKeys(string $db, string $table) :array {
         $driver = self::db();
         $keys = $driver::getKeys($db, $table);
 
@@ -179,7 +189,7 @@ trait GreenQL_RowsTrait {
         string $sortDir = "ASC",
         ?int $limit = null,
         int $offset = 0
-    ): array {
+    ) :array {
         $driver = self::db();
         $started = microtime(true);
         $plan = method_exists($driver, 'queryPlan')
@@ -190,7 +200,8 @@ trait GreenQL_RowsTrait {
 
         $comparator = method_exists($driver, 'typedCompare') ? function ($field, $left, $op, $right) use ($driver, $db, $table) {
             return $driver::typedCompare($db, $table, (string)$field, $left, (string)$op, $right);
-        } : null;
+        }
+        : null;
 
         $rows = array_values(array_filter($rows, function ($row) use ($where, $comparator) {
             return is_array($row) && self::rowMatch($row, $where, $comparator);
@@ -198,7 +209,8 @@ trait GreenQL_RowsTrait {
 
         $sorter = method_exists($driver, 'typedSortRows') ? function (&$rows, $field, $dir) use ($driver, $db, $table) {
             $driver::typedSortRows($db, $table, $rows, (string)$field, (string)$dir);
-        } : null;
+        }
+        : null;
 
         self::sortRows($rows, $sortField, $sortDir, $sorter);
 
@@ -214,14 +226,18 @@ trait GreenQL_RowsTrait {
             $rows = array_map(function ($row) use ($columns) {
                 $tmp = [];
 
-                foreach ($columns as $col) $tmp[$col] = $row[$col] ?? "";
+                foreach ($columns as $col) {
+                    $tmp[$col] = $row[$col] ?? "";
+                }
 
                 return $tmp;
             }, $rows);
             $keys = $columns;
         }
 
-        if (method_exists($driver, 'slowQueryLog')) $driver::slowQueryLog($plan, microtime(true) - $started);
+        if (method_exists($driver, 'slowQueryLog')) {
+            $driver::slowQueryLog($plan, microtime(true) - $started);
+        }
 
         return [
             "keys" => $keys,
@@ -243,7 +259,7 @@ trait GreenQL_RowsTrait {
      *
      * @return array result.
      */
-    public static function aggregateRows(string $db, string $table, string $fn, string $column = '*', ?string $groupBy = null, ?array $having = null): array {
+    public static function aggregateRows(string $db, string $table, string $fn, string $column = '*', ?string $groupBy = null, ?array $having = null) :array {
         $driver = self::db();
 
         if (method_exists($driver, 'aggregate')) {
@@ -265,7 +281,7 @@ trait GreenQL_RowsTrait {
      *
      * @return array result.
      */
-    public static function distinctRows(string $db, string $table, string $column): array {
+    public static function distinctRows(string $db, string $table, string $column) :array {
         $driver = self::db();
         $values = method_exists($driver, 'distinct') ? $driver::distinct($db, $table, $column) : [];
         $rows = array_map(fn($value) => [$column => $value], $values);
@@ -280,7 +296,7 @@ trait GreenQL_RowsTrait {
      *
      * @return array result.
      */
-    public static function stats(string $db): array {
+    public static function stats(string $db) :array {
         $driver = self::db();
         $tables = $driver::listTables($db);
         $rows = 0;
@@ -291,7 +307,6 @@ trait GreenQL_RowsTrait {
             if (is_array($data)) {
                 $rows += count($data);
             }
-
         }
 
         return [
@@ -299,5 +314,4 @@ trait GreenQL_RowsTrait {
             "rows" => $rows
         ];
     }
-
 }

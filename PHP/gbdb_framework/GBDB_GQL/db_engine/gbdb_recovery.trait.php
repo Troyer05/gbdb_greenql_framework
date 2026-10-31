@@ -2,12 +2,25 @@
 
 trait GBDB_RecoveryTrait {
     private static bool $booted = false;
+    private static mixed $recoveryLease = null;
+    private static string $recoveryMarker = '';
 
-    private static function recoveryRoot(): string {
+    private static function recoveryMarkers() :string {
+        $directory = GBDBConfig::runtimePath() . '/recovery';
+
+        if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
+            $directory = GBDBRuntime::lockDirectory() . '/recovery';
+            @mkdir($directory, 0700, true);
+        }
+
+        return $directory;
+    }
+
+    private static function recoveryRoot() :string {
         $dir = dirname(Vars::DB_PATH()) . '/.system/recovery';
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         return $dir;
@@ -18,7 +31,7 @@ trait GBDB_RecoveryTrait {
      *
      * @return array result.
      */
-    public static function boot(): array {
+    public static function boot() :array {
         if (self::$booted) {
             return [
                 'ok' => true,
@@ -28,45 +41,77 @@ trait GBDB_RecoveryTrait {
 
         self::$booted = true;
 
-        $report = self::recover(true);
+        $dirty = self::dirtyShutdownDetected();
+        $report = $dirty ? self::recover(true) : ['ok' => true, 'recovery_skipped' => true, 'dirty_shutdown' => false];
+
+        if ($dirty && ($report['ok'] ?? false)) {
+            foreach (glob(self::recoveryMarkers() . '/*.lease') ?: [] as $file) {
+                $handle = @fopen($file, 'r+');
+
+                if ($handle !== false) {
+                    if (flock($handle, LOCK_EX | LOCK_NB)) {
+                        @unlink($file);
+                        flock($handle, LOCK_UN);
+                    }
+
+                    fclose($handle);
+                }
+            }
+        }
 
         self::writeDirtyMarker();
 
         return $report;
     }
 
-    /**
-     * handles shutdown.
-     *
-     * @return void result.
-     */
-    public static function shutdown(): void {
-        $file = self::recoveryRoot() . '/dirty.json';
-
-        @unlink($file);
-
-        GBDBStorage::atomicWrite(self::recoveryRoot() . '/clean.json', json_encode([
-            'clean_at' => time(),
-            'owner' => function_exists('gethostname') ? gethostname() . ':' . getmypid() : (string)getmypid()
-        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+    /** Release only this worker's crash marker; another live request is never "recovered". */
+    public static function shutdown() :void {
+        if (is_resource(self::$recoveryLease)) {
+            @unlink(self::$recoveryMarker);
+            flock(self::$recoveryLease, LOCK_UN);
+            fclose(self::$recoveryLease);
+            self::$recoveryLease = null;
+        }
     }
 
-    private static function writeDirtyMarker(): void {
-        GBDBStorage::atomicWrite(self::recoveryRoot() . '/dirty.json', json_encode([
-            'started_at' => time(),
-            'pid' => getmypid(),
-            'host' => function_exists('gethostname') ? gethostname() : 'host',
-            'instance' => self::getInstance()
-        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+    private static function writeDirtyMarker() :void {
+        self::$recoveryMarker = self::recoveryMarkers() . '/' . getmypid() . '-' . bin2hex(random_bytes(8)) . '.lease';
+        self::$recoveryLease = @fopen(self::$recoveryMarker, 'x+');
+
+        if (self::$recoveryLease === false || !flock(self::$recoveryLease, LOCK_EX | LOCK_NB)) {
+            throw new RuntimeException('GBDB konnte die Prozess-Recovery nicht initialisieren.');
+        }
+
+        fwrite(self::$recoveryLease, json_encode(['started_at' => time(), 'pid' => getmypid()]));
+        fflush(self::$recoveryLease);
     }
 
-    /**
-     * handles dirty shutdown detected.
-     *
-     * @return bool result.
-     */
-    public static function dirtyShutdownDetected(): bool {
-        return is_file(self::recoveryRoot() . '/dirty.json');
+    public static function dirtyShutdownDetected() :bool {
+        foreach (glob(self::recoveryMarkers() . '/*.lease') ?: [] as $file) {
+            if ($file === self::$recoveryMarker) {
+                continue;
+            }
+
+            $handle = @fopen($file, 'r+');
+
+            if ($handle === false) {
+                continue;
+            }
+
+            $orphaned = flock($handle, LOCK_EX | LOCK_NB);
+
+            if ($orphaned) {
+                flock($handle, LOCK_UN);
+            }
+
+            fclose($handle);
+
+            if ($orphaned) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -76,7 +121,7 @@ trait GBDB_RecoveryTrait {
      *
      * @return array result.
      */
-    public static function recover(bool $auto = false): array {
+    public static function recover(bool $auto = false) :array {
         $dirty = self::dirtyShutdownDetected();
         $report = [
             'ok' => true,
@@ -91,7 +136,7 @@ trait GBDB_RecoveryTrait {
         ];
 
         $oldInstance = self::getInstance();
-        $instances = self::listInstances();
+        $instances = self::listInstances(true);
 
         if (empty($instances)) {
             $instances = [$oldInstance ?: 'default'];
@@ -112,11 +157,8 @@ trait GBDB_RecoveryTrait {
                     if (!($tableReport['ok'] ?? false)) {
                         $report['ok'] = false;
                     }
-
                 }
-
             }
-
         }
 
         self::setInstance($oldInstance);
@@ -139,7 +181,7 @@ trait GBDB_RecoveryTrait {
      *
      * @return array result.
      */
-    public static function recoverTable(string $database, string $table): array {
+    public static function recoverTable(string $database, string $table) :array {
         $file = self::makePath($database, $table);
         $appendFile = self::appendFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
@@ -206,7 +248,7 @@ trait GBDB_RecoveryTrait {
         ];
     }
 
-    private static function detectHalfWrittenAppendOps(string $appendFile): array {
+    private static function detectHalfWrittenAppendOps(string $appendFile) :array {
         if (!is_file($appendFile)) {
             return [
                 'ok' => true,
@@ -257,11 +299,10 @@ trait GBDB_RecoveryTrait {
      *
      * @return array result.
      */
-    public static function recoveryReport(): array {
+    public static function recoveryReport() :array {
         $file = self::recoveryRoot() . '/last_report.json';
         $data = is_file($file) ? json_decode((string)@file_get_contents($file), true) : [];
 
         return is_array($data) ? $data : [];
     }
-
 }

@@ -8,13 +8,13 @@ require_once __DIR__ . '/greenql_v2_helper.php';
 GreenQLUIv2Helper::boot();
 gbdbui_require_tool('public_api');
 
-function gbdbui_public_api_redirect(): void {
+function gbdbui_public_api_redirect() :void {
     header('Location: ' . gbdbui_url('public_api'));
 
     exit;
 }
 
-function gbdbui_public_api_rights_from_post(): string {
+function gbdbui_public_api_rights_from_post() :string {
     $rights = $_POST['rights'] ?? [];
     $items = [];
 
@@ -43,7 +43,7 @@ function gbdbui_public_api_rights_from_post(): string {
     return implode(',', array_unique($items));
 }
 
-function gbdbui_public_api_rights_badges(string $rights): string {
+function gbdbui_public_api_rights_badges(string $rights) :string {
     $decoded = json_decode($rights, true);
     $items = is_array($decoded) ? $decoded : preg_split('/[\s,]+/', $rights);
     $items = is_array($items) ? $items : [];
@@ -66,7 +66,7 @@ function gbdbui_public_api_rights_badges(string $rights): string {
     return $html !== '' ? $html : '<span class="gb-chip gb-chip-muted">no rights</span>';
 }
 
-function gbdbui_public_api_datetime_input(string $value): string {
+function gbdbui_public_api_datetime_input(string $value) :string {
     $value = trim($value);
 
     if ($value === '') {
@@ -129,7 +129,7 @@ $fetchLogs = GreenQLUIv2Helper::publicApiLogs('fetches', 25);
 $keyLogs = GreenQLUIv2Helper::publicApiLogs('key_log', 25);
 $activeKeys = 0;
 $expiredKeys = 0;
-$knownRights = ['*', 'gbdb-read', 'gbdb-write', 'gbdb-gql', 'gbdb-admin', 'read'];
+$knownRights = ['*', 'gbdb-read', 'gbdb-write', 'gbdb-gql', 'gbdb-admin', 'gbdb-backend', 'read'];
 
 foreach ($modules as $module) {
     foreach (($module['rights'] ?? []) as $right) {
@@ -154,31 +154,9 @@ $exampleJson = json_encode([
     'do' => 'gbdb.info'
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 ?>
-<!doctype html>
-<html lang="en">
+<?php gbdbui_layout_start('public_api', 'Public API', 'API-Schlüssel für externe Clients, Rechte wie gbdb-read, gbdb-write, gbdb-gql und gbdb-admin, geladene Module und Anfrageprotokolle.', ['eyebrow' => 'Zugriff']); ?>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB UI Public API</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.11">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro public-api-body">
-    <?php gbdbui_nav('public_api'); ?>
-    <main class="gbdbui-wide">
-        <?php gbdbui_render_flashes(); ?>
-
-        <section class="gbdbui-hero public-api-hero">
-            <div>
-                <p class="gbdbui-kicker">Public API Center</p>
-                <h1>Keys, rights, modules & logs</h1>
-                <p>
-                    Manage API keys for external clients, assign granular rights like <code>gbdb-read</code>,
-                    <code>gbdb-write</code>, <code>gbdb-gql</code> and <code>gbdb-admin</code>, inspect loaded modules
-                    and keep an eye on request activity.
-                </p>
-            </div>
+        <section class="gbdbui-hero-stats">
             <div class="public-api-endpoint-card">
                 <span>Endpoint</span>
                 <code><?= gbdbui_e($endpoint) ?></code>
@@ -238,7 +216,7 @@ $exampleJson = json_encode([
                     <div class="field-12 public-api-right-picker">
                         <span>Rights</span>
                         <div>
-                            <?php foreach ($knownRights as $right): ?>
+                            <?php foreach ($knownRights as $right) : ?>
                                 <label><input type="checkbox" name="rights[]" value="<?= gbdbui_e($right) ?>"> <?= gbdbui_e($right) ?></label>
                             <?php endforeach; ?>
                         </div>
@@ -296,7 +274,7 @@ $exampleJson = json_encode([
                         <table class="gbdbui-table">
                             <thead><tr><th>Time</th><th>Action</th><th>IP</th><th>Key</th></tr></thead>
                             <tbody>
-                                <?php foreach ($fetchLogs as $log): ?>
+                                <?php foreach ($fetchLogs as $log) : ?>
                                     <tr>
                                         <td><?= gbdbui_e($log['datetime'] ?? '') ?></td>
                                         <td><code><?= gbdbui_e($log['action'] ?? '') ?></code></td>
@@ -304,7 +282,9 @@ $exampleJson = json_encode([
                                         <td><code><?= gbdbui_e(GreenQLUIv2Helper::maskPublicApiKey((string) ($log['key'] ?? ''))) ?></code></td>
                                     </tr>
                                 <?php endforeach; ?>
-                                <?php if (empty($fetchLogs)): ?><tr><td colspan="4">No request logs yet.</td></tr><?php endif; ?>
+                                <?php if (empty($fetchLogs)) :
+                                    ?><tr><td colspan="4">No request logs yet.</td></tr><?php
+                                endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -325,7 +305,7 @@ $exampleJson = json_encode([
                         <table class="gbdbui-table">
                             <thead><tr><th>Time</th><th>Action</th><th>User</th><th>Key</th></tr></thead>
                             <tbody>
-                                <?php foreach ($keyLogs as $log): ?>
+                                <?php foreach ($keyLogs as $log) : ?>
                                     <tr>
                                         <td><?= gbdbui_e($log['datetime'] ?? '') ?></td>
                                         <td><?= gbdbui_e($log['action'] ?? '') ?></td>
@@ -333,7 +313,9 @@ $exampleJson = json_encode([
                                         <td><code><?= gbdbui_e(GreenQLUIv2Helper::maskPublicApiKey((string) ($log['key'] ?? ''))) ?></code></td>
                                     </tr>
                                 <?php endforeach; ?>
-                                <?php if (empty($keyLogs)): ?><tr><td colspan="4">No security events yet.</td></tr><?php endif; ?>
+                                <?php if (empty($keyLogs)) :
+                                    ?><tr><td colspan="4">No security events yet.</td></tr><?php
+                                endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -348,11 +330,11 @@ $exampleJson = json_encode([
                     </div>
                 </div>
 
-                <?php if (empty($keys)): ?>
+                <?php if (empty($keys)) : ?>
                     <div class="empty-state"><strong>No API keys yet.</strong><span>Create the first key on the left.</span></div>
-                <?php else: ?>
+                <?php else : ?>
                     <div class="public-api-key-list">
-                        <?php foreach ($keys as $row): ?>
+                        <?php foreach ($keys as $row) : ?>
                             <?php
                             $rawKey = (string) ($row['key'] ?? '');
                             $rights = (string) ($row['rights'] ?? '');
@@ -365,7 +347,9 @@ $exampleJson = json_encode([
                                         <p><code><?= gbdbui_e(GreenQLUIv2Helper::maskPublicApiKey($rawKey)) ?></code></p>
                                         <div class="public-api-chip-row">
                                             <span class="gb-chip <?= (string) ($row['active'] ?? '0') === '1' ? '' : 'gb-chip-muted' ?>"><?= (string) ($row['active'] ?? '0') === '1' ? 'active' : 'inactive' ?></span>
-                                            <?php if (!empty($row['exp'])): ?><span class="gb-chip <?= $expired ? 'gb-chip-muted' : '' ?>">exp <?= gbdbui_e($row['exp']) ?></span><?php endif; ?>
+                                            <?php if (!empty($row['exp'])) :
+                                                ?><span class="gb-chip <?= $expired ? 'gb-chip-muted' : '' ?>">exp <?= gbdbui_e($row['exp']) ?></span><?php
+                                            endif; ?>
                                             <?= gbdbui_public_api_rights_badges($rights) ?>
                                         </div>
                                     </div>
@@ -410,20 +394,20 @@ $exampleJson = json_encode([
                     </div>
                 </div>
 
-                <?php if (empty($modules)): ?>
+                <?php if (empty($modules)) : ?>
                     <div class="empty-state"><strong>No modules loaded.</strong><span>Check includes/public_api and module files.</span></div>
-                <?php else: ?>
+                <?php else : ?>
                     <div class="public-api-module-list">
-                        <?php foreach ($modules as $module): ?>
+                        <?php foreach ($modules as $module) : ?>
                             <details class="public-api-module" open>
                                 <summary><strong><?= gbdbui_e($module['name'] ?? '') ?></strong><span><?= gbdbui_e($module['class'] ?? '') ?> · <?= gbdbui_e($module['file'] ?? '') ?></span></summary>
                                 <div class="public-api-chip-row"><?= gbdbui_public_api_rights_badges(json_encode($module['rights'] ?? [])) ?></div>
-                                <?php if (!empty($module['actions'])): ?>
+                                <?php if (!empty($module['actions'])) : ?>
                                     <div class="gbdbui-table-wrap public-api-actions-table">
                                         <table class="gbdbui-table">
                                             <thead><tr><th>Action</th><th>Required rights</th></tr></thead>
                                             <tbody>
-                                                <?php foreach (($module['actions'] ?? []) as $action => $rights): ?>
+                                                <?php foreach (($module['actions'] ?? []) as $action => $rights) : ?>
                                                     <tr><td><code><?= gbdbui_e($module['name'] . '.' . $action) ?></code></td><td><?= gbdbui_public_api_rights_badges(json_encode($rights)) ?></td></tr>
                                                 <?php endforeach; ?>
                                             </tbody>
@@ -436,7 +420,7 @@ $exampleJson = json_encode([
                 <?php endif; ?>
             </section>
             </section>
-    </main>
+
 
     <script>
     document.querySelectorAll('[data-copy]').forEach(function (btn) {
@@ -449,6 +433,4 @@ $exampleJson = json_encode([
         });
     });
     </script>
-</body>
-
-</html>
+<?php gbdbui_layout_end(); ?>

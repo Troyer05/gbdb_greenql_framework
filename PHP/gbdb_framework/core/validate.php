@@ -1,14 +1,13 @@
 <?php
 
 class Validate {
-
     /**
      * checks required fields
      * @param array $data
      * @param array $fields
      * @return bool
      */
-    public static function required(array $data, array $fields): bool {
+    public static function required(array $data, array $fields) :bool {
         foreach ($fields as $f) {
             if (!array_key_exists($f, $data)) {
                 return false;
@@ -17,7 +16,6 @@ class Validate {
             if (trim((string)$data[$f]) === "") {
                 return false;
             }
-
         }
 
         return true;
@@ -28,7 +26,7 @@ class Validate {
      * @param string $value
      * @return bool
      */
-    public static function email(string $value): bool {
+    public static function email(string $value) :bool {
         return (bool)filter_var(trim($value), FILTER_VALIDATE_EMAIL);
     }
 
@@ -37,7 +35,7 @@ class Validate {
      * @param string|int|float $value
      * @return bool
      */
-    public static function number(string|int|float $value): bool {
+    public static function number(string|int|float $value) :bool {
         $v = str_replace(",", ".", trim((string)$value));
 
         return is_numeric($v);
@@ -49,7 +47,7 @@ class Validate {
      * @param int $min
      * @return bool
      */
-    public static function minLength(string $value, int $min): bool {
+    public static function minLength(string $value, int $min) :bool {
         return mb_strlen(trim($value)) >= $min;
     }
 
@@ -59,7 +57,7 @@ class Validate {
      * @param int $max
      * @return bool
      */
-    public static function maxLength(string $value, int $max): bool {
+    public static function maxLength(string $value, int $max) :bool {
         return mb_strlen(trim($value)) <= $max;
     }
 
@@ -69,7 +67,7 @@ class Validate {
      * @param string $pattern
      * @return bool
      */
-    public static function regex(string $value, string $pattern): bool {
+    public static function regex(string $value, string $pattern) :bool {
         if ($pattern === "") {
             return false;
         }
@@ -90,7 +88,7 @@ class Validate {
      * @param float|int $max
      * @return bool
      */
-    public static function between(float|int $value, float|int $min, float|int $max): bool {
+    public static function between(float|int $value, float|int $min, float|int $max) :bool {
         return $value >= $min && $value <= $max;
     }
 
@@ -100,7 +98,7 @@ class Validate {
      * @param array $allowed
      * @return bool
      */
-    public static function in(string|int $value, array $allowed): bool {
+    public static function in(string|int $value, array $allowed) :bool {
         return in_array($value, $allowed, true);
     }
 
@@ -110,7 +108,7 @@ class Validate {
      * @param string $b
      * @return bool
      */
-    public static function match(string $a, string $b): bool {
+    public static function match(string $a, string $b) :bool {
         return hash_equals($a, $b);
     }
 
@@ -120,7 +118,7 @@ class Validate {
      * @param array $rules
      * @return array
      */
-    public static function validateArray(array $data, array $rules): array {
+    public static function validateArray(array $data, array $rules) :array {
         $errors = [];
 
         foreach ($rules as $field => $ruleString) {
@@ -166,7 +164,6 @@ class Validate {
                         break;
 
                     case "between":
-
                         if ($param !== null && str_contains($param, ",")) {
                             [$min, $max] = explode(",", $param, 2);
                             $valid = self::between((float)$value, (float)$min, (float)$max);
@@ -184,12 +181,9 @@ class Validate {
                 if (!$valid) {
                     $errors[$field][] = $rule;
                 }
-
             }
-
         }
 
         return $errors;
     }
-
 }

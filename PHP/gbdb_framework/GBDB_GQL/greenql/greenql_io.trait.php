@@ -1,8 +1,7 @@
 <?php
 
 trait GreenQL_IoTrait {
-
-    private static function scriptRoot(): string {
+    private static function scriptRoot() :string {
         $dir = __DIR__;
 
         while ($dir !== dirname($dir)) {
@@ -16,7 +15,7 @@ trait GreenQL_IoTrait {
         return dirname(__DIR__, 7);
     }
 
-    private static function resolveScriptPath(string $path): string {
+    private static function resolveScriptPath(string $path) :string {
         $path = trim((string)self::unquote($path));
         $path = str_replace('\\', '/', $path);
         $path = ltrim($path, '/');
@@ -29,22 +28,25 @@ trait GreenQL_IoTrait {
         $full = $root . '/' . $path;
 
         if (!is_file($full)) {
-            $alt = $root . '/GBDB_GQL/.DB/.scripts/' . $path;
+            $alt = Vars::data_root() . '/.scripts/' . $path;
 
-        if (!is_file($alt)) {
-            $alt = $root . '/scripts/greenql/' . $path;
-        }
+            if (!is_file($alt)) {
+                $alt = $root . '/scripts/greenql/' . $path;
+            }
 
             if (is_file($alt)) {
                 $full = $alt;
             } else {
                 return '';
             }
-
         }
 
-        $realRoot = realpath($root);
-        $realFile = realpath($full);
+        if (str_starts_with($full, 'gbdbdata://')) {
+            return $full;
+        }
+
+        $realRoot = GBDBFilesystem::realpath($root);
+        $realFile = GBDBFilesystem::realpath($full);
 
         if ($realRoot === false || $realFile === false || !str_starts_with($realFile, $realRoot)) {
             return '';
@@ -53,7 +55,7 @@ trait GreenQL_IoTrait {
         return $realFile;
     }
 
-    private static function resolveLogPath(string $path): string {
+    private static function resolveLogPath(string $path) :string {
         $path = trim((string)self::unquote($path));
         $path = str_replace('\\', '/', $path);
         $path = ltrim($path, '/');
@@ -63,7 +65,7 @@ trait GreenQL_IoTrait {
         }
 
         $root = self::scriptRoot();
-        $rootReal = realpath($root);
+        $rootReal = GBDBFilesystem::realpath($root);
 
         if ($rootReal === false) {
             return '';
@@ -76,7 +78,7 @@ trait GreenQL_IoTrait {
             @mkdir($dir, 0775, true);
         }
 
-        $dirReal = realpath($dir);
+        $dirReal = GBDBFilesystem::realpath($dir);
 
         if ($dirReal === false || !str_starts_with($dirReal, $rootReal)) {
             return '';
@@ -85,13 +87,13 @@ trait GreenQL_IoTrait {
         return $dirReal . '/' . basename($full);
     }
 
-    private static function activeLogFile(array $ctx): string {
+    private static function activeLogFile(array $ctx) :string {
         $file = (string)($ctx['logfile'] ?? self::$defaultLogFile);
 
         return $file !== '' ? $file : '';
     }
 
-    private static function formatLogValue(mixed $value): string {
+    private static function formatLogValue(mixed $value) :string {
         if (is_array($value) || is_object($value)) {
             return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?: '';
         }
@@ -107,7 +109,7 @@ trait GreenQL_IoTrait {
         return (string)$value;
     }
 
-    private static function writeLogLine(string $file, mixed $value): bool {
+    private static function writeLogLine(string $file, mixed $value) :bool {
         if ($file === '') {
             return false;
         }
@@ -117,60 +119,13 @@ trait GreenQL_IoTrait {
         return @file_put_contents($file, $line, FILE_APPEND | LOCK_EX) !== false;
     }
 
-    private static function readEnvValue(string $key): mixed {
+    private static function readEnvValue(string $key) :mixed {
         $key = trim($key);
 
         if ($key === '' || !preg_match('/^[a-zA-Z0-9_.\-]+$/', $key)) {
             return null;
         }
 
-        $root = self::scriptRoot();
-
-        $candidates = [
-            $root . '/.config/.greenql.env.php'
-        ];
-
-        $file = '';
-
-        foreach ($candidates as $candidate) {
-            if (is_file($candidate)) {
-                $file = $candidate;
-                break;
-            }
-
-        }
-
-        $realRoot = realpath($root);
-        $realFile = $file !== '' ? realpath($file) : false;
-
-        if ($realRoot === false || $realFile === false || !str_starts_with($realFile, $realRoot . DIRECTORY_SEPARATOR)) {
-            return null;
-        }
-
-        $loader = static function (string $__greenqlEnvFile): array {
-            $GREENQL_ENV = [];
-            $GQL_ENV = [];
-            $ENV = [];
-
-            $returned = require $__greenqlEnvFile;
-
-            if (is_array($returned)) return $returned;
-
-            if (is_array($GREENQL_ENV) && !empty($GREENQL_ENV)) return $GREENQL_ENV;
-
-            if (is_array($GQL_ENV) && !empty($GQL_ENV)) return $GQL_ENV;
-
-            if (is_array($ENV) && !empty($ENV)) return $ENV;
-
-            $vars = get_defined_vars();
-            unset($vars['__greenqlEnvFile'], $vars['returned'], $vars['GREENQL_ENV'], $vars['GQL_ENV'], $vars['ENV']);
-
-            return $vars;
-        };
-
-        $env = $loader($realFile);
-
-        return is_array($env) && array_key_exists($key, $env) ? $env[$key] : null;
+        return GBDBConfig::get('greenql', $key);
     }
-
 }

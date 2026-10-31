@@ -5,29 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/migration.logic.php';
 ?>
-<!doctype html>
-<html lang="de">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Migration</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-    <link rel="stylesheet" href="gbdb_framework/public/css/migration.css">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('migration'); ?>
-    <main class="gbdbui-wide legacy-tool-page">
-        <section class="gbdbui-hero legacy-tool-hero">
-            <p class="gbdbui-kicker">Migration</p>
-            <h1>GBDB Migration</h1>
-            <p>
-                Migrate older GBDB structures to the current schema, optionally convert to the target storage format
-                and rewrite meta / append files in a controlled way. This area is intended for development and
-                maintenance work.
-            </p>
-        </section>
+<?php gbdbui_layout_start('migration', 'Migration', 'Ältere GBDB-Strukturen auf das aktuelle Schema heben, optional ins Zielformat konvertieren und Meta-/Append-Dateien kontrolliert neu schreiben.', ['eyebrow' => 'Betrieb']); ?>
 
         <section class="gbdbui-panel legacy-tool-panel">
             <div class="gbdbui-panel-head compact">
@@ -41,15 +19,16 @@ require_once __DIR__ . '/migration.logic.php';
                 </div>
             </div>
 
-            <?php if ($errors): ?>
+            <?php if ($errors) : ?>
                 <div class="msgs">
-                    <?php foreach ($errors as $error): ?>
+                    <?php foreach ($errors as $error) : ?>
                         <div class="msg err">❌ <?= h($error) ?></div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
 
             <form method="post" class="row legacy-tool-form" style="margin-top:12px;">
+                <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                 <input type="hidden" name="do" value="migrate">
 
                 <label>
@@ -70,10 +49,10 @@ require_once __DIR__ . '/migration.logic.php';
                 </div>
             </form>
 
-            <?php if ($logs): ?>
+            <?php if ($logs) : ?>
                 <pre><?php foreach ($logs as $line) {
                     echo h($line) . "\n";
-                } ?></pre>
+                     } ?></pre>
             <?php endif; ?>
         </section>
 
@@ -88,7 +67,5 @@ require_once __DIR__ . '/migration.logic.php';
                 </div>
             </div>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

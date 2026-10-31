@@ -18,11 +18,11 @@ class GBDBStorage {
      * @param string $payload
      * @return bool
      */
-    public static function atomicWrite(string $file, string $payload): bool {
+    public static function atomicWrite(string $file, string $payload) :bool {
         $dir = dirname($file);
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         $tmp = $file . "." . getmypid() . "." . uniqid("tmp_", true);
@@ -44,7 +44,7 @@ class GBDBStorage {
                     @fflush($handle);
 
                     if (function_exists("fsync")) {
-                        @fsync($handle);
+                        @GBDBFilesystem::sync($handle);
                     }
 
                     $ok = true;
@@ -52,7 +52,6 @@ class GBDBStorage {
 
                 @flock($handle, LOCK_UN);
             }
-
         } finally {
             @fclose($handle);
         }
@@ -82,11 +81,11 @@ class GBDBStorage {
      * @param string $line
      * @return bool
      */
-    public static function appendLine(string $file, string $line): bool {
+    public static function appendLine(string $file, string $line) :bool {
         $dir = dirname($file);
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         $handle = @fopen($file, "ab");
@@ -107,7 +106,7 @@ class GBDBStorage {
                     @fflush($handle);
 
                     if (function_exists("fsync")) {
-                        @fsync($handle);
+                        @GBDBFilesystem::sync($handle);
                     }
 
                     $ok = true;
@@ -115,7 +114,6 @@ class GBDBStorage {
 
                 @flock($handle, LOCK_UN);
             }
-
         } finally {
             @fclose($handle);
         }
@@ -131,7 +129,7 @@ class GBDBStorage {
      * @param string $tx
      * @return bool
      */
-    public static function wal(string $appendFile, array $op, string $state, string $tx): bool {
+    public static function wal(string $appendFile, array $op, string $state, string $tx) :bool {
         $entry = [
             "tx" => $tx,
             "state" => $state,
@@ -156,7 +154,7 @@ class GBDBStorage {
      * @param array $entry
      * @return string
      */
-    public static function journalChecksum(array $entry): string {
+    public static function journalChecksum(array $entry) :string {
         unset($entry["checksum"]);
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -169,12 +167,14 @@ class GBDBStorage {
      * @param array $entry
      * @return bool
      */
-    public static function journal(string $file, array $entry): bool {
+    public static function journal(string $file, array $entry) :bool {
         $entry["ts"] = (int)($entry["ts"] ?? time());
         $entry["checksum"] = self::journalChecksum($entry);
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        if ($json === false) return false;
+        if ($json === false) {
+            return false;
+        }
 
         if (is_file($file) && (int)@filesize($file) >= self::JOURNAL_ROTATE_BYTES) {
             @rename($file, $file . "." . date("Ymd_His") . ".old");
@@ -188,12 +188,16 @@ class GBDBStorage {
      * @param string $file
      * @return array{entries: array, invalid: int, ok: bool}
      */
-    public static function readJournal(string $file): array {
-        if (!is_file($file)) return ["ok" => true, "entries" => [], "invalid" => 0];
+    public static function readJournal(string $file) :array {
+        if (!is_file($file)) {
+            return ["ok" => true, "entries" => [], "invalid" => 0];
+        }
 
         $handle = @fopen($file, "r");
 
-        if (!$handle) return ["ok" => false, "entries" => [], "invalid" => 0];
+        if (!$handle) {
+            return ["ok" => false, "entries" => [], "invalid" => 0];
+        }
 
         $entries = [];
         $invalid = 0;
@@ -202,20 +206,30 @@ class GBDBStorage {
             while (!feof($handle)) {
                 $line = fgets($handle);
 
-                if ($line === false) break;
+                if ($line === false) {
+                    break;
+                }
                 $json = self::decodeLine($line);
 
-                if ($json === null) continue;
+                if ($json === null) {
+                    continue;
+                }
                 $entry = json_decode($json, true);
 
-                if (!is_array($entry)) { $invalid++; continue; }
+                if (!is_array($entry)) {
+                    $invalid++;
+                    continue;
+                }
                 $checksum = (string)($entry["checksum"] ?? "");
 
-                if ($checksum !== "" && $checksum !== self::journalChecksum($entry)) $invalid++;
+                if ($checksum !== "" && $checksum !== self::journalChecksum($entry)) {
+                    $invalid++;
+                }
                 $entries[] = $entry;
             }
-
-        } finally { @fclose($handle); }
+        } finally {
+            @fclose($handle);
+        }
 
         return ["ok" => $invalid === 0, "entries" => $entries, "invalid" => $invalid];
     }
@@ -225,7 +239,7 @@ class GBDBStorage {
      * @param string $json
      * @return string
      */
-    public static function encodeLine(string $json): string {
+    public static function encodeLine(string $json) :string {
         if (class_exists("Vars") && method_exists("Vars", "crypt_data") && Vars::crypt_data() && class_exists("Crypt")) {
             return Crypt::encode($json);
         }
@@ -238,7 +252,7 @@ class GBDBStorage {
      * @param array $meta
      * @return array{append_ops: int, checksum: string, chunk_size: int, constraints: array, created_at: int, deleted_rows: int, indexes: array, last_compaction: int, last_id: int, last_snapshot: int, page_size: mixed, rows: int, schema_version: int, storage_checksum: string, storage_format: int, storage_last_repair: int, storage_verified_at: int, updated_at: int, version: int}
      */
-    public static function normalizeMeta(array $meta = []): array {
+    public static function normalizeMeta(array $meta = []) :array {
         $now = time();
 
         $defaults = [
@@ -282,7 +296,7 @@ class GBDBStorage {
      * @param bool $bumpVersion
      * @return array{append_ops: int, checksum: string, chunk_size: int, constraints: array, created_at: int, deleted_rows: int, indexes: array, last_compaction: int, last_id: int, last_snapshot: int, page_size: mixed, rows: int, schema_version: int, storage_checksum: string, storage_format: int, storage_last_repair: int, storage_verified_at: int, updated_at: int, version: int}
      */
-    public static function touchMeta(array $meta, bool $bumpVersion = true): array {
+    public static function touchMeta(array $meta, bool $bumpVersion = true) :array {
         $meta = self::normalizeMeta($meta);
         $meta["updated_at"] = time();
 
@@ -299,19 +313,27 @@ class GBDBStorage {
      * @param string $appendFile
      * @return bool
      */
-    public static function shouldCompact(array $meta, string $appendFile): bool {
+    public static function shouldCompact(array $meta, string $appendFile) :bool {
         $meta = self::normalizeMeta($meta);
         $appendOps = (int)($meta["append_ops"] ?? 0);
         $rows = max(1, (int)($meta["rows"] ?? 0));
         $appendSize = is_file($appendFile) ? (int)@filesize($appendFile) : 0;
 
-        if ($appendOps <= 0) return false;
+        if ($appendOps <= 0) {
+            return false;
+        }
 
-        if ($appendOps >= 100) return true;
+        if ($appendOps >= 100) {
+            return true;
+        }
 
-        if ($appendOps >= max(25, (int)ceil($rows * 0.20))) return true;
+        if ($appendOps >= max(25, (int)ceil($rows * 0.20))) {
+            return true;
+        }
 
-        if ($appendSize >= 1024 * 1024) return true;
+        if ($appendSize >= 1024 * 1024) {
+            return true;
+        }
 
         return false;
     }
@@ -321,7 +343,7 @@ class GBDBStorage {
      * @param array $rows
      * @return string
      */
-    public static function checksum(array $rows): string {
+    public static function checksum(array $rows) :string {
         $json = json_encode($rows, JSON_UNESCAPED_UNICODE);
 
         return hash("sha256", $json === false ? "" : $json);
@@ -333,7 +355,7 @@ class GBDBStorage {
      * @param string $column
      * @return string
      */
-    public static function indexFile(string $dataFile, string $column): string {
+    public static function indexFile(string $dataFile, string $column) :string {
         $column = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $column);
 
         return dirname($dataFile) . "/" . self::INDEX_PREFIX . basename($dataFile) . "__" . $column . ".idx";
@@ -345,15 +367,21 @@ class GBDBStorage {
      * @param string $column
      * @return array<array>
      */
-    public static function buildIndex(array $rows, string $column): array {
+    public static function buildIndex(array $rows, string $column) :array {
         $idx = [];
 
         foreach ($rows as $i => $row) {
-            if (!is_array($row)) continue;
+            if (!is_array($row)) {
+                continue;
+            }
 
-            if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) continue;
+            if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) {
+                continue;
+            }
 
-            if (!array_key_exists($column, $row) || !isset($row["id"])) continue;
+            if (!array_key_exists($column, $row) || !isset($row["id"])) {
+                continue;
+            }
 
             $key = self::indexKey($row[$column]);
 
@@ -374,7 +402,7 @@ class GBDBStorage {
      * @param array $rows
      * @return bool
      */
-    public static function writeIndex(string $dataFile, string $column, array $rows): bool {
+    public static function writeIndex(string $dataFile, string $column, array $rows) :bool {
         $payload = json_encode([
             "column" => $column,
             "created_at" => time(),
@@ -398,7 +426,7 @@ class GBDBStorage {
      * @param string $column
      * @return bool
      */
-    public static function deleteIndex(string $dataFile, string $column): bool {
+    public static function deleteIndex(string $dataFile, string $column) :bool {
         $file = self::indexFile($dataFile, $column);
 
         return !is_file($file) || @unlink($file);
@@ -412,8 +440,10 @@ class GBDBStorage {
      * @param mixed $excludeId
      * @return bool
      */
-    public static function validateConstraints(array $rows, array $candidate, array $constraints, ?int $excludeId = null): bool {
-        if (empty($constraints)) return true;
+    public static function validateConstraints(array $rows, array $candidate, array $constraints, ?int $excludeId = null) :bool {
+        if (empty($constraints)) {
+            return true;
+        }
 
         foreach ($constraints as $column => $rules) {
             $column = (string)$column;
@@ -423,29 +453,33 @@ class GBDBStorage {
                 if (!array_key_exists($column, $candidate) || $candidate[$column] === "" || $candidate[$column] === null) {
                     return false;
                 }
-
             }
 
             if (($rules["unique"] ?? false) === true && array_key_exists($column, $candidate)) {
                 $value = self::indexKey($candidate[$column]);
 
                 foreach ($rows as $i => $row) {
-                    if (!is_array($row)) continue;
+                    if (!is_array($row)) {
+                        continue;
+                    }
 
-                    if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) continue;
+                    if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) {
+                        continue;
+                    }
 
-                    if ($excludeId !== null && isset($row["id"]) && (int)$row["id"] === $excludeId) continue;
+                    if ($excludeId !== null && isset($row["id"]) && (int)$row["id"] === $excludeId) {
+                        continue;
+                    }
 
-                    if (!array_key_exists($column, $row)) continue;
+                    if (!array_key_exists($column, $row)) {
+                        continue;
+                    }
 
                     if (self::indexKey($row[$column]) === $value) {
                         return false;
                     }
-
                 }
-
             }
-
         }
 
         return true;
@@ -456,12 +490,18 @@ class GBDBStorage {
      * @param mixed $value
      * @return string
      */
-    public static function indexKey(mixed $value): string {
-        if (is_bool($value)) return $value ? "bool:true" : "bool:false";
+    public static function indexKey(mixed $value) :string {
+        if (is_bool($value)) {
+            return $value ? "bool:true" : "bool:false";
+        }
 
-        if ($value === null) return "null";
+        if ($value === null) {
+            return "null";
+        }
 
-        if (is_int($value) || is_float($value)) return "num:" . (string)$value;
+        if (is_int($value) || is_float($value)) {
+            return "num:" . (string)$value;
+        }
 
         return "str:" . (string)$value;
     }
@@ -473,16 +513,17 @@ class GBDBStorage {
      * @param array $rows
      * @return void
      */
-    public static function rebuildIndexes(string $dataFile, array $meta, array $rows): void {
+    public static function rebuildIndexes(string $dataFile, array $meta, array $rows) :void {
         $meta = self::normalizeMeta($meta);
 
         foreach ($meta["indexes"] as $column) {
             $column = (string)$column;
 
-            if ($column === "" || $column === "id") continue;
+            if ($column === "" || $column === "id") {
+                continue;
+            }
             self::writeIndex($dataFile, $column, $rows);
         }
-
     }
 
     /**
@@ -492,7 +533,7 @@ class GBDBStorage {
      * @param string $reason
      * @return string
      */
-    public static function snapshot(string $dataFile, array $extraFiles = [], string $reason = "manual"): string {
+    public static function snapshot(string $dataFile, array $extraFiles = [], string $reason = "manual") :string {
         if (!is_file($dataFile)) {
             return "";
         }
@@ -502,21 +543,22 @@ class GBDBStorage {
         $dir = dirname($dataFile) . "/" . self::SNAPSHOT_DIR . "/" . basename($dataFile) . "/" . $id;
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         $files = array_merge([$dataFile], $extraFiles);
         $copied = [];
 
         foreach ($files as $file) {
-            if (!is_file($file)) continue;
+            if (!is_file($file)) {
+                continue;
+            }
 
             $target = $dir . "/" . basename($file);
 
             if (@copy($file, $target)) {
                 $copied[] = basename($file);
             }
-
         }
 
         $manifest = [
@@ -537,12 +579,14 @@ class GBDBStorage {
      * @param string $dataFile
      * @return void
      */
-    public static function deleteTableArtifacts(string $dataFile): void {
+    public static function deleteTableArtifacts(string $dataFile) :void {
         $dir = dirname($dataFile);
         $base = basename($dataFile);
 
-        foreach (glob($dir . "/" . self::INDEX_PREFIX . $base . "__*.idx") ?: [] as $file) {
-            if (is_file($file)) @unlink($file);
+        foreach (GBDBFilesystem::glob($dir . "/" . self::INDEX_PREFIX . $base . "__*.idx") ?: [] as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
         }
 
         if (is_file($dataFile . self::WAL_SUFFIX)) {
@@ -560,7 +604,9 @@ class GBDBStorage {
         if (is_dir($blocksRoot)) {
             $items = array_diff(scandir($blocksRoot) ?: [], [".", ".."]);
 
-            if (empty($items)) @rmdir($blocksRoot);
+            if (empty($items)) {
+                @rmdir($blocksRoot);
+            }
         }
 
         $snapDir = $dir . "/" . self::SNAPSHOT_DIR . "/" . $base;
@@ -577,9 +623,7 @@ class GBDBStorage {
             if (empty($items)) {
                 @rmdir($rootSnapDir);
             }
-
         }
-
     }
 
     /**
@@ -587,15 +631,21 @@ class GBDBStorage {
      * @param string $dir
      * @return bool
      */
-    public static function deleteDir(string $dir): bool {
-        if (!is_dir($dir)) return true;
+    public static function deleteDir(string $dir) :bool {
+        if (!is_dir($dir)) {
+            return true;
+        }
 
         $items = scandir($dir);
 
-        if (!$items) return @rmdir($dir);
+        if (!$items) {
+            return @rmdir($dir);
+        }
 
         foreach ($items as $item) {
-            if ($item === "." || $item === "..") continue;
+            if ($item === "." || $item === "..") {
+                continue;
+            }
 
             $path = $dir . "/" . $item;
 
@@ -604,7 +654,6 @@ class GBDBStorage {
             } else {
                 @unlink($path);
             }
-
         }
 
         return @rmdir($dir);
@@ -615,7 +664,7 @@ class GBDBStorage {
      * @param string $line
      * @return string|null
      */
-    public static function decodeLine(string $line): ?string {
+    public static function decodeLine(string $line) :?string {
         $line = trim($line);
 
         if ($line === "") {
@@ -636,7 +685,7 @@ class GBDBStorage {
      * @param string $appendFile
      * @return array[]
      */
-    public static function readWal(string $appendFile): array {
+    public static function readWal(string $appendFile) :array {
         $walFile = $appendFile . self::WAL_SUFFIX;
 
         if (!is_file($walFile)) {
@@ -655,23 +704,33 @@ class GBDBStorage {
             while (!feof($handle)) {
                 $line = fgets($handle);
 
-                if ($line === false) break;
+                if ($line === false) {
+                    break;
+                }
 
                 $json = self::decodeLine($line);
 
-                if ($json === null) continue;
+                if ($json === null) {
+                    if (trim($line) !== '') {
+                        throw new GBDBPrimaryFailure('Beschädigtes GBDB-WAL.');
+                    }
+
+                    continue;
+                }
 
                 $entry = json_decode($json, true);
 
                 if (is_array($entry) && isset($entry["tx"], $entry["state"], $entry["op"])) {
                     $checksum = (string)($entry["checksum"] ?? "");
 
-                    if ($checksum !== "" && $checksum !== self::journalChecksum($entry)) continue;
+                    if ($checksum !== '' && !hash_equals($checksum, self::journalChecksum($entry))) {
+                        throw new GBDBPrimaryFailure('Ungültige WAL-Prüfsumme.');
+                    }
                     $entries[] = $entry;
+                } else {
+                    throw new GBDBPrimaryFailure('Ungültiger GBDB-WAL-Eintrag.');
                 }
-
             }
-
         } finally {
             @fclose($handle);
         }
@@ -684,7 +743,7 @@ class GBDBStorage {
      * @param string $appendFile
      * @return array{dangling: int, ok: bool, replayed: int}
      */
-    public static function recoverWal(string $appendFile): array {
+    public static function recoverWal(string $appendFile) :array {
         $entries = self::readWal($appendFile);
 
         if (empty($entries)) {
@@ -711,20 +770,21 @@ class GBDBStorage {
                     while (!feof($handle)) {
                         $line = fgets($handle);
 
-                        if ($line === false) break;
+                        if ($line === false) {
+                            break;
+                        }
 
                         $json = self::decodeLine($line);
 
-                        if ($json === null) continue;
+                        if ($json === null) {
+                            continue;
+                        }
                         $existing[hash("sha256", $json)] = true;
                     }
-
                 } finally {
                     @fclose($handle);
                 }
-
             }
-
         }
 
         $replayed = 0;
@@ -734,7 +794,9 @@ class GBDBStorage {
             if (!empty($txStates["committed"]) && isset($ops[$tx])) {
                 $json = json_encode($ops[$tx], 0);
 
-                if ($json === false) continue;
+                if ($json === false) {
+                    continue;
+                }
 
                 $hash = hash("sha256", $json);
 
@@ -744,11 +806,9 @@ class GBDBStorage {
                     $existing[$hash] = true;
                     $replayed++;
                 }
-
-            } else if (!empty($txStates["prepared"]) && empty($txStates["failed"])) {
+            } elseif (!empty($txStates["prepared"]) && empty($txStates["failed"])) {
                 $dangling++;
             }
-
         }
 
         return ["ok" => true, "replayed" => $replayed, "dangling" => $dangling];
@@ -760,7 +820,7 @@ class GBDBStorage {
      * @param string $snapshotId
      * @return bool
      */
-    public static function restoreSnapshot(string $dataFile, string $snapshotId): bool {
+    public static function restoreSnapshot(string $dataFile, string $snapshotId) :bool {
         $snapshotId = preg_replace('/[^a-zA-Z0-9_\-]/', '', $snapshotId);
 
         if ($snapshotId === "") {
@@ -777,7 +837,9 @@ class GBDBStorage {
         $items = scandir($dir) ?: [];
 
         foreach ($items as $item) {
-            if ($item === "." || $item === ".." || $item === "manifest.json") continue;
+            if ($item === "." || $item === ".." || $item === "manifest.json") {
+                continue;
+            }
 
             $src = $dir . "/" . $item;
             $target = dirname($dataFile) . "/" . $item;
@@ -788,9 +850,7 @@ class GBDBStorage {
                 if ($payload === false || !self::atomicWrite($target, $payload)) {
                     $ok = false;
                 }
-
             }
-
         }
 
         return $ok;
@@ -803,7 +863,7 @@ class GBDBStorage {
      * @param mixed $value
      * @return array
      */
-    public static function indexLookup(string $dataFile, string $column, mixed $value): array {
+    public static function indexLookup(string $dataFile, string $column, mixed $value) :array {
         $file = self::indexFile($dataFile, $column);
 
         if (!is_file($file)) {
@@ -822,7 +882,6 @@ class GBDBStorage {
             if (is_string($decoded)) {
                 $payload = $decoded;
             }
-
         }
 
         $idx = json_decode($payload, true);
@@ -841,7 +900,7 @@ class GBDBStorage {
      * @param string $dataFile
      * @return string
      */
-    public static function advancedIndexDir(string $dataFile): string {
+    public static function advancedIndexDir(string $dataFile) :string {
         return self::storageDir($dataFile) . "/index/indexes";
     }
 
@@ -853,10 +912,12 @@ class GBDBStorage {
      * @param array $options
      * @return array{columns: array, created_at: int, fulltext: bool, name: array|string|null, prefix: bool, sorted: bool, type: string, unique: bool, updated_at: int}
      */
-    public static function normalizeIndexDefinition(string $name, string $type, array $columns, array $options = []): array {
+    public static function normalizeIndexDefinition(string $name, string $type, array $columns, array $options = []) :array {
         $type = strtolower(trim($type));
 
-        if ($type === '') $type = 'single';
+        if ($type === '') {
+            $type = 'single';
+        }
 
         $columns = array_values(array_filter(array_map(function ($column) {
             return preg_replace('/[^a-zA-Z0-9_\-]/', '_', trim((string)$column));
@@ -887,7 +948,7 @@ class GBDBStorage {
      * @param array $columns
      * @return array|string|null
      */
-    public static function indexName(string $type, array $columns): string {
+    public static function indexName(string $type, array $columns) :string {
         return preg_replace('/[^a-zA-Z0-9_\-]/', '_', strtolower($type) . '_' . implode('_', $columns));
     }
 
@@ -897,7 +958,7 @@ class GBDBStorage {
      * @param string $name
      * @return string
      */
-    public static function advancedIndexFile(string $dataFile, string $name): string {
+    public static function advancedIndexFile(string $dataFile, string $name) :string {
         $name = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $name);
 
         return self::advancedIndexDir($dataFile) . '/' . $name . '.idx.json';
@@ -908,7 +969,7 @@ class GBDBStorage {
      * @param string $dataFile
      * @return string
      */
-    public static function advancedIndexMetaFile(string $dataFile): string {
+    public static function advancedIndexMetaFile(string $dataFile) :string {
         return self::advancedIndexDir($dataFile) . '/_meta.json';
     }
 
@@ -918,10 +979,12 @@ class GBDBStorage {
      * @param array $columns
      * @return string
      */
-    public static function compositeIndexKey(array $row, array $columns): string {
+    public static function compositeIndexKey(array $row, array $columns) :string {
         $parts = [];
 
-        foreach ($columns as $column) $parts[] = self::indexKey($row[$column] ?? null);
+        foreach ($columns as $column) {
+            $parts[] = self::indexKey($row[$column] ?? null);
+        }
 
         return implode('|', $parts);
     }
@@ -931,7 +994,7 @@ class GBDBStorage {
      * @param string $text
      * @return array
      */
-    public static function tokenizeFulltext(string $text): array {
+    public static function tokenizeFulltext(string $text) :array {
         $text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
         $stopwords = array_flip(['der','die','das','den','dem','und','oder','aber','ein','eine','einer','eines','ist','sind','war','waren','the','a','an','and','or','of','to','in','for','on','with']);
 
@@ -942,20 +1005,30 @@ class GBDBStorage {
         foreach (($m[0] ?? []) as $token) {
             $token = trim((string)$token);
 
-            if ($token === '') continue;
+            if ($token === '') {
+                continue;
+            }
 
             $plain = ltrim($token, '#@');
             $len = function_exists('mb_strlen') ? mb_strlen($plain, 'UTF-8') : strlen($plain);
 
-            if ($len < 2) continue;
+            if ($len < 2) {
+                continue;
+            }
 
-            if (!str_starts_with($token, '#') && !str_starts_with($token, '@') && isset($stopwords[$plain])) continue;
+            if (!str_starts_with($token, '#') && !str_starts_with($token, '@') && isset($stopwords[$plain])) {
+                continue;
+            }
 
             $tokens[] = $token;
 
-            if (str_starts_with($token, '#')) $tokens[] = 'hashtag:' . substr($token, 1);
+            if (str_starts_with($token, '#')) {
+                $tokens[] = 'hashtag:' . substr($token, 1);
+            }
 
-            if (str_starts_with($token, '@')) $tokens[] = 'mention:' . substr($token, 1);
+            if (str_starts_with($token, '@')) {
+                $tokens[] = 'mention:' . substr($token, 1);
+            }
 
             $prefix = '';
             $chars = preg_split('//u', $plain, -1, PREG_SPLIT_NO_EMPTY) ?: [];
@@ -963,11 +1036,14 @@ class GBDBStorage {
             foreach ($chars as $i => $ch) {
                 $prefix .= $ch;
 
-                if ($i >= 1) $tokens[] = 'prefix:' . $prefix;
+                if ($i >= 1) {
+                    $tokens[] = 'prefix:' . $prefix;
+                }
 
-                if ($i >= 11) break;
+                if ($i >= 11) {
+                    break;
+                }
             }
-
         }
 
         return array_values(array_unique($tokens));
@@ -979,28 +1055,42 @@ class GBDBStorage {
      * @param array $definition
      * @return array
      */
-    public static function buildAdvancedIndex(array $rows, array $definition): array {
+    public static function buildAdvancedIndex(array $rows, array $definition) :array {
         $type = (string)($definition['type'] ?? 'single');
         $columns = is_array($definition['columns'] ?? null) ? $definition['columns'] : [];
         $map = [];
 
-        if (empty($columns)) return $map;
+        if (empty($columns)) {
+            return $map;
+        }
 
         foreach ($rows as $i => $row) {
-            if (!is_array($row)) continue;
+            if (!is_array($row)) {
+                continue;
+            }
 
-            if ($i === 0 && isset($row['id']) && (int)$row['id'] === -1) continue;
+            if ($i === 0 && isset($row['id']) && (int)$row['id'] === -1) {
+                continue;
+            }
 
-            if (!isset($row['id'])) continue;
+            if (!isset($row['id'])) {
+                continue;
+            }
 
             $id = (int)$row['id'];
 
             if ($type === 'fulltext') {
                 $haystack = '';
 
-                foreach ($columns as $column) if (array_key_exists($column, $row) && (is_scalar($row[$column]) || $row[$column] === null)) $haystack .= ' ' . (string)$row[$column];
+                foreach ($columns as $column) {
+                    if (array_key_exists($column, $row) && (is_scalar($row[$column]) || $row[$column] === null)) {
+                        $haystack .= ' ' . (string)$row[$column];
+                    }
+                }
 
-                foreach (self::tokenizeFulltext($haystack) as $token) $map[$token][] = $id;
+                foreach (self::tokenizeFulltext($haystack) as $token) {
+                    $map[$token][] = $id;
+                }
 
                 continue;
             }
@@ -1017,18 +1107,24 @@ class GBDBStorage {
                 foreach ($chars as $pos => $ch) {
                     $prefix .= $ch;
 
-                    if ($pos >= 1) $map['prefix:' . $prefix][] = $id;
+                    if ($pos >= 1) {
+                        $map['prefix:' . $prefix][] = $id;
+                    }
 
-                    if ($pos >= 31) break;
+                    if ($pos >= 31) {
+                        break;
+                    }
                 }
-
             }
-
         }
 
-        foreach ($map as $key => $ids) $map[$key] = array_values(array_unique(array_map('intval', $ids)));
+        foreach ($map as $key => $ids) {
+            $map[$key] = array_values(array_unique(array_map('intval', $ids)));
+        }
 
-        if (!empty($definition['sorted'])) ksort($map, SORT_NATURAL);
+        if (!empty($definition['sorted'])) {
+            ksort($map, SORT_NATURAL);
+        }
 
         return $map;
     }
@@ -1040,17 +1136,21 @@ class GBDBStorage {
      * @param array $rows
      * @return bool
      */
-    public static function writeAdvancedIndex(string $dataFile, array $definition, array $rows): bool {
+    public static function writeAdvancedIndex(string $dataFile, array $definition, array $rows) :bool {
         $dir = self::advancedIndexDir($dataFile);
 
-        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
 
         $definition = self::normalizeIndexDefinition((string)($definition['name'] ?? ''), (string)($definition['type'] ?? 'single'), (array)($definition['columns'] ?? []), $definition);
         $map = self::buildAdvancedIndex($rows, $definition);
         $payload = ['definition' => $definition, 'map' => $map, 'checksum' => self::checksum($map), 'updated_at' => time()];
         $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-        if ($json === false) return false;
+        if ($json === false) {
+            return false;
+        }
 
         return self::atomicWrite(self::advancedIndexFile($dataFile, $definition['name']), $json . "\n");
     }
@@ -1061,7 +1161,7 @@ class GBDBStorage {
      * @param string $name
      * @return array
      */
-    public static function readAdvancedIndex(string $dataFile, string $name): array {
+    public static function readAdvancedIndex(string $dataFile, string $name) :array {
         return self::readJsonFile(self::advancedIndexFile($dataFile, $name));
     }
 
@@ -1071,7 +1171,7 @@ class GBDBStorage {
      * @param array $definitions
      * @return bool
      */
-    public static function writeAdvancedIndexMeta(string $dataFile, array $definitions): bool {
+    public static function writeAdvancedIndexMeta(string $dataFile, array $definitions) :bool {
         $meta = ['format' => self::STORAGE_FORMAT, 'updated_at' => time(), 'definitions' => $definitions, 'checksum' => self::checksum($definitions)];
         $json = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
@@ -1085,17 +1185,23 @@ class GBDBStorage {
      * @param mixed $value
      * @return array
      */
-    public static function advancedIndexLookup(string $dataFile, array $definition, mixed $value): array {
+    public static function advancedIndexLookup(string $dataFile, array $definition, mixed $value) :array {
         $idx = self::readAdvancedIndex($dataFile, (string)($definition['name'] ?? ''));
 
-        if (empty($idx['map']) || !is_array($idx['map'])) return [];
+        if (empty($idx['map']) || !is_array($idx['map'])) {
+            return [];
+        }
 
         $type = (string)($definition['type'] ?? 'single');
 
         if ($type === 'fulltext') {
             $ids = [];
 
-            foreach (self::tokenizeFulltext((string)$value) as $token) foreach (($idx['map'][$token] ?? []) as $id) $ids[] = (int)$id;
+            foreach (self::tokenizeFulltext((string)$value) as $token) {
+                foreach (($idx['map'][$token] ?? []) as $id) {
+                    $ids[] = (int)$id;
+                }
+            }
 
             return array_values(array_unique($ids));
         }
@@ -1103,7 +1209,9 @@ class GBDBStorage {
         $vals = is_array($value) ? $value : [$value];
         $row = [];
 
-        foreach ((array)($definition['columns'] ?? []) as $i => $column) $row[$column] = $vals[$i] ?? null;
+        foreach ((array)($definition['columns'] ?? []) as $i => $column) {
+            $row[$column] = $vals[$i] ?? null;
+        }
 
         $key = self::compositeIndexKey($row, (array)($definition['columns'] ?? []));
 
@@ -1114,7 +1222,7 @@ class GBDBStorage {
      * gets page sizes
      * @return int[]
      */
-    public static function pageSizes(): array {
+    public static function pageSizes() :array {
         return [self::PAGE_4K, self::PAGE_8K, self::PAGE_16K];
     }
 
@@ -1123,7 +1231,7 @@ class GBDBStorage {
      * @param int $pageSize
      * @return int
      */
-    public static function normalizePageSize(int $pageSize): int {
+    public static function normalizePageSize(int $pageSize) :int {
         return in_array($pageSize, self::pageSizes(), true) ? $pageSize : self::DEFAULT_PAGE_SIZE;
     }
 
@@ -1132,7 +1240,7 @@ class GBDBStorage {
      * @param string $dataFile
      * @return string
      */
-    public static function storageDir(string $dataFile): string {
+    public static function storageDir(string $dataFile) :string {
         return dirname($dataFile) . "/.blocks/" . basename($dataFile);
     }
 
@@ -1143,7 +1251,7 @@ class GBDBStorage {
      * @param array $meta
      * @return array
      */
-    public static function initStorage(string $dataFile, array $rows, array $meta = []): array {
+    public static function initStorage(string $dataFile, array $rows, array $meta = []) :array {
         return self::syncStorage($dataFile, $rows, $meta, "init");
     }
 
@@ -1170,7 +1278,7 @@ class GBDBStorage {
      * @param string $reason
      * @return array{checksum: mixed, dir: string, format: int, ok: bool, page_size: int, pages: int, rows: int}
      */
-    public static function syncStorage(string $dataFile, array $rows, array $meta = [], string $reason = "sync"): array {
+    public static function syncStorage(string $dataFile, array $rows, array $meta = [], string $reason = "sync") :array {
         $meta = self::normalizeMeta($meta);
         $pageSize = self::normalizePageSize((int)($meta["page_size"] ?? self::DEFAULT_PAGE_SIZE));
         $chunkRows = max(1, (int)($meta["chunk_size"] ?? self::DEFAULT_CHUNK_ROWS));
@@ -1179,21 +1287,27 @@ class GBDBStorage {
         foreach (["data", "index", "meta", "journal", "free", "repair", "tmp"] as $sub) {
             $path = $dir . "/" . $sub;
 
-            if (!is_dir($path)) @mkdir($path, 0777, true);
+            if (!is_dir($path)) {
+                @mkdir($path, 0750, true);
+            }
         }
 
         $header = [];
         $body = [];
 
         foreach ($rows as $i => $row) {
-            if (!is_array($row)) continue;
+            if (!is_array($row)) {
+                continue;
+            }
 
             if ($i === 0 && isset($row["id"]) && (int)$row["id"] === -1) {
                 $header = $row;
                 continue;
             }
 
-            if (!isset($row["id"])) continue;
+            if (!isset($row["id"])) {
+                continue;
+            }
 
             $body[] = $row;
         }
@@ -1202,14 +1316,20 @@ class GBDBStorage {
         $oldTombstones = is_array($oldFree["tombstones"] ?? null) ? $oldFree["tombstones"] : [];
         $liveIds = [];
 
-        foreach ($body as $row) $liveIds[(string)(int)$row["id"]] = true;
-
-        foreach ($oldTombstones as $id => $item) {
-            if (isset($liveIds[(string)$id])) unset($oldTombstones[$id]);
+        foreach ($body as $row) {
+            $liveIds[(string)(int)$row["id"]] = true;
         }
 
-        foreach (glob($dir . "/data/chunk_*.page") ?: [] as $oldPage) {
-            if (is_file($oldPage)) @unlink($oldPage);
+        foreach ($oldTombstones as $id => $item) {
+            if (isset($liveIds[(string)$id])) {
+                unset($oldTombstones[$id]);
+            }
+        }
+
+        foreach (GBDBFilesystem::glob($dir . "/data/chunk_*.page") ?: [] as $oldPage) {
+            if (is_file($oldPage)) {
+                @unlink($oldPage);
+            }
         }
 
         $chunks = [];
@@ -1220,7 +1340,9 @@ class GBDBStorage {
         $currentSize = 0;
 
         $flush = function () use (&$chunks, &$pointers, &$pageChecksums, &$chunkNo, &$current, &$currentSize, $dir, $dataFile, $header, $pageSize, $reason) {
-            if (empty($current)) return;
+            if (empty($current)) {
+                return;
+            }
 
             $chunkNo++;
             $chunkId = str_pad((string)$chunkNo, 6, "0", STR_PAD_LEFT);
@@ -1262,7 +1384,9 @@ class GBDBStorage {
             $page["checksum"] = self::checksum($page["rows"]);
             $payload = json_encode($page, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-            if ($payload === false) $payload = "{}";
+            if ($payload === false) {
+                $payload = "{}";
+            }
 
             self::atomicWrite($pageFile, $payload . "\n");
 
@@ -1284,7 +1408,9 @@ class GBDBStorage {
             $size = $json === false ? 128 : strlen($json);
             $wouldOverflow = !empty($current) && ($currentSize + $size > $pageSize || count($current) >= $chunkRows);
 
-            if ($wouldOverflow) $flush();
+            if ($wouldOverflow) {
+                $flush();
+            }
 
             $current[] = $row;
             $currentSize += $size;
@@ -1375,10 +1501,12 @@ class GBDBStorage {
      * @param array $op
      * @return bool
      */
-    public static function appendStorageJournal(string $dataFile, array $op): bool {
+    public static function appendStorageJournal(string $dataFile, array $op) :bool {
         $dir = self::storageDir($dataFile) . "/journal";
 
-        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
 
         $entry = [
             "ts" => time(),
@@ -1388,7 +1516,9 @@ class GBDBStorage {
         $entry["checksum"] = self::checksum($entry["op"]);
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE);
 
-        if ($json === false) return false;
+        if ($json === false) {
+            return false;
+        }
 
         return self::appendLine($dir . "/operations.log", $json . "\n");
     }
@@ -1399,10 +1529,12 @@ class GBDBStorage {
      * @param array $ids
      * @return bool
      */
-    public static function markTombstones(string $dataFile, array $ids): bool {
+    public static function markTombstones(string $dataFile, array $ids) :bool {
         $dir = self::storageDir($dataFile);
 
-        if (!is_dir($dir . "/free")) @mkdir($dir . "/free", 0777, true);
+        if (!is_dir($dir . "/free")) {
+            @mkdir($dir . "/free", 0750, true);
+        }
 
         $freeFile = $dir . "/free/free.json";
         $free = self::readJsonFile($freeFile);
@@ -1411,12 +1543,16 @@ class GBDBStorage {
             $free = ["format" => self::STORAGE_FORMAT, "free_slots" => [], "tombstones" => []];
         }
 
-        if (!is_array($free["tombstones"] ?? null)) $free["tombstones"] = [];
+        if (!is_array($free["tombstones"] ?? null)) {
+            $free["tombstones"] = [];
+        }
 
         foreach ($ids as $id) {
             $id = (int)$id;
 
-            if ($id <= 0) continue;
+            if ($id <= 0) {
+                continue;
+            }
 
             $free["tombstones"][(string)$id] = [
                 "id" => $id,
@@ -1438,7 +1574,7 @@ class GBDBStorage {
      * @param string $dataFile
      * @return array{checksum: string, errors: array, format: int, ok: bool, pages: int, rows: int, warnings: array|array{errors: string[], ok: bool, warnings: array}}
      */
-    public static function verifyStorage(string $dataFile): array {
+    public static function verifyStorage(string $dataFile) :array {
         $dir = self::storageDir($dataFile);
         $errors = [];
         $warnings = [];
@@ -1449,15 +1585,21 @@ class GBDBStorage {
 
         $manifest = self::readJsonFile($dir . "/manifest.json");
 
-        if (empty($manifest)) $errors[] = "manifest_missing_or_invalid";
+        if (empty($manifest)) {
+            $errors[] = "manifest_missing_or_invalid";
+        }
 
         $storageMeta = self::readJsonFile($dir . "/meta/storage.json");
 
-        if (empty($storageMeta)) $warnings[] = "storage_meta_missing_or_invalid";
+        if (empty($storageMeta)) {
+            $warnings[] = "storage_meta_missing_or_invalid";
+        }
 
         $pointer = self::readJsonFile($dir . "/index/primary.ptr");
 
-        if (empty($pointer)) $warnings[] = "primary_pointer_missing_or_invalid";
+        if (empty($pointer)) {
+            $warnings[] = "primary_pointer_missing_or_invalid";
+        }
 
         $pageChecks = is_array($manifest["page_checksums"] ?? null) ? $manifest["page_checksums"] : [];
         $pages = 0;
@@ -1506,7 +1648,9 @@ class GBDBStorage {
             "checksum" => (string)($manifest["checksum"] ?? "")
         ];
 
-        if (!is_dir($dir . "/repair")) @mkdir($dir . "/repair", 0777, true);
+        if (!is_dir($dir . "/repair")) {
+            @mkdir($dir . "/repair", 0750, true);
+        }
 
         self::atomicWrite($dir . "/repair/last_report.json", json_encode($report, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
@@ -1520,10 +1664,12 @@ class GBDBStorage {
      * @param array $meta
      * @return array{ok: bool, repaired_at: int, sync: array{checksum: mixed, dir: string, format: int, ok: bool, page_size: int, pages: int, rows: int, verify: array}}
      */
-    public static function repairStorage(string $dataFile, array $rows, array $meta = []): array {
+    public static function repairStorage(string $dataFile, array $rows, array $meta = []) :array {
         $dir = self::storageDir($dataFile);
 
-        if (is_dir($dir . "/tmp")) self::deleteDir($dir . "/tmp");
+        if (is_dir($dir . "/tmp")) {
+            self::deleteDir($dir . "/tmp");
+        }
 
         self::appendStorageJournal($dataFile, ["op" => "repair_start"]);
 
@@ -1539,7 +1685,9 @@ class GBDBStorage {
             "repaired_at" => time()
         ];
 
-        if (!is_dir($dir . "/repair")) @mkdir($dir . "/repair", 0777, true);
+        if (!is_dir($dir . "/repair")) {
+            @mkdir($dir . "/repair", 0750, true);
+        }
 
         self::atomicWrite($dir . "/repair/last_report.json", json_encode($report, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
 
@@ -1553,13 +1701,17 @@ class GBDBStorage {
      * @param array $meta
      * @return array{checksum: mixed, dir: string, format: int, ok: bool, page_size: int, pages: int, rows: int}
      */
-    public static function vacuumStorage(string $dataFile, array $rows, array $meta = []): array {
+    public static function vacuumStorage(string $dataFile, array $rows, array $meta = []) :array {
         $dir = self::storageDir($dataFile);
 
-        foreach (glob($dir . "/tmp/*") ?: [] as $tmp) {
-            if (is_file($tmp)) @unlink($tmp);
+        foreach (GBDBFilesystem::glob($dir . "/tmp/*") ?: [] as $tmp) {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
 
-            if (is_dir($tmp)) self::deleteDir($tmp);
+            if (is_dir($tmp)) {
+                self::deleteDir($tmp);
+            }
         }
 
         self::appendStorageJournal($dataFile, ["op" => "vacuum_start"]);
@@ -1575,11 +1727,15 @@ class GBDBStorage {
      * @return array
      */
 
-    private static function readJsonFile(string $file): array {
-        if (!is_file($file)) return [];
+    private static function readJsonFile(string $file) :array {
+        if (!is_file($file)) {
+            return [];
+        }
         $raw = @file_get_contents($file);
 
-        if (!is_string($raw) || trim($raw) === "") return [];
+        if (!is_string($raw) || trim($raw) === "") {
+            return [];
+        }
         $json = json_decode($raw, true);
 
         return is_array($json) ? $json : [];
@@ -1591,7 +1747,7 @@ class GBDBStorage {
      * @return void
      */
 
-    private static function syncDir(string $dir): void {
+    private static function syncDir(string $dir) :void {
         if (!function_exists("fsync")) {
             return;
         }
@@ -1599,10 +1755,8 @@ class GBDBStorage {
         $handle = @fopen($dir, "r");
 
         if ($handle) {
-            @fsync($handle);
+            @GBDBFilesystem::sync($handle);
             @fclose($handle);
         }
-
     }
-
 }

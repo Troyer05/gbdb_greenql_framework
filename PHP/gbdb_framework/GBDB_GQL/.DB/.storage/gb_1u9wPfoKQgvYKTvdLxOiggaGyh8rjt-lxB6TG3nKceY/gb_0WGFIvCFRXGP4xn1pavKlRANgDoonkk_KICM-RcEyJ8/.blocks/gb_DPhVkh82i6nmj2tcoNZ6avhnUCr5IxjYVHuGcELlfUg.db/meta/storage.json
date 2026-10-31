@@ -1,0 +1,20 @@
+{
+    "format": 4,
+    "storage_version": 4,
+    "updated_at": 1793127880,
+    "page_size": 8192,
+    "supported_page_sizes": [
+        4096,
+        8192,
+        16384
+    ],
+    "chunk_size": 128,
+    "record_pointer_file": "index\/primary.ptr",
+    "data_files": [],
+    "journal_file": "journal\/operations.log",
+    "free_file": "free\/free.json",
+    "repair_file": "repair\/last_report.json",
+    "rows": 0,
+    "tombstones": 0,
+    "checksum": "7d68e3f9ef313367920a1639c2ccc95b53473510bcf6ae077c9847cd60d7afbc"
+}

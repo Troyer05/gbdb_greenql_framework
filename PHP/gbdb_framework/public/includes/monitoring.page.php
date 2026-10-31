@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . '/_shared.php';
 GreenQLUIv2Helper::boot();
 gbdbui_require_tool('monitoring');
@@ -29,32 +31,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         gbdbui_flash('ok', 'Processed jobs: ' . (int) ($r['done'] ?? 0) . ' done, ' . (int) ($r['failed'] ?? 0) . ' failed');
         gbdbui_redirect('monitoring');
     }
-
 }
 
 $d = GBDB::jobDashboard(80);
 $stats = $d['stats'] ?? [];
-?><!doctype html>
-<html lang="en">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Monitoring</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro gbdbui-enterprise-body"><?php gbdbui_nav('monitoring'); ?>
-    <main class="gbdbui-wide"><?php gbdbui_render_flashes(); ?>
-        <section class="gbdbui-hero enterprise-hero">
-            <p class="gbdbui-kicker">Operations</p>
-            <h1>Jobs & Queue Monitoring</h1>
-            <p>Watch queued, running, done and failed jobs, scheduled tasks and dead-letter entries.</p>
-        </section>
-        <section class="enterprise-metric-grid"><?php foreach (['queued', 'running', 'done', 'failed'] as $k): ?>
+?><?php gbdbui_layout_start('monitoring', 'Monitoring', 'Wartende, laufende, erledigte und fehlgeschlagene Jobs, geplante Aufgaben und Dead-Letter-Einträge im Blick behalten.', ['eyebrow' => 'Betrieb']); ?>
+        <section class="enterprise-metric-grid"><?php foreach (['queued', 'running', 'done', 'failed'] as $k) : ?>
                 <div class="enterprise-metric">
                     <span><?= gbdbui_e($k) ?></span><strong><?= (int) ($stats[$k] ?? 0) ?></strong><small>jobs</small></div>
-            <?php endforeach; ?>
+                                                <?php endforeach; ?>
         </section>
         <section class="panel enterprise-panel">
             <h2>Actions</h2>
@@ -79,7 +64,7 @@ $stats = $d['stats'] ?? [];
                             <th>Updated</th>
                         </tr>
                     </thead>
-                    <tbody><?php foreach (($d['jobs'] ?? []) as $j): ?>
+                    <tbody><?php foreach (($d['jobs'] ?? []) as $j) : ?>
                             <tr>
                                 <td><code><?= gbdbui_e((string) ($j['id'] ?? '')) ?></code></td>
                                 <td><?= gbdbui_e((string) ($j['type'] ?? '')) ?></td>
@@ -90,7 +75,8 @@ $stats = $d['stats'] ?? [];
                                 <td><?= (int) ($j['priority'] ?? 0) ?></td>
                                 <td><?= (int) ($j['attempts'] ?? 0) ?> / <?= (int) ($j['max_attempts'] ?? 0) ?></td>
                                 <td><?= !empty($j['updated_at']) ? date('Y-m-d H:i:s', (int) $j['updated_at']) : '' ?></td>
-                            </tr><?php endforeach; ?>
+                            </tr>
+                           <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
@@ -105,7 +91,5 @@ $stats = $d['stats'] ?? [];
                 <p>Failed jobs that reached max attempts.</p>
             </div>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

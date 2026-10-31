@@ -1,12 +1,11 @@
 <?php
 
 class ReCaptcha {
-
     /**
      * loads reCaptcha official javascript
      * @return void
      */
-    public function loadJsApi(): void {
+    public function loadJsApi() :void {
         echo '<script src="https://www.google.com/recaptcha/api.js" async defer></script>';
     }
 
@@ -14,7 +13,7 @@ class ReCaptcha {
      * name of input-tag name
      * @return string
      */
-    public static function postName(): string {
+    public static function postName() :string {
         return "g-recaptcha-response";
     }
 
@@ -23,7 +22,7 @@ class ReCaptcha {
      * @param string $callbackJs
      * @return string
      */
-    public static function checkBox(string $callbackJs = ""): string {
+    public static function checkBox(string $callbackJs = "") :string {
         $wc = Vars::reCaptcha_website_key();
         $cb = htmlspecialchars($callbackJs, ENT_QUOTES);
 
@@ -35,7 +34,7 @@ class ReCaptcha {
      * @param mixed $token
      * @return bool
      */
-    public static function verify(?string $token): bool {
+    public static function verify(?string $token) :bool {
         if (empty($token)) {
             return false;
         }
@@ -67,5 +66,4 @@ class ReCaptcha {
 
         return !empty($json["success"]);
     }
-
 }

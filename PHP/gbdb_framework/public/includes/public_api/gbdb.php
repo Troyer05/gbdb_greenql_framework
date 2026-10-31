@@ -1,7 +1,12 @@
 <?php
 
+require_once __DIR__ . "/module_helper.php";
+
 class PublicAPI_GBDB {
     private const ACTIONS = [
+        'backend_status' => ['method' => 'backendStatus', 'rights' => ['gbdb-backend']],
+        'backend_switch' => ['method' => 'backendSwitch', 'rights' => ['gbdb-backend']],
+        'backend_sync' => ['method' => 'backendSync', 'rights' => ['gbdb-backend']],
         "info" => ["method" => "info", "rights" => ["gbdb-read"]],
         "list_instances" => ["method" => "listInstances", "rights" => ["gbdb-read"]],
         "list_bases" => ["method" => "listBases", "rights" => ["gbdb-read"]],
@@ -37,7 +42,7 @@ class PublicAPI_GBDB {
      *
      * @return string
      */
-    public static function name(): string {
+    public static function name() :string {
         return "gbdb";
     }
 
@@ -47,7 +52,7 @@ class PublicAPI_GBDB {
      * @param string $action
      * @return array
      */
-    public static function requiresRights(string $action = ""): array {
+    public static function requiresRights(string $action = "") :array {
         return PublicAPI_ModuleHelper::rights(self::ACTIONS, $action);
     }
 
@@ -59,21 +64,51 @@ class PublicAPI_GBDB {
      * @param array $keyData
      * @return mixed
      */
-    public static function handle(string $action, array $body, array $keyData): mixed {
+    public static function handle(string $action, array $body, array $keyData) :mixed {
         try {
-            return PublicAPI_ModuleHelper::handle(self::class, self::ACTIONS, $action, $body, $keyData);
+            if (!isset(self::ACTIONS[$action])) {
+                return ['status' => 404, 'data' => 'unknown action'];
+            }
+
+            $method = self::ACTIONS[$action]['method'];
+
+            return self:: {$method}($body, $keyData);
+        } catch (GBDBInstanceAccessDenied $e) {
+            return ['status' => 403, 'data' => 'instance not accessible'];
         } catch (Throwable $e) {
             return [
                 "status" => 500,
                 "data" => [
                     "error" => "gbdb api error",
-                    "message" => $e->getMessage()
+                    "message" => Vars::__DEV__() ? $e->getMessage() : "GBDB operation failed; check storage status"
                 ]
             ];
         }
     }
 
-    private static function info(array $body, array $keyData): array {
+    private static function backendStatus(array $body, array $keyData) :array {
+        return GBDB::backendStatus();
+    }
+
+    private static function backendSwitch(array $body, array $keyData) :array {
+        if (!is_string($body['backend'] ?? null)) {
+            return ['status' => 400, 'data' => 'backend must be a string'];
+        }
+
+        $backend = strtolower((string) ($body['backend'] ?? ''));
+
+        if (!in_array($backend, ['gbdb', 'sql'], true)) {
+            return ['status' => 400, 'data' => 'backend must be gbdb or sql'];
+        }
+
+        return GBDB::switchBackend($backend);
+    }
+
+    private static function backendSync(array $body, array $keyData) :array {
+        return GBDB::synchronizeSQL();
+    }
+
+    private static function info(array $body, array $keyData) :array {
         return [
             "module" => self::name(),
             "rights" => self::requiresRights(),
@@ -81,7 +116,7 @@ class PublicAPI_GBDB {
         ];
     }
 
-    private static function listInstances(array $body, array $keyData): array {
+    private static function listInstances(array $body, array $keyData) :array {
         $includeSystem = self::bool($body, "include_system", false);
 
         return [
@@ -90,8 +125,8 @@ class PublicAPI_GBDB {
         ];
     }
 
-    private static function listBases(array $body, array $keyData): mixed {
-        return self::run($body, function (): array {
+    private static function listBases(array $body, array $keyData) :mixed {
+        return self::run($body, function () :array {
             return [
                 "instance" => GBDB::getInstance(),
                 "items" => GBDB::listDBs()
@@ -99,12 +134,12 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function listTables(array $body, array $keyData): mixed {
+    private static function listTables(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return [
                 "base" => self::base($body),
                 "items" => GBDB::listTables(self::base($body), self::bool($body, "desc", false))
@@ -112,32 +147,32 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function keys(array $body, array $keyData): mixed {
+    private static function keys(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return GBDB::getKeys(self::base($body), self::table($body));
         });
     }
 
-    private static function nextId(array $body, array $keyData): mixed {
+    private static function nextId(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): int {
+        return self::run($body, function () use ($body) :int {
             return GBDB::nextID(self::base($body), self::table($body));
         });
     }
 
-    private static function get(array $body, array $keyData): mixed {
+    private static function get(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): mixed {
+        return self::run($body, function () use ($body) :mixed {
             return GBDB::get(
                 self::base($body),
                 self::table($body),
@@ -148,44 +183,44 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function exists(array $body, array $keyData): mixed {
+    private static function exists(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "where", "is"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return [
                 "exists" => GBDB::exists(self::base($body), self::table($body), $body["where"], $body["is"])
             ];
         });
     }
 
-    private static function page(array $body, array $keyData): mixed {
+    private static function page(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return GBDB::page(self::base($body), self::table($body), self::int($body, "page", 1), self::int($body, "per_page", 50));
         });
     }
 
-    private static function cursor(array $body, array $keyData): mixed {
+    private static function cursor(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return GBDB::cursor(self::base($body), self::table($body), self::int($body, "limit", 100), self::str($body, "cursor", ""));
         });
     }
 
-    private static function fulltext(array $body, array $keyData): mixed {
+    private static function fulltext(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "query"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return GBDB::fulltext(
                 self::base($body),
                 self::table($body),
@@ -196,19 +231,19 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function stats(array $body, array $keyData): mixed {
+    private static function stats(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             $table = self::table($body, false);
 
             return GBDB::stats(self::base($body), $table == "" ? null : $table);
         });
     }
 
-    private static function createInstance(array $body, array $keyData): mixed {
+    private static function createInstance(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["instance"])) !== true) {
             return $err;
         }
@@ -219,7 +254,7 @@ class PublicAPI_GBDB {
         ];
     }
 
-    private static function dropInstance(array $body, array $keyData): mixed {
+    private static function dropInstance(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["instance"])) !== true) {
             return $err;
         }
@@ -230,12 +265,12 @@ class PublicAPI_GBDB {
         ];
     }
 
-    private static function createBase(array $body, array $keyData): mixed {
+    private static function createBase(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return [
                 "done" => GBDB::createDatabase(self::base($body)),
                 "base" => self::base($body)
@@ -243,12 +278,12 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function dropBase(array $body, array $keyData): mixed {
+    private static function dropBase(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return [
                 "done" => GBDB::deleteDatabase(self::base($body)),
                 "base" => self::base($body)
@@ -256,7 +291,7 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function createTable(array $body, array $keyData): mixed {
+    private static function createTable(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "columns"])) !== true) {
             return $err;
         }
@@ -267,7 +302,7 @@ class PublicAPI_GBDB {
             return ["status" => 400, "data" => "columns must be a non empty array"];
         }
 
-        return self::run($body, function () use ($body, $columns): array {
+        return self::run($body, function () use ($body, $columns) :array {
             return [
                 "done" => GBDB::createTable(self::base($body), self::table($body), $columns),
                 "base" => self::base($body),
@@ -277,12 +312,12 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function dropTable(array $body, array $keyData): mixed {
+    private static function dropTable(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return [
                 "done" => GBDB::deleteTable(self::base($body), self::table($body)),
                 "base" => self::base($body),
@@ -291,12 +326,12 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function addColumn(array $body, array $keyData): mixed {
+    private static function addColumn(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "column"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             $column = self::clean(self::str($body, "column"));
 
             if ($column == "") {
@@ -310,7 +345,7 @@ class PublicAPI_GBDB {
         });
     }
 
-    private static function insert(array $body, array $keyData): mixed {
+    private static function insert(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "data"])) !== true) {
             return $err;
         }
@@ -321,14 +356,14 @@ class PublicAPI_GBDB {
             return ["status" => 400, "data" => "data must be a non empty object"];
         }
 
-        return self::run($body, function () use ($body, $data): array {
+        return self::run($body, function () use ($body, $data) :array {
             return [
                 "id" => GBDB::insert(self::base($body), self::table($body), $data)
             ];
         });
     }
 
-    private static function bulkInsert(array $body, array $keyData): mixed {
+    private static function bulkInsert(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "rows"])) !== true) {
             return $err;
         }
@@ -339,12 +374,12 @@ class PublicAPI_GBDB {
             return ["status" => 400, "data" => "rows must be a non empty array"];
         }
 
-        return self::run($body, function () use ($body, $rows): array {
+        return self::run($body, function () use ($body, $rows) :array {
             return GBDB::bulkInsert(self::base($body), self::table($body), $rows, self::bool($body, "transactional", true));
         });
     }
 
-    private static function update(array $body, array $keyData): mixed {
+    private static function update(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "where", "is", "data"])) !== true) {
             return $err;
         }
@@ -355,14 +390,14 @@ class PublicAPI_GBDB {
             return ["status" => 400, "data" => "data must be a non empty object"];
         }
 
-        return self::run($body, function () use ($body, $data): array {
+        return self::run($body, function () use ($body, $data) :array {
             return [
                 "done" => GBDB::edit(self::base($body), self::table($body), $body["where"], $body["is"], $data)
             ];
         });
     }
 
-    private static function upsert(array $body, array $keyData): mixed {
+    private static function upsert(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "where", "is", "data"])) !== true) {
             return $err;
         }
@@ -373,46 +408,46 @@ class PublicAPI_GBDB {
             return ["status" => 400, "data" => "data must be a non empty object"];
         }
 
-        return self::run($body, function () use ($body, $data): array {
+        return self::run($body, function () use ($body, $data) :array {
             return GBDB::upsert(self::base($body), self::table($body), $body["where"], $body["is"], $data);
         });
     }
 
-    private static function deleteRows(array $body, array $keyData): mixed {
+    private static function deleteRows(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["base", "table", "where", "is"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return [
                 "done" => GBDB::delete(self::base($body), self::table($body), $body["where"], $body["is"])
             ];
         });
     }
 
-    private static function query(array $body, array $keyData): mixed {
+    private static function query(array $body, array $keyData) :mixed {
         if (($err = self::requireBody($body, ["script"])) !== true) {
             return $err;
         }
 
-        return self::run($body, function () use ($body): array {
+        return self::run($body, function () use ($body) :array {
             return GBDB::query(self::str($body, "script"), self::arr($body, "ctx"), self::arr($body, "params"));
         });
     }
 
-    private static function runScript(array $body, array $keyData): mixed {
+    private static function runScript(array $body, array $keyData) :mixed {
         $script = self::str($body, "script", self::str($body, "script_name"));
 
         if ($script == "") {
             return ["status" => 400, "data" => "missing param: script"];
         }
 
-        return self::run($body, function () use ($body, $script): array {
+        return self::run($body, function () use ($body, $script) :array {
             return GBDB::runScript($script, self::arr($body, "params"), self::arr($body, "ctx"));
         });
     }
 
-    private static function run(array $body, callable $callback): mixed {
+    private static function run(array $body, callable $callback) :mixed {
         $instance = self::instance($body, false);
 
         if ($instance == "") {
@@ -422,7 +457,7 @@ class PublicAPI_GBDB {
         return GBDB::withInstance($instance, $callback);
     }
 
-    private static function requireBody(array $body, array $params): bool|array {
+    private static function requireBody(array $body, array $params) :bool|array {
         foreach ($params as $param) {
             if ($param == "base" && (isset($body["base"]) || isset($body["database"]))) {
                 continue;
@@ -439,15 +474,15 @@ class PublicAPI_GBDB {
         return true;
     }
 
-    private static function str(array $body, string $key, string $default = ""): string {
+    private static function str(array $body, string $key, string $default = "") :string {
         return (string) ($body[$key] ?? $default);
     }
 
-    private static function int(array $body, string $key, int $default = 0): int {
+    private static function int(array $body, string $key, int $default = 0) :int {
         return (int) ($body[$key] ?? $default);
     }
 
-    private static function bool(array $body, string $key, bool $default = false): bool {
+    private static function bool(array $body, string $key, bool $default = false) :bool {
         if (!isset($body[$key])) {
             return $default;
         }
@@ -459,7 +494,7 @@ class PublicAPI_GBDB {
         return in_array(strtolower((string) $body[$key]), ["1", "true", "yes", "on"], true);
     }
 
-    private static function arr(array $body, string $key): array {
+    private static function arr(array $body, string $key) :array {
         if (!isset($body[$key]) || !is_array($body[$key])) {
             return [];
         }
@@ -467,7 +502,7 @@ class PublicAPI_GBDB {
         return $body[$key];
     }
 
-    private static function instance(array $body, bool $required = true): string {
+    private static function instance(array $body, bool $required = true) :string {
         $instance = self::clean(self::str($body, "instance"));
 
         if ($required && $instance == "") {
@@ -477,11 +512,11 @@ class PublicAPI_GBDB {
         return $instance;
     }
 
-    private static function base(array $body): string {
+    private static function base(array $body) :string {
         return self::clean((string) ($body["base"] ?? ($body["database"] ?? "")));
     }
 
-    private static function table(array $body, bool $required = true): string {
+    private static function table(array $body, bool $required = true) :string {
         $table = self::clean(self::str($body, "table"));
 
         if (!$required && $table == "") {
@@ -491,11 +526,11 @@ class PublicAPI_GBDB {
         return $table;
     }
 
-    private static function clean(string $value): string {
+    private static function clean(string $value) :string {
         return Format::cleanString($value);
     }
 
-    private static function cleanList(array $items): array {
+    private static function cleanList(array $items) :array {
         $out = [];
 
         foreach ($items as $item) {

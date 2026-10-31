@@ -1,12 +1,41 @@
 <?php
+
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/autoloader.php';
 
-if (!Vars::__DEV__()) {
+if (!GBDBConfig::flag('ui', 'enabled', true)) {
     http_response_code(403);
-    echo 'GBDB UI ist nur im DEV-Modus verfuegbar.';
+    exit('GBDB UI ist deaktiviert.');
+}
 
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
+header('X-Frame-Options: DENY');
+header('Cache-Control: no-store');
+
+if (isset($_GET['gbdb_asset'])) {
+    $asset = (string) $_GET['gbdb_asset'];
+
+    if (!preg_match('~^(css/[a-zA-Z0-9_.-]+\.css|js/[a-zA-Z0-9_.-]+\.js|img/[a-zA-Z0-9_.-]+\.webp)$~D', $asset)) {
+        http_response_code(404);
+        exit;
+    }
+
+    $file = __DIR__ . '/' . $asset;
+
+    if (!is_file($file)) {
+        http_response_code(404);
+        exit;
+    }
+
+    header('Content-Type: ' . match (true) {
+        str_ends_with($asset, '.css') => 'text/css; charset=utf-8',
+        str_ends_with($asset, '.webp') => 'image/webp',
+        default => 'application/javascript; charset=utf-8',
+    });
+    header('Cache-Control: private, max-age=3600');
+    readfile($file);
     exit;
 }
 
@@ -17,13 +46,13 @@ require_once $uiDir . '/greenql_v2_helper.php';
 GreenQLUIv2Helper::boot();
 
 $tool = (string) ($_GET['tool'] ?? $_POST['tool'] ?? 'dashboard');
-$allowed = ['dashboard', 'greenql_v2', 'php_exec', 'users', 'migration', 'cryption', 'optimize', 'env', 'plugins', 'gql_scripts', 'backup', 'import_export', 'reinstall', 'enterprise', 'monitoring', 'public_api'];
+$allowed = ['dashboard', 'greenql_v2', 'php_exec', 'users', 'migration', 'cryption', 'optimize', 'env', 'plugins', 'gql_scripts', 'backup', 'import_export', 'reinstall', 'enterprise', 'monitoring', 'public_api', 'storage', 'distributed'];
 
 if (!in_array($tool, $allowed, true)) {
     $tool = 'dashboard';
 }
 
-function gbdbui_redirect(string $tool = 'dashboard', array $params = []): void {
+function gbdbui_redirect(string $tool = 'dashboard', array $params = []) :void {
     header('Location: ' . gbdbui_url($tool, $params));
 
     exit;
@@ -46,13 +75,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['gbdbui_act
 
         if (GreenQLUIv2Helper::hasUsers()) {
             gbdbui_flash('bad', 'Setup ist bereits abgeschlossen.');
-        } else if ($password !== $password2) {
+        } elseif ($password !== $password2) {
             gbdbui_flash('bad', 'Passwörter stimmen nicht überein.');
-        } else if (GreenQLUIv2Helper::createUser($username, $password, 'admin', '*', '*', $language, '*', '*')) {
-            GreenQLUIv2Helper::login($username, $password);
-            gbdbui_flash('ok', 'Admin angelegt und eingeloggt.');
+        } elseif (GreenQLUIv2Helper::createInitialAdmin($username, $password, $language, (string) ($_POST['setup_token'] ?? ''))) {
+            $loginSuccessful = GreenQLUIv2Helper::login($username, $password);
+            gbdbui_flash($loginSuccessful ? 'ok' : 'bad', $loginSuccessful
+                ? 'Admin angelegt und eingeloggt.' : 'Admin angelegt. Bitte mit deinen Zugangsdaten einloggen.');
         } else {
-            gbdbui_flash('bad', 'Admin konnte nicht angelegt werden. Benutzername prüfen, Passwort mindestens 8 Zeichen.');
+            gbdbui_flash('bad', GreenQLUIv2Helper::setupError());
         }
 
         gbdbui_redirect('dashboard');
@@ -73,60 +103,71 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['gbdbui_act
         gbdbui_flash('ok', 'Du wurdest ausgeloggt.');
         gbdbui_redirect('dashboard');
     }
-
 }
 
 $needsSetup = !GreenQLUIv2Helper::hasUsers();
 $loggedIn = GreenQLUIv2Helper::loggedIn();
 
 if (!$loggedIn) {
+    $languages = ['en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français', 'es' => 'Español', 'it' => 'Italiano', 'nl' => 'Nederlands'];
     ?>
-    <!doctype html>
-    <html lang="<?= gbdbui_e(GreenQLUIv2Helper::language()) ?>">
-
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>GBDB UI Login</title>
-        <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-        <link rel="stylesheet" href="gbdb_framework/public/css/greenql_ui.v2.css?v=2026.2">
-    </head>
-
-    <body class="gbdbui-dashboard gbdbui-auth-body">
-        <main class="auth-shell">
-            <section class="auth-card">
-                <div class="brand-mark">GB</div>
-                <p class="eyebrow">greenbucket® Framework</p>
-                <h1>GBDB Control Center</h1>
-                <p class="muted">
-                    <?= $needsSetup ? gbdbui_e(GreenQLUIv2Helper::t('setup_text')) : gbdbui_e(GreenQLUIv2Helper::t('login_text')) ?>
-                </p>
-                <?php gbdbui_render_flashes(); ?>
-                <form method="post" class="stack-form">
-                    <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
-                    <input type="hidden" name="gbdbui_action" value="<?= $needsSetup ? 'setup' : 'login' ?>">
-                    <?php if ($needsSetup): ?>
-                        <label><?= gbdbui_e(GreenQLUIv2Helper::t('language')) ?><select
-                                name="language"><?php foreach (['en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français', 'es' => 'Español', 'it' => 'Italiano', 'nl' => 'Nederlands'] as $code => $label): ?>
-                                    <option value="<?= gbdbui_e($code) ?>"><?= gbdbui_e($label) ?></option><?php endforeach; ?>
-                            </select></label>
-                    <?php endif; ?>
-                    <label><?= gbdbui_e(GreenQLUIv2Helper::t('username')) ?><input name="username" autocomplete="username"
-                            required></label>
-                    <label><?= gbdbui_e(GreenQLUIv2Helper::t('password')) ?><input name="password" type="password"
-                            autocomplete="<?= $needsSetup ? 'new-password' : 'current-password' ?>" required></label>
-                    <?php if ($needsSetup): ?>
-                        <label><?= gbdbui_e(GreenQLUIv2Helper::t('password_repeat')) ?><input name="password2" type="password"
-                                autocomplete="new-password" required></label>
-                    <?php endif; ?>
-                    <button
-                        class="primary"><?= $needsSetup ? gbdbui_e(GreenQLUIv2Helper::t('create_admin')) : gbdbui_e(GreenQLUIv2Helper::t('login')) ?></button>
-                </form>
-            </section>
-        </main>
-    </body>
-
-    </html>
+<!doctype html>
+<html lang="<?= gbdbui_e(GreenQLUIv2Helper::language()) ?>" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title><?= $needsSetup ? 'Einrichtung' : 'Anmelden' ?> · GBDB Control Center</title>
+    <script>try { if (localStorage.getItem('gbdbui:theme') === 'dark') { document.documentElement.dataset.theme = 'dark'; } } catch (error) { }</script>
+    <link rel="icon" type="image/webp" href="<?= gbdbui_e(gbdbui_asset('img/gbdb_icon.webp')) ?>">
+    <link rel="stylesheet" href="<?= gbdbui_e(gbdbui_asset('css/intranet.css')) ?>">
+    <link rel="stylesheet" href="<?= gbdbui_e(gbdbui_asset('css/gbdb_ui.css')) ?>">
+</head>
+<body data-page="login" class="login-body gbdbui-auth">
+<div class="login-grid">
+    <div class="login-illustration"><div class="login-illustration-inner">
+        <div class="login-mark"><img class="gbdbui-logo-icon" src="<?= gbdbui_e(gbdbui_asset('img/gbdb_icon.webp')) ?>" alt="" width="34" height="34"><span>GBDB<span class="muted"> Control Center</span></span></div>
+        <div class="login-hero"><span class="login-kicker"><span class="online-dot"></span> GREENBUCKET® FRAMEWORK</span><img class="gbdbui-login-logo" src="<?= gbdbui_e(gbdbui_asset('img/gbdb_logo.webp')) ?>" alt="GBDB" width="220" height="220"><h1>Eine Datenbank.<br><em>Alle Werkzeuge.</em></h1><p>Instanzen, Tabellen, GreenQL, Speicher-Failover und verteilte Replikation übersichtlich an einem Ort verwalten.</p>
+            <div class="login-stats"><div><strong>GBDB</strong><small>Engine</small></div><div><strong>SQL</strong><small>Fallback</small></div><div><strong>GDP/1</strong><small>Replikation</small></div></div>
+        </div>
+        <div class="login-grid-glow"></div>
+        <div class="login-illustration-foot">GBDB · CONTROL CENTER · <?= gbdbui_e(Vars::framework_version()) ?></div>
+    </div></div>
+    <div class="login-panel">
+        <div class="login-mobile-brand"><img class="gbdbui-logo-icon" src="<?= gbdbui_e(gbdbui_asset('img/gbdb_icon.webp')) ?>" alt="" width="34" height="34"><strong>GBDB</strong></div>
+        <div class="login-card">
+            <div class="welcome-icon"><?= gbdbui_icon('shield', 27) ?></div>
+            <div class="eyebrow"><?= $needsSetup ? 'ERSTEINRICHTUNG' : 'WILLKOMMEN ZURÜCK' ?></div>
+            <h2><?= $needsSetup ? 'Admin-Konto<br>einrichten.' : 'Hallo, schön dich<br>zu sehen.' ?></h2>
+            <p class="login-lead"><?= gbdbui_e($needsSetup ? GreenQLUIv2Helper::t('setup_text') : GreenQLUIv2Helper::t('login_text')) ?></p>
+            <?php gbdbui_render_flashes(); ?>
+            <?php if ($needsSetup && GreenQLUIv2Helper::setupConfigurationError() !== '') : ?>
+                <div class="notice notice-error" role="alert"><?= gbdbui_e(GreenQLUIv2Helper::setupConfigurationError()) ?></div>
+            <?php endif; ?>
+            <?php if ($needsSetup) : ?>
+                <div class="notice notice-info"><strong><?= gbdbui_icon('alert', 16) ?> Setup-Token</strong><p>Den Wert <code>UI → setup_token</code> aus <code>.config/.framework.env.php</code> einfügen. Das Admin-Passwort braucht mindestens 12 Zeichen.</p></div>
+            <?php endif; ?>
+            <form method="post" class="login-form">
+                <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
+                <input type="hidden" name="gbdbui_action" value="<?= $needsSetup ? 'setup' : 'login' ?>">
+                <?php if ($needsSetup) : ?>
+                    <label>Setup-Token<input name="setup_token" type="password" required autocomplete="off"></label>
+                    <label><?= gbdbui_e(GreenQLUIv2Helper::t('language')) ?><select name="language"><?php foreach ($languages as $code => $label) : ?><option value="<?= gbdbui_e($code) ?>"><?= gbdbui_e($label) ?></option><?php endforeach; ?></select></label>
+                <?php endif; ?>
+                <label><?= gbdbui_e(GreenQLUIv2Helper::t('username')) ?><input name="username" autocomplete="username" required></label>
+                <label><?= gbdbui_e(GreenQLUIv2Helper::t('password')) ?><input name="password" type="password" autocomplete="<?= $needsSetup ? 'new-password' : 'current-password' ?>" <?= $needsSetup ? 'minlength="12"' : '' ?> required></label>
+                <?php if ($needsSetup) : ?>
+                    <label><?= gbdbui_e(GreenQLUIv2Helper::t('password_repeat')) ?><input name="password2" type="password" autocomplete="new-password" required></label>
+                <?php endif; ?>
+                <button class="btn btn-primary btn-lg" type="submit"><?= $needsSetup ? gbdbui_e(GreenQLUIv2Helper::t('create_admin')) : gbdbui_e(GreenQLUIv2Helper::t('login')) ?> <?= gbdbui_icon('arrow-right', 18) ?></button>
+            </form>
+            <p class="login-undertext"><?= gbdbui_icon('lock', 14) ?> Anmeldeversuche sind begrenzt; die Sitzung ist an diesen Browser gebunden.</p>
+        </div>
+        <div class="login-panel-bottom">© <?= date('Y') ?> greenbucket <span>·</span> GBDB Framework</div>
+    </div>
+</div>
+</body>
+</html>
     <?php
 
     exit;
@@ -142,105 +183,63 @@ if ($tool !== 'dashboard') {
 
 $user = GreenQLUIv2Helper::user();
 $cards = [
-    ['tool' => 'greenql_v2', 'tag' => 'Studio', 'title' => 'GreenQL', 'text' => 'Zentrale GreenQL-Oberfläche für GBDB, Instanzen, Bases, Tabellen, Query-Pläne und Rechte.'],
-    ['tool' => 'php_exec', 'tag' => 'Dev', 'title' => 'PHP Exec', 'text' => 'PHP direkt im Browser testen – mit Highlighting, Auto-Einrückung und Output.'],
-    ['tool' => 'users', 'tag' => 'Admin', 'title' => 'Benutzerverwaltung', 'text' => 'Zentrale UI-User, Rollen, Instanz- und Base-Rechte verwalten.'],
-    ['tool' => 'public_api', 'tag' => 'API', 'title' => 'Public API', 'text' => 'API-Keys, Rechte, Module, Requests und Logs zentral verwalten.'],
-    ['tool' => 'migration', 'tag' => 'Maintenance', 'title' => 'Migration', 'text' => 'Struktur-Upgrades, Meta-/Append-Aufbau und optionale Schema-Konvertierung.'],
-    ['tool' => 'cryption', 'tag' => 'Security', 'title' => 'Crypto', 'text' => 'GBDB zwischen Plain-JSON und verschlüsselter/tokenisierter Struktur konvertieren.'],
-    ['tool' => 'optimize', 'tag' => 'Performance', 'title' => 'Optimize', 'text' => 'Tabellen compacten, Append-Logs auswerten und GBDB-Dateien warten.'],
-    ['tool' => 'env', 'tag' => 'Config', 'title' => 'ENV', 'text' => '.framework.env.php ansehen und ausgewählte Config-Datei direkt bearbeiten.'],
-    ['tool' => 'plugins', 'tag' => 'Extend', 'title' => 'Plugins', 'text' => 'Plugins anzeigen, hochladen, löschen und aktiv/deaktiviert markieren.'],
-    ['tool' => 'gql_scripts', 'tag' => 'Files', 'title' => 'GQL Scripts', 'text' => '.gql Scripts mit File-Browser, Editor und ENV-Verwaltung pflegen.'],
-    ['tool' => 'backup', 'tag' => 'Safe', 'title' => 'Backup', 'text' => 'GBDB-Datenbank nach frei wählbarem Pfad sichern.'],
-    ['tool' => 'import_export', 'tag' => 'Data', 'title' => 'Import / Export', 'text' => 'Tabellen als JSON, NDJSON oder CSV exportieren und geprüfte Datensätze importieren.'],
-    ['tool' => 'reinstall', 'tag' => 'Danger', 'title' => 'Re-Install', 'text' => 'Alle GBDB-Daten nach doppelter Warnung sauber löschen.'],
-    ['tool' => 'enterprise', 'tag' => 'Enterprise', 'title' => 'Enterprise Ops', 'text' => 'Intranet-Pattern, SSO, Tenant-Isolation, Quotas, Rate-Limits, Import/Export, CLI/API und Tests.'],
-    ['tool' => 'monitoring', 'tag' => 'Ops', 'title' => 'Monitoring', 'text' => 'Jobs, Queues, Dead-Letter, Worker-Locks und Framework-Health im Blick behalten.'],
+    ['tool' => 'greenql_v2', 'title' => 'Daten im GreenQL Studio bearbeiten', 'text' => 'Instanz, Base und Tabelle wählen, Datensätze pflegen oder Abfragen ausführen.'],
+    ['tool' => 'storage', 'title' => 'Speicher und SQL-Fallback prüfen', 'text' => 'Synchronisation kontrollieren und kontrolliert zwischen GBDB und SQL umschalten.'],
+    ['tool' => 'distributed', 'title' => 'Replikation (GDP) überwachen', 'text' => 'Knoten, Replikate, Policies, Journal und Synchronisationszustand einsehen.'],
+    ['tool' => 'users', 'title' => 'Benutzer und Rechte verwalten', 'text' => 'Konten, Rollen, Instanz- und Base-Rechte sowie Werkzeugfreigaben pflegen.'],
+    ['tool' => 'backup', 'title' => 'Backup ziehen', 'text' => 'Den Datenbestand vor Änderungen vollständig sichern.'],
+    ['tool' => 'import_export', 'title' => 'Tabellen importieren oder exportieren', 'text' => 'JSON, NDJSON oder CSV mit Validierung übertragen.'],
+    ['tool' => 'public_api', 'title' => 'API-Schlüssel ausgeben', 'text' => 'Schlüssel, Rechte, Module und Anfrageprotokolle verwalten.'],
+    ['tool' => 'monitoring', 'title' => 'Jobs und Warteschlangen ansehen', 'text' => 'Laufende, fehlgeschlagene und geplante Jobs im Blick behalten.'],
+    ['tool' => 'gql_scripts', 'title' => 'GQL-Skripte pflegen', 'text' => '.gql-Dateien bearbeiten, verschieben und testen.'],
+    ['tool' => 'env', 'title' => 'Framework-Konfiguration bearbeiten', 'text' => 'Die Vars-Konstanten aus .framework.env.php geprüft ändern.'],
 ];
 
 $dbRoot = Vars::DB_PATH();
-$stats = [
-    'instance' => GBDB::getInstance(),
-    'dbs' => count(gbdbui_list_dbs_cached()),
-    'tables' => 0,
-    'size' => gbdbui_dir_size($dbRoot),
-    'path' => basename(rtrim(dirname($dbRoot), '/')) . '/' . basename(rtrim($dbRoot, '/')),
-    'full_path' => $dbRoot,
-];
+$dbs = gbdbui_list_dbs_cached();
+$tables = 0;
 
-foreach (gbdbui_list_dbs_cached() as $dbName)
-    $stats['tables'] += count(gbdbui_list_tables_cached((string) $dbName));
+foreach ($dbs as $dbName) {
+    $tables += count(gbdbui_list_tables_cached((string) $dbName));
+}
+
+$storage = GBDB::backendStatus();
+$gdp = class_exists('GDP') && GDPConfig::enabled() ? GDP::getHealth() : ['status' => 'disabled'];
+gbdbui_layout_start('dashboard', 'Was möchtest du erledigen?', 'Wähle eine Aufgabe. Du gelangst direkt in den passenden Bereich.', ['eyebrow' => 'Start']);
 ?>
-<!doctype html>
-<html lang="de">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB UI</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('dashboard'); ?>
-    <main>
-        <?php gbdbui_render_flashes(); ?>
-        <section class="gbdbui-hero">
-            <p class="gbdbui-kicker">Angemeldet als <?= gbdbui_e($user['username'] ?? '') ?> · Rolle
-                <?= gbdbui_e($user['role'] ?? '') ?></p>
-            <h1>GBDB Control Center</h1>
-            <p>Zentrale Dev-Oberfläche für GBDB, GreenQL Studio, Migration, Crypto, Optimierung, PHP-Testausführung und
-                Benutzerrechte. GreenQL Legacy wurde aus der Oberfläche entfernt; alle Query-Workflows laufen über das
-                Studio.</p>
-        </section>
-
-        <section class="gbdbui-quickbar">
-            <?php if (gbdbui_can_tool('greenql_v2')): ?><a class="gbdbui-quick"
-                    href="<?= gbdbui_e(gbdbui_url('greenql_v2')) ?>"><strong>GreenQL Studio öffnen</strong><span>Instanzen,
-                        Bases, Tabellen und Queries verwalten</span></a><?php endif; ?>
-            <?php if (gbdbui_can_tool('users')): ?><a class="gbdbui-quick"
-                    href="<?= gbdbui_e(gbdbui_url('users')) ?>"><strong>Rechte prüfen</strong><span>User, Rollen und Zugriff
-                        sauber pflegen</span></a><?php endif; ?>
-            <?php if (gbdbui_can_tool('backup')): ?><a class="gbdbui-quick"
-                    href="<?= gbdbui_e(gbdbui_url('backup')) ?>"><strong>Backup ziehen</strong><span>Datenbestand vor
-                        Änderungen sichern</span></a><?php endif; ?>
-            <?php if (gbdbui_can_tool('import_export')): ?><a class="gbdbui-quick"
-                    href="<?= gbdbui_e(gbdbui_url('import_export')) ?>"><strong>Import / Export</strong><span>Tabellen
-                        sicher übertragen oder prüfen</span></a><?php endif; ?>
-        </section>
-
-        <section class="gbdbui-grid gbdbui-stat-grid">
-            <div class="gbdbui-card"><span>Instanz</span>
-                <h2><?= gbdbui_e($stats['instance']) ?></h2>
-                <p>Aktive GBDB-Instanz.</p>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-head"><span class="stat-icon stat-blue"><?= gbdbui_icon('database', 20) ?></span></div>
+                <div class="stat-label">Aktive Instanz</div>
+                <div class="stat-number"><?= gbdbui_e(GBDB::getInstance()) ?></div>
+                <div class="stat-foot">Angemeldet als <?= gbdbui_e($user['username'] ?? '') ?> · <?= gbdbui_e($user['role'] ?? '') ?></div>
             </div>
-            <div class="gbdbui-card"><span>Bases</span>
-                <h2><?= (int) $stats['dbs'] ?></h2>
-                <p>Logische Datenbanken in der aktiven Instanz.</p>
+            <div class="stat-card">
+                <div class="stat-head"><span class="stat-icon stat-purple"><?= gbdbui_icon('panel', 20) ?></span></div>
+                <div class="stat-label">Bases / Tabellen</div>
+                <div class="stat-number"><?= count($dbs) ?> <small>/ <?= (int) $tables ?></small></div>
+                <div class="stat-foot">In der aktiven Instanz sichtbar</div>
             </div>
-            <div class="gbdbui-card"><span>Tabellen</span>
-                <h2><?= (int) $stats['tables'] ?></h2>
-                <p>Tabellen über alle sichtbaren Bases.</p>
+            <div class="stat-card">
+                <div class="stat-head"><span class="stat-icon <?= $storage['mode'] === 'sql' ? 'stat-orange' : 'stat-green' ?>"><?= gbdbui_icon('server', 20) ?></span></div>
+                <div class="stat-label">Speicher</div>
+                <div class="stat-number"><?= gbdbui_e(strtoupper((string) $storage['mode'])) ?></div>
+                <div class="stat-foot"><span class="tiny-dot <?= $storage['sync_pending'] ? 'orange-dot' : 'green-dot' ?>"></span><?= gbdbui_e(gbdbui_bytes(gbdbui_dir_size($dbRoot))) ?> · <?= $storage['enabled'] ? ($storage['sql_ready'] ? 'SQL-Spiegel aktuell' : 'SQL-Spiegel ausstehend') : 'ohne SQL-Fallback' ?></div>
             </div>
-            <div class="gbdbui-card gbdbui-size-card"><span>Größe</span>
-                <h2><?= gbdbui_e(gbdbui_bytes((int) $stats['size'])) ?></h2>
-                <p title="<?= gbdbui_e($stats['full_path']) ?>">Speicherort: <?= gbdbui_e($stats['path']) ?></p>
+            <div class="stat-card">
+                <div class="stat-head"><span class="stat-icon stat-blue"><?= gbdbui_icon('globe', 20) ?></span></div>
+                <div class="stat-label">Replikation (GDP)</div>
+                <div class="stat-number"><?= gbdbui_e(['ok' => 'Online', 'degraded' => 'Offline', 'unpaired' => 'Nicht gekoppelt', 'blocked' => 'Blockiert', 'disabled' => 'Aus'][$gdp['status']] ?? $gdp['status']) ?></div>
+                <div class="stat-foot"><?= $gdp['status'] === 'disabled' ? 'Optional: GDP in .framework.env.php aktivieren' : (int) ($gdp['pending_operations'] ?? 0) . ' Änderungen ausstehend' ?></div>
             </div>
-        </section>
+        </div>
 
-        <section class="gbdbui-grid">
-            <?php foreach ($cards as $card): ?>
-                <?php if (!gbdbui_can_tool($card['tool']))
-                    continue; ?>
-                <a class="gbdbui-card"
-                    href="<?= gbdbui_e(gbdbui_url($card['tool'])) ?>"><span><?= gbdbui_e($card['tag']) ?></span>
-                    <h2><?= gbdbui_e($card['title']) ?></h2>
-                    <p><?= gbdbui_e($card['text']) ?></p>
-                </a>
-            <?php endforeach; ?>
-        </section>
-    </main>
-</body>
-
-</html>
+        <div class="task-cards">
+<?php foreach ($cards as $card) : ?>
+<?php if (gbdbui_can_tool($card['tool'])) : ?>
+            <a class="task-card" href="<?= gbdbui_e(gbdbui_url($card['tool'])) ?>"><span><strong><?= gbdbui_e($card['title']) ?></strong><small><?= gbdbui_e($card['text']) ?></small></span><span aria-hidden="true">→</span></a>
+<?php endif; ?>
+<?php endforeach; ?>
+        </div>
+        <section class="panel padded"><h2>Du suchst ein anderes Werkzeug?</h2><p>Öffne links den passenden Bereich oder nutze die Suche oben (Strg + K). Wartung, Migration und Systemeinstellungen findest du unter „Betrieb“ und „System“.</p></section>
+<?php gbdbui_layout_end(); ?>

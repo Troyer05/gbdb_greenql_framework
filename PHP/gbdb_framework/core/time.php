@@ -1,13 +1,12 @@
 <?php
 
 class Time {
-
     /**
      * how long is the date in the past?
      * @param mixed $timestamp
      * @return string
      */
-    public static function timeAgo(mixed $timestamp): string {
+    public static function timeAgo(mixed $timestamp) :string {
         $uploadedTime = strtotime((string)$timestamp);
 
         if ($uploadedTime === false) {
@@ -68,5 +67,4 @@ class Time {
             ? "1 year ago"
             : "$years years ago";
     }
-
 }

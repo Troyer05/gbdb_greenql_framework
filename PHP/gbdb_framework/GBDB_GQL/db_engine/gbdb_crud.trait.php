@@ -1,7 +1,6 @@
 <?php
 
 trait GBDB_CrudTrait {
-
     /**
      * handles create instance.
      *
@@ -9,7 +8,7 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function createInstance(string $name): bool {
+    public static function createInstance(string $name) :bool {
         $name = Format::cleanString($name);
 
         if ($name === "") {
@@ -19,7 +18,7 @@ trait GBDB_CrudTrait {
         $base = Vars::DB_PATH();
 
         if (!is_dir($base)) {
-            @mkdir($base, 0777, true);
+            @mkdir($base, 0750, true);
         }
 
         $dirName = Vars::crypt_data()
@@ -33,7 +32,7 @@ trait GBDB_CrudTrait {
         $path = $base . $dirName;
 
         if (!is_dir($path)) {
-            return @mkdir($path, 0777, true);
+            return @mkdir($path, 0750, true);
         }
 
         return true;
@@ -47,7 +46,11 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function deleteInstance(string $name, bool $force = false): bool {
+    public static function deleteInstance(string $name, bool $force = false) :bool {
+        if (class_exists('GDPWriteInterceptor', false)) {
+            GDPWriteInterceptor::assertInstanceRemovable(Format::cleanString($name));
+        }
+
         $name = Format::cleanString($name);
 
         if ($name === "") {
@@ -63,7 +66,6 @@ trait GBDB_CrudTrait {
             foreach ($databases as $database) {
                 self::deleteAll($database);
             }
-
         }
 
         $dirName = Vars::crypt_data()
@@ -92,13 +94,11 @@ trait GBDB_CrudTrait {
                     @unlink($path . "/" . $idx);
                     $rest = [];
                 }
-
             }
 
             if (count($rest) === 0) {
                 $ok = @rmdir($path);
             }
-
         }
 
         if ($ok) {
@@ -111,10 +111,12 @@ trait GBDB_CrudTrait {
         return $ok;
     }
 
-    private static function isInternalInstanceName(string $instance): bool {
+    private static function isInternalInstanceName(string $instance) :bool {
         $slug = strtolower(Format::cleanString($instance));
 
-        if ($slug === '') return true;
+        if ($slug === '') {
+            return true;
+        }
 
         return in_array($slug, [
             'default',
@@ -134,7 +136,7 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function listInstances(bool $includeSystem = false): array {
+    public static function listInstances(bool $includeSystem = false) :array {
         $base = Vars::DB_PATH();
 
         if (!is_dir($base)) {
@@ -157,7 +159,6 @@ trait GBDB_CrudTrait {
                 if (is_dir($base . $entry)) {
                     $instances[] = $entry;
                 }
-
             }
 
             $instances = $includeSystem ? $instances : array_values(array_filter($instances, fn($i) => !self::isInternalInstanceName((string)$i)));
@@ -173,7 +174,6 @@ trait GBDB_CrudTrait {
             if (is_dir($base . $token)) {
                 $out[] = $plain;
             }
-
         }
 
         $out = $includeSystem ? $out : array_values(array_filter($out, fn($i) => !self::isInternalInstanceName((string)$i)));
@@ -187,7 +187,7 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function listAllInstances(): array {
+    public static function listAllInstances() :array {
         return self::listInstances(true);
     }
 
@@ -198,7 +198,7 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function createDatabase(string $name): bool {
+    public static function createDatabase(string $name) :bool {
         $name = Format::cleanString($name);
 
         if ($name === "") {
@@ -210,7 +210,7 @@ trait GBDB_CrudTrait {
         $instancePath = self::instancePath(true);
 
         if (!is_dir($instancePath)) {
-            @mkdir($instancePath, 0777, true);
+            @mkdir($instancePath, 0750, true);
         }
 
         $dirName = Vars::crypt_data()
@@ -224,7 +224,7 @@ trait GBDB_CrudTrait {
         $path = $instancePath . $dirName;
 
         if (!is_dir($path)) {
-            return @mkdir($path, 0777, true);
+            return @mkdir($path, 0750, true);
         }
 
         return true;
@@ -237,7 +237,9 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function deleteDatabase(string $name): bool {
+    public static function deleteDatabase(string $name) :bool {
+        self::guardGdpStructure('delete_database', $name, '*');
+
         $name = Format::cleanString($name);
 
         if ($name === "") {
@@ -271,9 +273,7 @@ trait GBDB_CrudTrait {
                             @unlink($path . "/" . $idx);
                             $rest = [];
                         }
-
                     }
-
                 }
 
                 if (count($rest) === 0) {
@@ -285,9 +285,7 @@ trait GBDB_CrudTrait {
 
                     return $ok;
                 }
-
             }
-
         }
 
         return false;
@@ -302,7 +300,9 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function createTable(string $database, string $table, array $cols): bool {
+    public static function createTable(string $database, string $table, array $cols) :bool {
+        self::guardGdpStructure('create_table', $database, $table);
+
         self::createDatabase($database);
 
         $file = self::makePath($database, $table, true);
@@ -343,9 +343,8 @@ trait GBDB_CrudTrait {
 
             if (!is_file($appendFile)) {
                 if (!GBDBStorage::atomicWrite($appendFile, "")) {
-                return false;
-            }
-
+                    return false;
+                }
             }
 
             return true;
@@ -355,7 +354,9 @@ trait GBDB_CrudTrait {
             self::setSchemaTable($database, $table, $cols);
             self::syncStorageForTable($database, $table, "create_table");
 
-            if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
             self::autoCompact($database, $table);
         }
 
@@ -372,7 +373,9 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function addColumn(string $database, string $table, string $column, mixed $default = ""): bool {
+    public static function addColumn(string $database, string $table, string $column, mixed $default = "") :bool {
+        self::guardGdpStructure('add_column', $database, $table);
+
         $column = trim($column);
 
         if ($column === "" || $column === "id") {
@@ -416,7 +419,6 @@ trait GBDB_CrudTrait {
                 if ($key === "id") {
                     $newHeader[$column] = "-header-";
                 }
-
             }
 
             if (!array_key_exists($column, $newHeader)) {
@@ -474,7 +476,9 @@ trait GBDB_CrudTrait {
             self::setSchemaTable($database, $table, [$column => $default]);
             self::syncStorageForTable($database, $table, "add_column");
 
-            if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
             self::autoCompact($database, $table);
         }
 
@@ -489,7 +493,9 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function deleteTable(string $database, string $table): bool {
+    public static function deleteTable(string $database, string $table) :bool {
+        self::guardGdpStructure('delete_table', $database, $table);
+
         $file = self::makePath($database, $table);
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
@@ -520,11 +526,15 @@ trait GBDB_CrudTrait {
                 if (method_exists(static::class, "mvccFile")) {
                     $mvccFile = self::mvccFile($database, $table);
 
-                    if (is_file($mvccFile)) @unlink($mvccFile);
+                    if (is_file($mvccFile)) {
+                        @unlink($mvccFile);
+                    }
                     $mvccDir = dirname($mvccFile);
                     $left = is_dir($mvccDir) ? array_diff(scandir($mvccDir) ?: [], [".", ".."]) : [];
 
-                    if (is_dir($mvccDir) && empty($left)) @rmdir($mvccDir);
+                    if (is_dir($mvccDir) && empty($left)) {
+                        @rmdir($mvccDir);
+                    }
                 }
 
                 self::dropTableFromIndex($database, $table);
@@ -532,7 +542,6 @@ trait GBDB_CrudTrait {
                 if (is_file($lockFile)) {
                     @unlink($lockFile);
                 }
-
             }
 
             return $ok;
@@ -541,7 +550,9 @@ trait GBDB_CrudTrait {
         if ($res) {
             self::dropSchemaTable($database, $table);
 
-            if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
         }
 
         return $res;
@@ -556,7 +567,15 @@ trait GBDB_CrudTrait {
      *
      * @return int result.
      */
-    public static function insertData(string $database, string $table, mixed $data): int {
+    public static function insertData(string $database, string $table, mixed $data) :int {
+        if (!self::inTransaction() && class_exists('GDPWriteInterceptor', false) && GDPWriteInterceptor::engaged(self::getInstance())) {
+            return GDPWriteInterceptor::insert(self::getInstance(), $database, $table, $data, static fn(mixed $row) :int => self::insertDataLocal($database, $table, $row));
+        }
+
+        return self::insertDataLocal($database, $table, $data);
+    }
+
+    private static function insertDataLocal(string $database, string $table, mixed $data) :int {
         if (!is_array($data)) {
             return -1;
         }
@@ -566,9 +585,13 @@ trait GBDB_CrudTrait {
         if (method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeInsert", $database, $table, ["data" => $data]);
 
-            if (($trigger["ok"] ?? true) === false) return -1;
+            if (($trigger["ok"] ?? true) === false) {
+                return -1;
+            }
 
-            if (isset($trigger["context"]["data"]) && is_array($trigger["context"]["data"])) $data = $trigger["context"]["data"];
+            if (isset($trigger["context"]["data"]) && is_array($trigger["context"]["data"])) {
+                $data = $trigger["context"]["data"];
+            }
         }
 
         if (!file_exists($file)) {
@@ -580,7 +603,9 @@ trait GBDB_CrudTrait {
         }
 
         if (self::inTransaction()) {
-            if (!self::checkTransactionTimeout()) return -1;
+            if (!self::checkTransactionTimeout()) {
+                return -1;
+            }
             $id = self::reserveTransactionId($database, $table, $data);
             $data["id"] = $id;
             self::$txOps[] = ["type" => "insert", "instance" => self::getInstance(), "db" => $database, "table" => $table, "data" => $data, "id" => $id];
@@ -601,7 +626,6 @@ trait GBDB_CrudTrait {
                 if (!self::writeTable($file, $base)) {
                     return -1;
                 }
-
             }
 
             $header = $base[0];
@@ -616,6 +640,12 @@ trait GBDB_CrudTrait {
 
             $row = self::buildRowFromHeader($header, $data, $id);
             $full = self::applyOps($base, self::readAppendOps($appendFile));
+
+            foreach ($full as $existingRow) {
+                if (is_array($existingRow) && (int) ($existingRow['id'] ?? -1) === $id) {
+                    return -1;
+                }
+            }
 
             if (method_exists(static::class, "prepareSchemaRow")) {
                 $schemaPrepared = self::prepareSchemaRow($database, $table, $row, $full, $id, true);
@@ -655,30 +685,43 @@ trait GBDB_CrudTrait {
         });
 
         if (is_int($res) && $res > 0) {
-            if (method_exists(static::class, 'appendReplicationEvent')) self::appendReplicationEvent('insert', ['database' => $database, 'table' => $table, 'id' => $res]);
+            if (method_exists(static::class, 'appendReplicationEvent')) {
+                self::appendReplicationEvent('insert', ['database' => $database, 'table' => $table, 'id' => $res]);
+            }
 
             if (method_exists(static::class, 'recordPartitionStats')) {
                 $insertedRow = self::getData($database, $table, true, "id", $res);
 
-                if (is_array($insertedRow) && !empty($insertedRow)) self::recordPartitionStats($database, $table, $insertedRow);
+                if (is_array($insertedRow) && !empty($insertedRow)) {
+                    self::recordPartitionStats($database, $table, $insertedRow);
+                }
             }
 
-            if (method_exists(static::class, 'rebuildIndexes')) self::rebuildIndexes($database, $table);
+            if (method_exists(static::class, 'rebuildIndexes')) {
+                self::rebuildIndexes($database, $table);
+            }
             self::syncStorageForTable($database, $table, "insert");
 
-            if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
             self::autoCompact($database, $table);
 
             if (method_exists(static::class, 'auditDataChange') || method_exists(static::class, 'runDataTriggers')) {
                 $insertedRow = self::getData($database, $table, true, "id", $res);
 
-                if (method_exists(static::class, 'auditDataChange')) self::auditDataChange('insert', $database, $table, [], is_array($insertedRow) ? $insertedRow : []);
+                if (method_exists(static::class, 'auditDataChange')) {
+                    self::auditDataChange('insert', $database, $table, [], is_array($insertedRow) ? $insertedRow : []);
+                }
 
-                if (method_exists(static::class, 'runDataTriggers')) self::runDataTriggers('afterInsert', $database, $table, ["id" => $res, "row" => is_array($insertedRow) ? $insertedRow : []]);
+                if (method_exists(static::class, 'runDataTriggers')) {
+                    self::runDataTriggers('afterInsert', $database, $table, ["id" => $res, "row" => is_array($insertedRow) ? $insertedRow : []]);
+                }
 
-                if (method_exists(static::class, 'enqueueEvent')) self::enqueueEvent('insert', $database, $table, ["id" => $res]);
+                if (method_exists(static::class, 'enqueueEvent')) {
+                    self::enqueueEvent('insert', $database, $table, ["id" => $res]);
+                }
             }
-
         }
 
         return is_int($res) ? $res : -1;
@@ -694,7 +737,15 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function deleteData(string $database, string $table, mixed $where, mixed $is): bool {
+    public static function deleteData(string $database, string $table, mixed $where, mixed $is) :bool {
+        if (!self::inTransaction() && class_exists('GDPWriteInterceptor', false) && GDPWriteInterceptor::engaged(self::getInstance())) {
+            return GDPWriteInterceptor::delete(self::getInstance(), $database, $table, $where, $is, static fn() :bool => self::deleteDataLocal($database, $table, $where, $is));
+        }
+
+        return self::deleteDataLocal($database, $table, $where, $is);
+    }
+
+    private static function deleteDataLocal(string $database, string $table, mixed $where, mixed $is) :bool {
         $file = self::makePath($database, $table);
 
         if (!file_exists($file)) {
@@ -704,11 +755,15 @@ trait GBDB_CrudTrait {
         if (method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeDelete", $database, $table, ["where" => $where, "is" => $is]);
 
-            if (($trigger["ok"] ?? true) === false) return false;
+            if (($trigger["ok"] ?? true) === false) {
+                return false;
+            }
         }
 
         if (self::inTransaction()) {
-            if (!self::checkTransactionTimeout()) return false;
+            if (!self::checkTransactionTimeout()) {
+                return false;
+            }
             self::$txOps[] = ["type" => "delete", "instance" => self::getInstance(), "db" => $database, "table" => $table, "where" => $where, "is" => $is];
 
             return true;
@@ -746,7 +801,6 @@ trait GBDB_CrudTrait {
                     $ids[] = $rid;
                     $beforeRows[$rid] = $row;
                 }
-
             }
 
             if (empty($ids)) {
@@ -760,22 +814,25 @@ trait GBDB_CrudTrait {
             if (method_exists(static::class, "beforeRelationDelete")) {
                 $rel = self::beforeRelationDelete($database, $table, array_values($beforeRows));
 
-                if (!($rel["ok"] ?? false)) return false;
+                if (!($rel["ok"] ?? false)) {
+                    return false;
+                }
             }
 
             foreach ($ids as $id) {
-                if (!self::appendOp($appendFile, [
+                if (
+                    !self::appendOp($appendFile, [
                     "op" => "del",
                     "id" => $id,
                     "ts" => time()
-                ])) {
+                    ])
+                ) {
                     return false;
                 }
 
                 if (method_exists(static::class, "writeRowVersion")) {
                     self::writeRowVersion($database, $table, $id, "delete", (array)($beforeRows[$id] ?? []), []);
                 }
-
             }
 
             GBDBStorage::markTombstones($file, $ids);
@@ -790,19 +847,31 @@ trait GBDB_CrudTrait {
         });
 
         if ($res) {
-            if (method_exists(static::class, 'appendReplicationEvent')) self::appendReplicationEvent('delete', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+            if (method_exists(static::class, 'appendReplicationEvent')) {
+                self::appendReplicationEvent('delete', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+            }
 
-            if (method_exists(static::class, 'rebuildIndexes')) self::rebuildIndexes($database, $table);
+            if (method_exists(static::class, 'rebuildIndexes')) {
+                self::rebuildIndexes($database, $table);
+            }
             self::syncStorageForTable($database, $table, "delete");
 
-            if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
             self::autoCompact($database, $table);
 
-            if (method_exists(static::class, 'auditDataChange')) self::auditDataChange('delete', $database, $table, ["where" => $where, "is" => $is], []);
+            if (method_exists(static::class, 'auditDataChange')) {
+                self::auditDataChange('delete', $database, $table, ["where" => $where, "is" => $is], []);
+            }
 
-            if (method_exists(static::class, 'runDataTriggers')) self::runDataTriggers('afterDelete', $database, $table, ["where" => $where, "is" => $is]);
+            if (method_exists(static::class, 'runDataTriggers')) {
+                self::runDataTriggers('afterDelete', $database, $table, ["where" => $where, "is" => $is]);
+            }
 
-            if (method_exists(static::class, 'enqueueEvent')) self::enqueueEvent('delete', $database, $table, ["where" => $where, "is" => $is]);
+            if (method_exists(static::class, 'enqueueEvent')) {
+                self::enqueueEvent('delete', $database, $table, ["where" => $where, "is" => $is]);
+            }
         }
 
         return (bool)$res;
@@ -819,7 +888,15 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function editData(string $database, string $table, mixed $where, mixed $is, mixed $newData): bool {
+    public static function editData(string $database, string $table, mixed $where, mixed $is, mixed $newData) :bool {
+        if (!self::inTransaction() && class_exists('GDPWriteInterceptor', false) && GDPWriteInterceptor::engaged(self::getInstance())) {
+            return GDPWriteInterceptor::update(self::getInstance(), $database, $table, $where, $is, $newData, static fn(mixed $data) :bool => self::editDataLocal($database, $table, $where, $is, $data));
+        }
+
+        return self::editDataLocal($database, $table, $where, $is, $newData);
+    }
+
+    private static function editDataLocal(string $database, string $table, mixed $where, mixed $is, mixed $newData) :bool {
         if (!is_array($newData)) {
             return false;
         }
@@ -833,13 +910,19 @@ trait GBDB_CrudTrait {
         if (method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeUpdate", $database, $table, ["where" => $where, "is" => $is, "data" => $newData]);
 
-            if (($trigger["ok"] ?? true) === false) return false;
+            if (($trigger["ok"] ?? true) === false) {
+                return false;
+            }
 
-            if (isset($trigger["context"]["data"]) && is_array($trigger["context"]["data"])) $newData = $trigger["context"]["data"];
+            if (isset($trigger["context"]["data"]) && is_array($trigger["context"]["data"])) {
+                $newData = $trigger["context"]["data"];
+            }
         }
 
         if (self::inTransaction()) {
-            if (!self::checkTransactionTimeout()) return false;
+            if (!self::checkTransactionTimeout()) {
+                return false;
+            }
             self::$txOps[] = ["type" => "edit", "instance" => self::getInstance(), "db" => $database, "table" => $table, "where" => $where, "is" => $is, "data" => $newData];
 
             return true;
@@ -872,7 +955,6 @@ trait GBDB_CrudTrait {
                 if ($hasHeader && array_key_exists($key, $header)) {
                     $set[$key] = $value;
                 }
-
             }
 
             if (empty($set)) {
@@ -893,7 +975,6 @@ trait GBDB_CrudTrait {
                 if (isset($row[$where]) && $row[$where] == $is && isset($row["id"])) {
                     $ids[] = (int)$row["id"];
                 }
-
             }
 
             if (empty($ids)) {
@@ -906,7 +987,6 @@ trait GBDB_CrudTrait {
                 if (is_array($row) && isset($row["id"])) {
                     $rowsById[(int)$row["id"]] = $row;
                 }
-
             }
 
             $meta = self::readMeta($metaFile);
@@ -939,14 +1019,14 @@ trait GBDB_CrudTrait {
                     $set = [];
 
                     foreach ($after as $aKey => $aValue) {
-                        if ($aKey === "id") continue;
+                        if ($aKey === "id") {
+                            continue;
+                        }
 
                         if (!array_key_exists($aKey, $before) || $before[$aKey] !== $aValue) {
                             $set[$aKey] = $aValue;
                         }
-
                     }
-
                 }
 
                 if (!GBDBStorage::validateConstraints($full, $after, $meta["constraints"] ?? [], $id)) {
@@ -956,22 +1036,25 @@ trait GBDB_CrudTrait {
                 if (method_exists(static::class, "afterRelationUpdate")) {
                     $rel = self::afterRelationUpdate($database, $table, [$id => $before], [$id => $after]);
 
-                    if (!($rel["ok"] ?? false)) return false;
+                    if (!($rel["ok"] ?? false)) {
+                        return false;
+                    }
                 }
 
-                if (!self::appendOp($appendFile, [
+                if (
+                    !self::appendOp($appendFile, [
                     "op" => "upd",
                     "id" => $id,
                     "set" => $set,
                     "ts" => time()
-                ])) {
+                    ])
+                ) {
                     return false;
                 }
 
                 if (method_exists(static::class, "writeRowVersion")) {
                     self::writeRowVersion($database, $table, $id, "update", $before, $after);
                 }
-
             }
 
             $meta = self::readMeta($metaFile);
@@ -982,19 +1065,31 @@ trait GBDB_CrudTrait {
         });
 
         if ($res) {
-            if (method_exists(static::class, 'appendReplicationEvent')) self::appendReplicationEvent('edit', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+            if (method_exists(static::class, 'appendReplicationEvent')) {
+                self::appendReplicationEvent('edit', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+            }
 
-            if (method_exists(static::class, 'rebuildIndexes')) self::rebuildIndexes($database, $table);
+            if (method_exists(static::class, 'rebuildIndexes')) {
+                self::rebuildIndexes($database, $table);
+            }
             self::syncStorageForTable($database, $table, "edit");
 
-            if (method_exists(static::class, 'clearRuntimeCache')) self::clearRuntimeCache($database, $table);
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
             self::autoCompact($database, $table);
 
-            if (method_exists(static::class, 'auditDataChange')) self::auditDataChange('update', $database, $table, ["where" => $where, "is" => $is], is_array($newData) ? $newData : []);
+            if (method_exists(static::class, 'auditDataChange')) {
+                self::auditDataChange('update', $database, $table, ["where" => $where, "is" => $is], is_array($newData) ? $newData : []);
+            }
 
-            if (method_exists(static::class, 'runDataTriggers')) self::runDataTriggers('afterUpdate', $database, $table, ["where" => $where, "is" => $is, "data" => $newData]);
+            if (method_exists(static::class, 'runDataTriggers')) {
+                self::runDataTriggers('afterUpdate', $database, $table, ["where" => $where, "is" => $is, "data" => $newData]);
+            }
 
-            if (method_exists(static::class, 'enqueueEvent')) self::enqueueEvent('update', $database, $table, ["where" => $where, "is" => $is]);
+            if (method_exists(static::class, 'enqueueEvent')) {
+                self::enqueueEvent('update', $database, $table, ["where" => $where, "is" => $is]);
+            }
         }
 
         return (bool)$res;
@@ -1017,7 +1112,7 @@ trait GBDB_CrudTrait {
         bool $filter = false,
         mixed $where = "",
         mixed $is = ""
-    ): mixed {
+    ) :mixed {
         $reader = function () use ($database, $table, $filter, $where, $is) {
             $file = self::makePath($database, $table);
             $base = self::ini($file);
@@ -1045,7 +1140,6 @@ trait GBDB_CrudTrait {
                         $ids = GBDBStorage::advancedIndexLookup($file, $definition, $is);
                         break;
                     }
-
                 }
 
                 if (empty($ids) && in_array((string)$where, $indexes, true)) {
@@ -1053,17 +1147,23 @@ trait GBDB_CrudTrait {
                 }
 
                 if (!empty($ids)) {
+                    $idSet = array_fill_keys(array_map('intval', $ids), true);
+
                     foreach ($full as $i => $row) {
-                        if (!is_array($row)) continue;
+                        if (!is_array($row)) {
+                            continue;
+                        }
 
-                        if ($i === 0 && self::isHeaderRow($row)) continue;
+                        if ($i === 0 && self::isHeaderRow($row)) {
+                            continue;
+                        }
 
-                        if (isset($row["id"]) && in_array((int)$row["id"], $ids, true)) return $row;
+                        if (isset($row['id'], $idSet[(int) $row['id']]) && array_key_exists((string) $where, $row) && $row[$where] == $is) {
+                            return $row;
+                        }
                     }
-
-                    return [];
+                    // A stale derived index must not hide newer append-log rows.
                 }
-
             }
 
             $hasHeader = isset($full[0]) && is_array($full[0]) && self::isHeaderRow($full[0]);
@@ -1081,7 +1181,6 @@ trait GBDB_CrudTrait {
                     if (isset($row[$where]) && $row[$where] == $is) {
                         return $row;
                     }
-
                 }
 
                 return [];
@@ -1114,7 +1213,7 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function elementExists(string $database, string $table, mixed $where, mixed $is): bool {
+    public static function elementExists(string $database, string $table, mixed $where, mixed $is) :bool {
         $row = self::getData($database, $table, true, $where, $is);
 
         return is_array($row) && !empty($row);
@@ -1125,7 +1224,7 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function listDBs(): array {
+    public static function listDBs() :array {
         $instancePath = self::instancePath(false);
 
         if (!is_dir($instancePath)) {
@@ -1148,7 +1247,6 @@ trait GBDB_CrudTrait {
                 if (is_dir($instancePath . $entry)) {
                     $dirs[] = $entry;
                 }
-
             }
 
             sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
@@ -1169,7 +1267,6 @@ trait GBDB_CrudTrait {
             if (is_dir($instancePath . $token)) {
                 $out[] = $plain;
             }
-
         }
 
         sort($out, SORT_NATURAL | SORT_FLAG_CASE);
@@ -1185,7 +1282,7 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function listTables(string $database, bool $descending = false): array {
+    public static function listTables(string $database, bool $descending = false) :array {
         $database = Format::cleanString($database);
 
         if ($database === "") {
@@ -1266,7 +1363,6 @@ trait GBDB_CrudTrait {
             if (is_file($file)) {
                 $tables[] = $plain;
             }
-
         }
 
         if ($descending) {
@@ -1285,7 +1381,9 @@ trait GBDB_CrudTrait {
      *
      * @return bool result.
      */
-    public static function deleteAll(string $database): bool {
+    public static function deleteAll(string $database) :bool {
+        self::guardGdpStructure('delete_all', $database, '*');
+
         $ok = true;
         $tables = self::listTables($database);
 
@@ -1294,7 +1392,6 @@ trait GBDB_CrudTrait {
                 $ok = false;
                 break;
             }
-
         }
 
         if (!self::deleteDatabase($database)) {
@@ -1316,7 +1413,7 @@ trait GBDB_CrudTrait {
      *
      * @return int result.
      */
-    public static function nextID(string $database, string $table): int {
+    public static function nextID(string $database, string $table) :int {
         $file = self::makePath($database, $table);
 
         if (!file_exists($file)) {
@@ -1343,7 +1440,7 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function getKeys(string $database, string $table): array {
+    public static function getKeys(string $database, string $table) :array {
         $file = self::makePath($database, $table);
         $db = self::ini($file);
 
@@ -1363,7 +1460,7 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function query(string $script, array $ctx = [], array $params = []): array {
+    public static function query(string $script, array $ctx = [], array $params = []) :array {
         $ctx["instance"] = self::instanceName();
 
         return GreenQL::run($script, $ctx, $params);
@@ -1378,52 +1475,54 @@ trait GBDB_CrudTrait {
      *
      * @return array result.
      */
-    public static function runScript(string $scriptName, array $params = [], array $ctx = []): array {
+    public static function runScript(string $scriptName, array $params = [], array $ctx = []) :array {
         if (!str_contains($scriptName, ".gql")) {
             $scriptName = $scriptName . ".gql";
         }
 
-        $path = dirname(__DIR__) . "/.DB/.scripts/" . $scriptName;
-        $originalPath = $path;
+        // Only paths below a script root are accepted; ".." never leaves it.
+        $originalPath = $scriptName;
+        $path = '';
 
-        if (!is_file($path)) {
-            $rel = str_replace('\\', '/', trim($path));
-            $rel = preg_replace('#/+#', '/', $rel) ?? '';
-            $parts = [];
+        $rel = str_replace('\\', '/', trim($scriptName));
+        $rel = preg_replace('#/+#', '/', $rel) ?? '';
+        $parts = [];
 
-            foreach (explode('/', $rel) as $part) {
-                if ($part === '' || $part === '.') {
-                    continue;
-                }
-
-                if ($part === '..') {
-                    $parts = [];
-                    break;
-                }
-
-                $parts[] = $part;
+        foreach (explode('/', $rel) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
             }
 
-            $rel = implode('/', $parts);
-            $scriptRoot = dirname(rtrim(Vars::DB_PATH(), '/')) . '/.scripts';
-            $rootReal = realpath($scriptRoot) ?: $scriptRoot;
-            $candidates = $rel === '' ? [] : [$scriptRoot . '/' . $rel];
+            if ($part === '..') {
+                $parts = [];
+                break;
+            }
 
-            if ($rel !== '' && !str_ends_with(strtolower($rel), '.gql')) $candidates[] = $scriptRoot . '/' . $rel . '.gql';
+            $parts[] = $part;
+        }
+
+        $rel = implode('/', $parts);
+        $roots = [dirname(rtrim(Vars::DB_PATH(), '/')) . '/.scripts', dirname(__DIR__) . '/.DB/.scripts'];
+
+        foreach ($rel === '' ? [] : $roots as $scriptRoot) {
+            $rootReal = GBDBFilesystem::realpath($scriptRoot) ?: $scriptRoot;
+            $candidates = [$scriptRoot . '/' . $rel];
+
+            if (!str_ends_with(strtolower($rel), '.gql')) {
+                $candidates[] = $scriptRoot . '/' . $rel . '.gql';
+            }
 
             foreach ($candidates as $candidate) {
-                $candidateReal = realpath($candidate);
+                $candidateReal = GBDBFilesystem::realpath($candidate);
 
                 if ($candidateReal !== false && is_file($candidateReal) && str_starts_with(str_replace('\\', '/', $candidateReal), rtrim(str_replace('\\', '/', $rootReal), '/') . '/')) {
                     $path = $candidateReal;
-                    break;
+                    break 2;
                 }
-
             }
-
         }
 
-        if (!is_file($path)) {
+        if ($path === '' || !is_file($path)) {
             return [
                 "ok" => false,
                 "messages" => [
@@ -1468,4 +1567,98 @@ trait GBDB_CrudTrait {
         return self::query($script, $ctx, $params);
     }
 
+    private static function guardGdpStructure(string $action, string $database, string $table) :void {
+        if (class_exists('GDPWriteInterceptor', false) && GDPWriteInterceptor::engaged(self::getInstance())) {
+            GDPWriteInterceptor::assertStructureChange(self::getInstance(), $action, $database, $table);
+        }
+    }
+
+    /**
+     * Ersetzt den vollständigen Inhalt einer Tabelle in einem Schritt.
+     *
+     * Für Snapshot-Aktivierung und Wiederherstellung: Header, Zeilen samt ID und
+     * Versionsspalten werden übernommen, Append-Log und WAL geleert, Meta und
+     * Indizes neu aufgebaut. Fehlt die Tabelle, wird sie angelegt.
+     *
+     * @param string $database Datenbank.
+     * @param string $table Tabelle.
+     * @param array $columns Spalten ohne id.
+     * @param array $rows Zeilen mit id.
+     *
+     * @return bool
+     */
+    public static function replaceTableContents(string $database, string $table, array $columns, array $rows) :bool {
+        self::guardGdpStructure('replace_table', $database, $table);
+        self::createDatabase($database);
+
+        $file = self::makePath($database, $table, true);
+        $lockFile = self::lockFileForTable($database, $table, true);
+        $metaFile = self::metaFileForTable($database, $table, true);
+        $appendFile = self::appendFileForTable($database, $table, true);
+        $isNew = !file_exists($file);
+
+        $res = (bool) self::withTableLock($lockFile, function () use ($file, $metaFile, $appendFile, $columns, $rows) :bool {
+            $header = ["id" => -1];
+
+            foreach ($columns as $column) {
+                $column = (string) $column;
+
+                if ($column !== "" && $column !== "id" && !str_starts_with($column, "_gbdb_")) {
+                    $header[$column] = "-header-";
+                }
+            }
+
+            $full = [$header];
+            $maxId = 0;
+            $seen = [];
+
+            foreach ($rows as $row) {
+                if (!is_array($row) || !isset($row["id"]) || (int) $row["id"] <= 0 || isset($seen[(int) $row["id"]])) {
+                    return false;
+                }
+
+                $id = (int) $row["id"];
+                $seen[$id] = true;
+                $built = self::buildRowFromHeader($header, $row, $id);
+
+                foreach ($row as $key => $value) {
+                    if (is_string($key) && str_starts_with($key, "_gbdb_")) {
+                        $built[$key] = $value;
+                    }
+                }
+
+                $full[] = $built;
+                $maxId = max($maxId, $id);
+            }
+
+            if (!self::writeTable($file, $full) || !GBDBStorage::atomicWrite($appendFile . '.wal', '') || !GBDBStorage::atomicWrite($appendFile, '')) {
+                return false;
+            }
+
+            $meta = self::readMeta($metaFile);
+            $meta["last_id"] = max($maxId, (int) ($meta["last_id"] ?? 0));
+            $meta["rows"] = count($full) - 1;
+            $meta["append_ops"] = 0;
+            $meta["deleted_rows"] = 0;
+            $meta["checksum"] = GBDBStorage::checksum($full);
+            $meta["created_at"] = (int) ($meta["created_at"] ?? time());
+            GBDBStorage::rebuildIndexes($file, $meta, $full);
+
+            return self::writeMeta($metaFile, $meta);
+        });
+
+        if ($res) {
+            if ($isNew) {
+                self::setSchemaTable($database, $table, array_values(array_filter($columns, static fn($column) :bool => (string) $column !== "id")));
+            }
+
+            self::syncStorageForTable($database, $table, "replace");
+
+            if (method_exists(static::class, 'clearRuntimeCache')) {
+                self::clearRuntimeCache($database, $table);
+            }
+        }
+
+        return $res;
+    }
 }

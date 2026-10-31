@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/greenql_v2_helper.php';
 
@@ -8,45 +10,73 @@ gbdbui_require_tool('backup');
 
 $msg = '';
 $report = [];
-$defaultTarget = dirname(Vars::DB_PATH()) . '/backup_' . date('Ymd_His');
+$defaultTarget = Vars::data_root() . '/.backups/backup_' . date('Ymd_His');
+
+/**
+ * Prüft ein frei gewähltes Backup-Ziel: absolut, ohne "..", außerhalb des
+ * Webroots und nicht innerhalb des zu sichernden Datenbestands.
+ *
+ * @param string $target Zielpfad.
+ *
+ * @return string Fehlermeldung oder leer.
+ */
+function gbdbui_backup_target_error(string $target) :string {
+    if (str_contains($target, "\0") || preg_match('~(^|[\\/])\.\.([\\/]|$)~', $target)) {
+        return 'Der Zielpfad darf weder ".." noch Steuerzeichen enthalten.';
+    }
+
+    if (str_starts_with($target, 'gbdbdata://')) {
+        return str_starts_with($target, Vars::data_root() . '/.backups/') ? '' : 'Interne Ziele nur unterhalb von .backups.';
+    }
+
+    if (str_contains($target, '://') || (!str_starts_with($target, '/') && !preg_match('~^[A-Za-z]:[\\/]~', $target))) {
+        return 'Bitte einen absoluten Dateisystempfad angeben.';
+    }
+
+    $normalized = rtrim(str_replace('\\', '/', $target), '/') . '/';
+    $protected = [GBDBConfig::dataPath(), GBDBConfig::root()];
+    $documentRoot = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+
+    if ($documentRoot !== '') {
+        $protected[] = realpath($documentRoot) ?: $documentRoot;
+    }
+
+    foreach ($protected as $directory) {
+        $directory = rtrim(str_replace('\\', '/', (string) $directory), '/') . '/';
+
+        if ($directory !== '/' && str_starts_with($normalized, $directory)) {
+            return 'Backups dürfen nicht im Webroot, im Framework oder im Datenbestand liegen. Ohne Angabe wird .backups im geschützten Datenordner verwendet.';
+        }
+    }
+
+    return '';
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!GreenQLUIv2Helper::checkCsrf((string) ($_POST['csrf'] ?? ''))) {
         $msg = 'Ungültiger CSRF Token.';
     } else {
-        $target = rtrim((string) ($_POST['path'] ?? ''), '/');
+        $target = rtrim(trim((string) ($_POST['path'] ?? '')), '/');
 
-        if ($target === '')
+        if ($target === '') {
             $target = $defaultTarget;
+        }
 
-        $report = gbdbui_copy_tree(Vars::DB_PATH(), $target);
-        $msg = $report['ok'] ? 'Backup erstellt: ' . $target : 'Backup mit Fehlern.';
+        $error = gbdbui_backup_target_error($target);
+
+        if ($error !== '') {
+            $msg = $error;
+        } else {
+            $report = gbdbui_copy_tree(Vars::DB_PATH(), $target);
+            $msg = $report['ok'] ? 'Backup erstellt: ' . $target : 'Backup mit Fehlern.';
+        }
     }
-
 }
 
 ?>
-<!doctype html>
-<html lang="de">
+<?php gbdbui_layout_start('backup', 'Backup', 'Erstellt eine vollständige Dateikopie der GBDB-Daten – sinnvoll vor Migration, Verschlüsselungswechsel oder Re-Install.', ['eyebrow' => 'Daten']); ?>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Backup</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('backup'); ?>
-    <main class="gbdbui-wide">
-        <section class="gbdbui-hero">
-            <p class="gbdbui-kicker">Safe</p>
-            <h1>Backup</h1>
-            <p>Erstellt eine saubere Dateisystem-Kopie der kompletten GBDB-Daten. Ideal vor Migration,
-                Crypto-Konvertierung oder Re-Install.</p>
-        </section>
-
-        <?php if ($msg): ?>
+        <?php if ($msg) : ?>
             <div class="gbdbui-flash <?= $report && !$report['ok'] ? 'bad' : 'ok' ?>"><?= gbdbui_e($msg) ?></div>
         <?php endif; ?>
 
@@ -81,14 +111,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         <p>Letzter Lauf und Report.</p>
                     </div>
                 </div>
-                <?php if ($report): ?>
+                <?php if ($report) : ?>
                     <pre><?= gbdbui_e($report) ?></pre>
-                <?php else: ?>
+                <?php else : ?>
                     <div class="gbdbui-empty">Noch kein Backup in dieser Sitzung ausgeführt.</div>
                 <?php endif; ?>
             </div>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

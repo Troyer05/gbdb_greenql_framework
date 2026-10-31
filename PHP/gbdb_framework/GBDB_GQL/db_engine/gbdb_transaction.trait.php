@@ -1,7 +1,7 @@
 <?php
 
 trait GBDB_TransactionTrait {
-    private static function inTransaction(): bool {
+    private static function inTransaction() :bool {
         return self::$txActive && !self::$txCommitting;
     }
 
@@ -12,13 +12,13 @@ trait GBDB_TransactionTrait {
      *
      * @return int result.
      */
-    public static function transactionTimeout(int $seconds): int {
+    public static function transactionTimeout(int $seconds) :int {
         self::$txTimeout = max(1, $seconds);
 
         return self::$txTimeout;
     }
 
-    private static function checkTransactionTimeout(): bool {
+    private static function checkTransactionTimeout() :bool {
         if (!self::$txActive) {
             return true;
         }
@@ -37,7 +37,7 @@ trait GBDB_TransactionTrait {
         return false;
     }
 
-    private static function reserveTransactionId(string $database, string $table, array $data): int {
+    private static function reserveTransactionId(string $database, string $table, array $data) :int {
         if (isset($data['id']) && (int)$data['id'] > 0) {
             return (int)$data['id'];
         }
@@ -63,17 +63,17 @@ trait GBDB_TransactionTrait {
         return max(1, $next);
     }
 
-    private static function transactionJournalDir(): string {
+    private static function transactionJournalDir() :string {
         $dir = Vars::DB_PATH() . '.journal/transactions';
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         return $dir;
     }
 
-    private static function journalTransaction(string $state, array $payload = []): void {
+    private static function journalTransaction(string $state, array $payload = []) :void {
         if (self::$txId === '') {
             return;
         }
@@ -86,7 +86,7 @@ trait GBDB_TransactionTrait {
         ]);
     }
 
-    private static function createTransactionSnapshots(): array {
+    private static function createTransactionSnapshots() :array {
         $snapshots = [];
 
         foreach (self::$txOps as $op) {
@@ -117,7 +117,7 @@ trait GBDB_TransactionTrait {
         return $snapshots;
     }
 
-    private static function restoreTransactionSnapshots(array $snapshots): void {
+    private static function restoreTransactionSnapshots(array $snapshots) :void {
         foreach ($snapshots as $item) {
             $instance = (string)($item['instance'] ?? self::getInstance());
             $db = (string)($item['db'] ?? '');
@@ -129,9 +129,7 @@ trait GBDB_TransactionTrait {
                     self::restoreSnapshot($db, $table, $snapshot);
                 });
             }
-
         }
-
     }
 
     /**
@@ -139,7 +137,7 @@ trait GBDB_TransactionTrait {
      *
      * @return bool result.
      */
-    public static function begin(): bool {
+    public static function begin() :bool {
         if (self::$txActive) {
             return false;
         }
@@ -167,7 +165,7 @@ trait GBDB_TransactionTrait {
      *
      * @return bool result.
      */
-    public static function savepoint(string $name): bool {
+    public static function savepoint(string $name) :bool {
         if (!self::$txActive || !self::checkTransactionTimeout()) {
             return false;
         }
@@ -195,7 +193,7 @@ trait GBDB_TransactionTrait {
      *
      * @return bool result.
      */
-    public static function rollbackTo(string $name): bool {
+    public static function rollbackTo(string $name) :bool {
         if (!self::$txActive) {
             return false;
         }
@@ -212,7 +210,6 @@ trait GBDB_TransactionTrait {
             if ((int)self::$txSavepoints[$sp] > count(self::$txOps)) {
                 unset(self::$txSavepoints[$sp]);
             }
-
         }
 
         self::journalTransaction('rollback_to', [
@@ -228,7 +225,7 @@ trait GBDB_TransactionTrait {
      *
      * @return bool result.
      */
-    public static function commit(): bool {
+    public static function commit() :bool {
         if (!self::$txActive || !self::checkTransactionTimeout()) {
             return false;
         }
@@ -241,6 +238,11 @@ trait GBDB_TransactionTrait {
         self::$txSnapshots = $snapshots;
         self::$txCommitting = true;
         $ok = true;
+        $gdp = class_exists('GDPWriteInterceptor', false);
+
+        if ($gdp) {
+            GDPWriteInterceptor::beginGroup();
+        }
 
         try {
             foreach ($ops as $op) {
@@ -270,9 +272,7 @@ trait GBDB_TransactionTrait {
                 if (!$ok) {
                     break;
                 }
-
             }
-
         } catch (Throwable $e) {
             $ok = false;
 
@@ -294,7 +294,6 @@ trait GBDB_TransactionTrait {
                     'ops' => count($ops)
                 ]);
             }
-
         } else {
             self::journalTransaction('commit_marker', [
                 'committed_at' => time(),
@@ -307,7 +306,6 @@ trait GBDB_TransactionTrait {
                     'ops' => count($ops)
                 ]);
             }
-
         }
 
         self::$txActive = false;
@@ -318,6 +316,11 @@ trait GBDB_TransactionTrait {
         self::$txSavepoints = [];
         self::$txSnapshots = [];
 
+        if ($gdp) {
+            // Nach einem Rollback zählt nur, was tatsächlich im Datenbestand verblieben ist.
+            GDPWriteInterceptor::endGroup($ok);
+        }
+
         return $ok;
     }
 
@@ -326,7 +329,7 @@ trait GBDB_TransactionTrait {
      *
      * @return bool result.
      */
-    public static function rollback(): bool {
+    public static function rollback() :bool {
         if (!self::$txActive) {
             return false;
         }
@@ -359,7 +362,7 @@ trait GBDB_TransactionTrait {
      *
      * @return array result.
      */
-    public static function transactionStatus(): array {
+    public static function transactionStatus() :array {
         return [
             'active' => self::$txActive,
             'id' => self::$txId,
@@ -370,5 +373,4 @@ trait GBDB_TransactionTrait {
             'savepoints' => array_keys(self::$txSavepoints)
         ];
     }
-
 }

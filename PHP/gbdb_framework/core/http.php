@@ -1,7 +1,6 @@
 <?php
 
 class Http {
-
     /**
      * fetches an api with GET-methos
      * @param string $url
@@ -9,7 +8,7 @@ class Http {
      * @param int $timeout
      * @return bool|string
      */
-    public static function get(string $url, array $headers = [], int $timeout = 10): string|false {
+    public static function get(string $url, array $headers = [], int $timeout = 10) :string|false {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
 
@@ -51,7 +50,7 @@ class Http {
      * @param int $timeout
      * @return bool|string
      */
-    public static function post(string $url, array $data = [], array $headers = [], int $timeout = 10): string|false {
+    public static function post(string $url, array $data = [], array $headers = [], int $timeout = 10) :string|false {
         $json = json_encode($data, JSON_UNESCAPED_UNICODE);
 
         if (function_exists('curl_init')) {
@@ -100,17 +99,20 @@ class Http {
      * @param array $mail
      * @return array{error: string, response: bool|string|array{error: string}|bool}
      */
-    public static function sendMail(array $mail): bool|array {
+    public static function sendMail(array $mail) :bool|array {
         $required = ["to_name", "to_email", "from_name", "from_email", "subject", "mail_content"];
 
         foreach ($required as $key) {
             if (!isset($mail[$key]) || trim($mail[$key]) === "") {
                 return ["error" => "Missing required field: $key"];
             }
-
         }
 
-        $url = "https://museumqr.de/mailing/index.php";
+        $url = (string) GBDBConfig::get('mail', 'api_url', '');
+
+        if (!preg_match('~^https?://~i', $url)) {
+            return ['error' => 'mail.api_url is not configured'];
+        }
 
         $headers = [
             "Accept" => "application/json"
@@ -135,7 +137,7 @@ class Http {
      * @param int $status
      * @return never
      */
-    public static function jsonResponse(array $data, int $status = 200): void {
+    public static function jsonResponse(array $data, int $status = 200) :void {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
 
@@ -150,7 +152,7 @@ class Http {
      * @param int $status
      * @return never
      */
-    public static function redirect(string $url, int $status = 302): void {
+    public static function redirect(string $url, int $status = 302) :void {
         http_response_code($status);
         header("Location: $url");
 
@@ -161,7 +163,7 @@ class Http {
      * get all headers
      * @return array
      */
-    public static function getHeaders(): array {
+    public static function getHeaders() :array {
         if (function_exists('getallheaders')) {
             return getallheaders();
         }
@@ -175,7 +177,6 @@ class Http {
 
                 $headers[$key] = $value;
             }
-
         }
 
         return $headers;
@@ -185,7 +186,7 @@ class Http {
      * gets a request method
      * @return string
      */
-    public static function method(): string {
+    public static function method() :string {
         return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     }
 
@@ -193,7 +194,7 @@ class Http {
      * is it valid json?
      * @return bool
      */
-    public static function isJson(): bool {
+    public static function isJson() :bool {
         $ctype = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
 
         return str_contains($ctype, 'application/json');
@@ -203,14 +204,14 @@ class Http {
      * gets body of request
      * @return array
      */
-    public static function jsonInput(): array {
+    public static function jsonInput() :array {
         $raw = file_get_contents('php://input');
         $parsed = json_decode($raw, true);
 
         return is_array($parsed) ? $parsed : [];
     }
 
-    private static function formatHeaders(array $headers): array {
+    private static function formatHeaders(array $headers) :array {
         $result = [];
 
         foreach ($headers as $k => $v) {
@@ -220,7 +221,7 @@ class Http {
         return $result;
     }
 
-    private static function implodeHeaders(array $headers): string {
+    private static function implodeHeaders(array $headers) :string {
         $r = "";
 
         foreach ($headers as $k => $v) {
@@ -229,5 +230,4 @@ class Http {
 
         return $r;
     }
-
 }

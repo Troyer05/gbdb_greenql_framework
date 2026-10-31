@@ -5,29 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/optimize.logic.php';
 ?>
-<!doctype html>
-<html lang="de">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Optimize</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-    <link rel="stylesheet" href="gbdb_framework/public/css/optimize.css">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('optimize'); ?>
-    <main class="gbdbui-wide legacy-tool-page">
-        <section class="gbdbui-hero legacy-tool-hero">
-            <p class="gbdbui-kicker">Optimization</p>
-            <h1>GBDB Optimize</h1>
-            <p>
-                Compact tables, inspect append/meta state and reduce write overhead after many inserts, edits and
-                deletes.
-                Use this section as a maintenance tool, not as something that runs on every request.
-            </p>
-        </section>
+<?php gbdbui_layout_start('optimize', 'Optimierung', 'Tabellen kompaktieren, Append-/Meta-Zustand prüfen und den Schreibaufwand nach vielen Änderungen reduzieren – als Wartungswerkzeug, nicht bei jeder Anfrage.', ['eyebrow' => 'Betrieb']); ?>
 
         <section class="gbdbui-panel legacy-tool-panel">
             <div class="gbdbui-panel-head compact">
@@ -37,9 +15,9 @@ require_once __DIR__ . '/optimize.logic.php';
                 </div>
             </div>
 
-            <?php if (!empty($msgs)): ?>
+            <?php if (!empty($msgs)) : ?>
                 <div class="msgs">
-                    <?php foreach ($msgs as $msg): ?>
+                    <?php foreach ($msgs as $msg) : ?>
                         <div class="msg"><?= h($msg) ?></div>
                     <?php endforeach; ?>
                 </div>
@@ -51,7 +29,7 @@ require_once __DIR__ . '/optimize.logic.php';
                         <span class="muted">DB</span>
                         <select name="db" onchange="this.form.submit()">
                             <option value="">– auswählen –</option>
-                            <?php foreach ($dbs as $db): ?>
+                            <?php foreach ($dbs as $db) : ?>
                                 <option value="<?= h($db) ?>" <?= ($db === $selDb ? 'selected' : '') ?>><?= h($db) ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -61,7 +39,7 @@ require_once __DIR__ . '/optimize.logic.php';
                         <span class="muted">Table</span>
                         <select name="table">
                             <option value="">– auswählen –</option>
-                            <?php foreach ($tables as $table): ?>
+                            <?php foreach ($tables as $table) : ?>
                                 <option value="<?= h($table) ?>" <?= ($table === $selTable ? 'selected' : '') ?>>
                                     <?= h($table) ?></option>
                             <?php endforeach; ?>
@@ -73,16 +51,18 @@ require_once __DIR__ . '/optimize.logic.php';
                     </div>
                 </form>
 
-                <?php if ($selDb !== ''): ?>
+                <?php if ($selDb !== '') : ?>
                     <div class="row legacy-tool-actions-row">
                         <form method="post">
+                                <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                             <input type="hidden" name="action" value="compact_all">
                             <input type="hidden" name="db" value="<?= h($selDb) ?>">
                             <button class="primary" type="submit">Compact ALL in <?= h($selDb) ?></button>
                         </form>
 
-                        <?php if ($selTable !== ''): ?>
+                        <?php if ($selTable !== '') : ?>
                             <form method="post">
+                                <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                                 <input type="hidden" name="action" value="compact_one">
                                 <input type="hidden" name="db" value="<?= h($selDb) ?>">
                                 <input type="hidden" name="table" value="<?= h($selTable) ?>">
@@ -91,10 +71,10 @@ require_once __DIR__ . '/optimize.logic.php';
                         <?php endif; ?>
                     </div>
 
-                    <?php if ($selTable !== ''): ?>
-                        <?php if (isset($stats['error'])): ?>
+                    <?php if ($selTable !== '') : ?>
+                        <?php if (isset($stats['error'])) : ?>
                             <p class="muted" style="margin-top:12px;">❌ <?= h($stats['error']) ?></p>
-                        <?php else: ?>
+                        <?php else : ?>
                             <div class="kv">
                                 <div class="muted">Mode</div>
                                 <div><code><?= h((string) $stats['mode']) ?></code></div>
@@ -122,7 +102,7 @@ require_once __DIR__ . '/optimize.logic.php';
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>
-                <?php else: ?>
+                <?php else : ?>
                     <p class="muted">Wähle zuerst eine Datenbank.</p>
                 <?php endif; ?>
             </div>
@@ -137,7 +117,5 @@ require_once __DIR__ . '/optimize.logic.php';
                 </div>
             </div>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

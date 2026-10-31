@@ -10,11 +10,11 @@ class SRVJob {
     public static string $logFile = "srv_job.log";
     public static array $params = [];
 
-    private static function logDir(): string {
+    private static function logDir() :string {
         return dirname(__DIR__, 2) . "/.logs/srv";
     }
 
-    private static function logFile(): string {
+    private static function logFile() :string {
         $filename = basename(self::$logFile);
 
         if ($filename == "") {
@@ -24,7 +24,7 @@ class SRVJob {
         return self::logDir() . "/" . $filename;
     }
 
-    private static function ensureLogDir(): void {
+    private static function ensureLogDir() :void {
         $dir = self::logDir();
 
         if (!is_dir($dir)) {
@@ -32,7 +32,7 @@ class SRVJob {
         }
     }
 
-    private static function cleanLogMessage(string $log): string {
+    private static function cleanLogMessage(string $log) :string {
         return trim(str_replace(["\r", "\n"], " ", $log));
     }
 
@@ -42,7 +42,7 @@ class SRVJob {
      * @param string $filename
      * @return void
      */
-    public static function setLogfile(string $filename): void {
+    public static function setLogfile(string $filename) :void {
         $filename = trim($filename);
 
         if ($filename == "") {
@@ -62,7 +62,7 @@ class SRVJob {
      * @param string $log
      * @return void
      */
-    public static function log(string $log): void {
+    public static function log(string $log) :void {
         self::ensureLogDir();
 
         $txt = "[" . date("Y-m-d H:i:s") . "] " . self::cleanLogMessage($log) . "\n";
@@ -76,7 +76,7 @@ class SRVJob {
      * @param array $params
      * @return void
      */
-    public static function setParams(array $params): void {
+    public static function setParams(array $params) :void {
         self::$params = $params;
     }
 
@@ -85,7 +85,7 @@ class SRVJob {
      *
      * @return array
      */
-    public static function getParams(): array {
+    public static function getParams() :array {
         return self::$params;
     }
 
@@ -95,7 +95,7 @@ class SRVJob {
      * @param string $param
      * @return bool
      */
-    public static function hasParam(string $param): bool {
+    public static function hasParam(string $param) :bool {
         return array_key_exists($param, self::$params);
     }
 
@@ -106,7 +106,7 @@ class SRVJob {
      * @param mixed $default
      * @return mixed
      */
-    public static function getParam(string $param, mixed $default = null): mixed {
+    public static function getParam(string $param, mixed $default = null) :mixed {
         if (!array_key_exists($param, self::$params)) {
             return $default;
         }
@@ -121,7 +121,7 @@ class SRVJob {
      * @param string $default
      * @return string
      */
-    public static function getString(string $param, string $default = ""): string {
+    public static function getString(string $param, string $default = "") :string {
         return trim((string)self::getParam($param, $default));
     }
 
@@ -132,7 +132,7 @@ class SRVJob {
      * @param int $default
      * @return int
      */
-    public static function getInt(string $param, int $default = 0): int {
+    public static function getInt(string $param, int $default = 0) :int {
         return (int)self::getParam($param, $default);
     }
 
@@ -143,7 +143,7 @@ class SRVJob {
      * @param bool $default
      * @return bool
      */
-    public static function getBool(string $param, bool $default = false): bool {
+    public static function getBool(string $param, bool $default = false) :bool {
         if (!array_key_exists($param, self::$params)) {
             return $default;
         }
@@ -172,7 +172,7 @@ class SRVJob {
      * @param array $data
      * @return array
      */
-    public static function returnOk(string $message, array $data = []): array {
+    public static function returnOk(string $message, array $data = []) :array {
         self::log("OK: " . $message);
 
         return [
@@ -189,7 +189,7 @@ class SRVJob {
      * @param array $data
      * @return array
      */
-    public static function returnError(string $message, array $data = []): array {
+    public static function returnError(string $message, array $data = []) :array {
         self::log("ERROR: " . $message);
 
         return [
@@ -199,5 +199,3 @@ class SRVJob {
         ];
     }
 }
-
-?>

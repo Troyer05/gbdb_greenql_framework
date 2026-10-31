@@ -34,7 +34,7 @@ class SrvFunctions {
         "password"
     ];
 
-    private static function authParams(array $required = [], bool $requireAtLeastOne = true): array {
+    private static function authParams(array $required = [], bool $requireAtLeastOne = true) :array {
         Srv::testParams(["user_data"]);
 
         if (!is_array(Srv::$body["user_data"])) {
@@ -66,7 +66,7 @@ class SrvFunctions {
         return $userData;
     }
 
-    private static function str(array $data, string $key, string $default = ""): string {
+    private static function str(array $data, string $key, string $default = "") :string {
         if (!array_key_exists($key, $data)) {
             return $default;
         }
@@ -74,7 +74,7 @@ class SrvFunctions {
         return trim((string)$data[$key]);
     }
 
-    private static function bool(array $data, string $key, bool $default = false): bool {
+    private static function bool(array $data, string $key, bool $default = false) :bool {
         if (!array_key_exists($key, $data)) {
             return $default;
         }
@@ -102,7 +102,7 @@ class SrvFunctions {
      * @param string $instance
      * @return void
      */
-    public static function setInstance(string $instance): void {
+    public static function setInstance(string $instance) :void {
         if (!GBDB::existsInstance($instance)) {
             Srv::respond(403, "Instance " . $instance . " not found");
         }
@@ -120,7 +120,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function ping(): void {
+    public static function ping() :void {
         Srv::respond(200, "ok");
     }
 
@@ -129,7 +129,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function getData(): void {
+    public static function getData() :void {
         Srv::testParams(["base", "table"]);
 
         $data = GBDB::get(
@@ -145,7 +145,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function registerUser(): void {
+    public static function registerUser() :void {
         $userData = self::authParams(self::REGISTER_FIELDS);
 
         $regRes = SrvAuth::userRegistration(
@@ -172,7 +172,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function login(): void {
+    public static function login() :void {
         $userData = self::authParams(self::LOGIN_FIELDS);
 
         $logRes = SrvAuth::login(
@@ -188,8 +188,8 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function logout(): void {
-        $logoutRes = SrvAuth::logout();
+    public static function logout() :void {
+        $logoutRes = SrvAuth::logout('', (string) (Srv::$body['user_data']['jwt'] ?? Srv::$body['jwt'] ?? ''));
 
         Srv::respond(200, $logoutRes);
     }
@@ -199,7 +199,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function init_auth(): void {
+    public static function init_auth() :void {
         $initRes = SrvAuth::init();
 
         Srv::respond(200, $initRes);
@@ -210,7 +210,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function verifyEmail(): void {
+    public static function verifyEmail() :void {
         Srv::testParams(["tmp_token"]);
 
         $verifyRes = SrvAuth::verify_email((string)Srv::$body["tmp_token"]);
@@ -223,7 +223,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function verify2fa(): void {
+    public static function verify2fa() :void {
         Srv::testParams(["code"]);
 
         $verifyRes = SrvAuth::verify_2fa_code((string)Srv::$body["code"]);
@@ -236,7 +236,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function deleteUser(): void {
+    public static function deleteUser() :void {
         Srv::testParams(["uid"]);
 
         $delRes = SrvAuth::deleteUser((string)Srv::$body["uid"]);
@@ -249,7 +249,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function editUser(): void {
+    public static function editUser() :void {
         Srv::testParams(["uid"]);
 
         $userData = self::authParams([], false);
@@ -280,7 +280,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function getUser(): void {
+    public static function getUser() :void {
         Srv::testParams(["uid"]);
 
         $user = SrvAuth::getUser((string)Srv::$body["uid"]);
@@ -293,7 +293,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function getJwtUser(): void {
+    public static function getJwtUser() :void {
         Srv::testParams(["jwt"]);
 
         $user = SrvAuth::getJwtUser((string)Srv::$body["jwt"]);
@@ -306,7 +306,7 @@ class SrvFunctions {
      *
      * @return void
      */
-    public static function getUsers(): void {
+    public static function getUsers() :void {
         $limit = 10000000;
 
         if (isset(Srv::$body["limit"])) {
@@ -318,9 +318,7 @@ class SrvFunctions {
         Srv::respond(200, $users);
     }
 
-    public static function driver(): void {
+    public static function driver() :void {
         Srv::respond(200, Vars::db_arch());
     }
 }
-
-?>

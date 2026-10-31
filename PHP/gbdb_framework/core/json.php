@@ -1,14 +1,13 @@
 <?php
 
 class Json {
-
     /**
      * decodes json for php usage
      * @param string $json
      * @param bool $assoc
      * @return mixed
      */
-    public static function decode(string $json, bool $assoc = false): mixed {
+    public static function decode(string $json, bool $assoc = false) :mixed {
         if ($json === "") {
             return null;
         }
@@ -30,7 +29,7 @@ class Json {
      * @param bool $pretty
      * @return bool|string
      */
-    public static function encode(mixed $data, bool $pretty = false): string {
+    public static function encode(mixed $data, bool $pretty = false) :string {
         $options = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
 
         if ($pretty || (class_exists('Vars') && Vars::json_pretty())) {
@@ -53,8 +52,10 @@ class Json {
      * @param string $json
      * @return bool
      */
-    public static function isJson(string $json): bool {
-        if (!is_string($json) || trim($json) === "") return false;
+    public static function isJson(string $json) :bool {
+        if (!is_string($json) || trim($json) === "") {
+            return false;
+        }
 
         json_decode($json);
 
@@ -67,17 +68,15 @@ class Json {
      * @param callable $callback
      * @return mixed
      */
-    public static function loop(mixed $data, callable $callback): mixed {
+    public static function loop(mixed $data, callable $callback) :mixed {
         if (is_array($data)) {
             foreach ($data as $key => $value) {
                 $data[$key] = $callback($value, $key);
             }
-
-        } else if (is_object($data)) {
+        } elseif (is_object($data)) {
             foreach ($data as $key => $value) {
                 $data->$key = $callback($value, $key);
             }
-
         }
 
         return $data;
@@ -89,7 +88,7 @@ class Json {
      * @param string $key
      * @return bool
      */
-    public static function elementExists(mixed $data, string $key): bool {
+    public static function elementExists(mixed $data, string $key) :bool {
         if (is_array($data)) {
             return array_key_exists($key, $data);
         }
@@ -107,12 +106,11 @@ class Json {
      * @param string $key
      * @return mixed
      */
-    public static function getElement(mixed $data, string $key): mixed {
+    public static function getElement(mixed $data, string $key) :mixed {
         if (!self::elementExists($data, $key)) {
             return null;
         }
 
         return is_array($data) ? $data[$key] : $data->$key;
     }
-
 }

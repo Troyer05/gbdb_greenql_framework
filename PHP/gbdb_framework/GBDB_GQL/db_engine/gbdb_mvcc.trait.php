@@ -4,12 +4,12 @@ trait GBDB_MVCCTrait {
     private static string $isolationLevel = 'read_committed';
     private static array $snapshots = [];
 
-    private static function mvccFile(string $database, string $table): string {
+    private static function mvccFile(string $database, string $table) :string {
         $file = self::makePath($database, $table, true);
         $dir = dirname($file) . '/.mvcc';
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         return $dir . '/' . basename($file) . '.versions.jsonl';
@@ -22,7 +22,7 @@ trait GBDB_MVCCTrait {
      *
      * @return string result.
      */
-    public static function isolationLevel(string $level): string {
+    public static function isolationLevel(string $level) :string {
         $level = strtolower(trim($level));
 
         if (!in_array($level, ['read_committed', 'repeatable_read', 'snapshot'], true)) {
@@ -39,7 +39,7 @@ trait GBDB_MVCCTrait {
      *
      * @return string result.
      */
-    public static function beginSnapshot(): string {
+    public static function beginSnapshot() :string {
         $id = 'snap_' . bin2hex(random_bytes(8));
 
         self::$snapshots[$id] = [
@@ -58,7 +58,7 @@ trait GBDB_MVCCTrait {
      *
      * @return bool result.
      */
-    public static function endSnapshot(string $snapshotId): bool {
+    public static function endSnapshot(string $snapshotId) :bool {
         if (!isset(self::$snapshots[$snapshotId])) {
             return false;
         }
@@ -73,11 +73,11 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function transactionSnapshots(): array {
+    public static function transactionSnapshots() :array {
         return array_values(self::$snapshots);
     }
 
-    private static function nextRowVersion(array $row): int {
+    private static function nextRowVersion(array $row) :int {
         return max((int)($row['_gbdb_version'] ?? 0), (int)($row['_gbdb_revision'] ?? 0)) + 1;
     }
 
@@ -88,7 +88,7 @@ trait GBDB_MVCCTrait {
         string $action,
         array $before = [],
         array $after = []
-    ): void {
+    ) :void {
         if ($rowId <= 0) {
             return;
         }
@@ -127,7 +127,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function rowVersions(string $database, string $table, int $rowId): array {
+    public static function rowVersions(string $database, string $table, int $rowId) :array {
         $file = self::mvccFile($database, $table);
 
         if (!is_file($file)) {
@@ -156,7 +156,7 @@ trait GBDB_MVCCTrait {
         return $out;
     }
 
-    private static function visibleRowAtSnapshot(string $database, string $table, array $row, float $snapshotTs): ?array {
+    private static function visibleRowAtSnapshot(string $database, string $table, array $row, float $snapshotTs) :?array {
         $created = (float)($row['_gbdb_visible_from'] ?? 0);
 
         if ($created <= 0 || $created <= $snapshotTs) {
@@ -178,13 +178,12 @@ trait GBDB_MVCCTrait {
                 $after = $version['after'] ?? [];
                 $visible = is_array($after) && !empty($after) ? $after : null;
             }
-
         }
 
         return $visible;
     }
 
-    private static function applySnapshotVisibility(string $database, string $table, array $rows, ?string $snapshotId = null): array {
+    private static function applySnapshotVisibility(string $database, string $table, array $rows, ?string $snapshotId = null) :array {
         if ($snapshotId === null || !isset(self::$snapshots[$snapshotId])) {
             return $rows;
         }
@@ -203,13 +202,12 @@ trait GBDB_MVCCTrait {
             if ($visible !== null) {
                 $out[] = $visible;
             }
-
         }
 
         return array_values($out);
     }
 
-    private static function applyVisibilityRules(array $rows, ?string $snapshotId = null): array {
+    private static function applyVisibilityRules(array $rows, ?string $snapshotId = null) :array {
         if ($snapshotId === null || !isset(self::$snapshots[$snapshotId])) {
             return $rows;
         }
@@ -226,7 +224,6 @@ trait GBDB_MVCCTrait {
             if ($created > 0 && $created > $visibleTs) {
                 unset($rows[$i]);
             }
-
         }
 
         return array_values($rows);
@@ -251,7 +248,7 @@ trait GBDB_MVCCTrait {
         bool $filter = false,
         mixed $where = '',
         mixed $is = ''
-    ): mixed {
+    ) :mixed {
         $rows = self::getData($database, $table, false);
 
         if (!is_array($rows)) {
@@ -265,7 +262,6 @@ trait GBDB_MVCCTrait {
                 if (is_array($row) && isset($row[$where]) && $row[$where] == $is) {
                     return $row;
                 }
-
             }
 
             return [];
@@ -293,7 +289,7 @@ trait GBDB_MVCCTrait {
         mixed $is,
         array $newData,
         int $expectedVersion
-    ): bool {
+    ) :bool {
         $row = self::getData($database, $table, true, $where, $is);
 
         if (!is_array($row) || empty($row)) {
@@ -319,7 +315,7 @@ trait GBDB_MVCCTrait {
      *
      * @return string|false result.
      */
-    public static function pessimisticRowLock(string $database, string $table, int $rowId, int $timeoutMs = 0): string|false {
+    public static function pessimisticRowLock(string $database, string $table, int $rowId, int $timeoutMs = 0) :string|false {
         return self::lockRow($database, $table, $rowId, 'write', $timeoutMs);
     }
 
@@ -332,7 +328,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function cleanupRowVersions(string $database, string $table, int $keepSeconds = 3600): array {
+    public static function cleanupRowVersions(string $database, string $table, int $keepSeconds = 3600) :array {
         $file = self::mvccFile($database, $table);
 
         if (!is_file($file)) {
@@ -386,7 +382,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function versionChains(string $database, string $table): array {
+    public static function versionChains(string $database, string $table) :array {
         $file = self::mvccFile($database, $table);
 
         if (!is_file($file)) {
@@ -435,7 +431,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function garbageCollectVersions(string $database, string $table, int $keepSeconds = 3600): array {
+    public static function garbageCollectVersions(string $database, string $table, int $keepSeconds = 3600) :array {
         return self::cleanupRowVersions($database, $table, $keepSeconds);
     }
 
@@ -446,7 +442,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function mvccCleanup(int $keepSeconds = 3600): array {
+    public static function mvccCleanup(int $keepSeconds = 3600) :array {
         $report = [
             'ok' => true,
             'tables' => [],
@@ -464,9 +460,7 @@ trait GBDB_MVCCTrait {
                 if (!($res['ok'] ?? false)) {
                     $report['ok'] = false;
                 }
-
             }
-
         }
 
         return $report;
@@ -477,7 +471,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function testConsistentReads(): array {
+    public static function testConsistentReads() :array {
         $oldInstance = self::getInstance();
         $instance = 'mvcc_test_' . bin2hex(random_bytes(4));
 
@@ -516,7 +510,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function mvccLoadTest(int $writes = 100): array {
+    public static function mvccLoadTest(int $writes = 100) :array {
         $writes = max(1, min(5000, $writes));
         $oldInstance = self::getInstance();
         $instance = 'mvcc_load_' . bin2hex(random_bytes(4));
@@ -558,7 +552,7 @@ trait GBDB_MVCCTrait {
      *
      * @return array result.
      */
-    public static function mvccStats(string $database, string $table): array {
+    public static function mvccStats(string $database, string $table) :array {
         $file = self::mvccFile($database, $table);
         $lines = is_file($file)
             ? (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [])
@@ -572,5 +566,4 @@ trait GBDB_MVCCTrait {
             'active_snapshots' => count(self::$snapshots)
         ];
     }
-
 }

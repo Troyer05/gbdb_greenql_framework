@@ -1,72 +1,4 @@
 {
-    "test": {
-        "main": {
-            "kunden": {
-                "format": "2.0",
-                "version": 2,
-                "types_enabled": false,
-                "columns": {
-                    "aktiv": {
-                        "type": "mixed",
-                        "default": 1,
-                        "nullable": true,
-                        "not_null": false,
-                        "required": false,
-                        "unique": false,
-                        "auto_increment": false,
-                        "sequence": "",
-                        "generated": null,
-                        "id_generator": "",
-                        "enum": [],
-                        "check": []
-                    },
-                    "knr": {
-                        "type": "mixed",
-                        "default": "",
-                        "nullable": true,
-                        "not_null": false,
-                        "required": false,
-                        "unique": false,
-                        "auto_increment": false,
-                        "sequence": "",
-                        "generated": null,
-                        "id_generator": "",
-                        "enum": [],
-                        "check": []
-                    },
-                    "name": {
-                        "type": "mixed",
-                        "default": "",
-                        "nullable": true,
-                        "not_null": false,
-                        "required": false,
-                        "unique": false,
-                        "auto_increment": false,
-                        "sequence": "",
-                        "generated": null,
-                        "id_generator": "",
-                        "enum": [],
-                        "check": []
-                    }
-                },
-                "constraints": [],
-                "relations": [],
-                "partitioning": [],
-                "sequences": [],
-                "migration_history": [
-                    {
-                        "id": "mig_fa3d9766f837d632",
-                        "area": "types",
-                        "action": "disable",
-                        "payload": [],
-                        "created_at": 1778171922
-                    }
-                ],
-                "created_at": 1778171922,
-                "updated_at": 1778362427
-            }
-        }
-    },
     "__greenql_ui_v2_system": {
         "papi": {
             "keys": {
@@ -178,8 +110,8 @@
                 "partitioning": [],
                 "sequences": [],
                 "migration_history": [],
-                "created_at": 1778363587,
-                "updated_at": 1778363591
+                "created_at": 1793127880,
+                "updated_at": 1793127880
             }
         },
         "plog": {
@@ -250,8 +182,8 @@
                 "partitioning": [],
                 "sequences": [],
                 "migration_history": [],
-                "created_at": 1778363587,
-                "updated_at": 1778363587
+                "created_at": 1793127880,
+                "updated_at": 1793127880
             },
             "key_log": {
                 "format": "2.0",
@@ -300,6 +232,20 @@
                         "enum": [],
                         "check": []
                     },
+                    "rights": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
                     "user": {
                         "type": "mixed",
                         "default": "",
@@ -320,11 +266,53 @@
                 "partitioning": [],
                 "sequences": [],
                 "migration_history": [],
-                "created_at": 1778363587,
-                "updated_at": 1778363587
+                "created_at": 1793127880,
+                "updated_at": 1793127880
             }
         },
         "system": {
+            "settings": {
+                "format": "2.0",
+                "version": 1,
+                "types_enabled": false,
+                "columns": {
+                    "key": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    },
+                    "value": {
+                        "type": "mixed",
+                        "default": "",
+                        "nullable": true,
+                        "not_null": false,
+                        "required": false,
+                        "unique": false,
+                        "auto_increment": false,
+                        "sequence": "",
+                        "generated": null,
+                        "id_generator": "",
+                        "enum": [],
+                        "check": []
+                    }
+                },
+                "constraints": [],
+                "relations": [],
+                "partitioning": [],
+                "sequences": [],
+                "migration_history": [],
+                "created_at": 1793127880,
+                "updated_at": 1793127880
+            },
             "users": {
                 "format": "2.0",
                 "version": 1,
@@ -504,8 +492,8 @@
                 "partitioning": [],
                 "sequences": [],
                 "migration_history": [],
-                "created_at": 1778063309,
-                "updated_at": 1778362388
+                "created_at": 1793127880,
+                "updated_at": 1793127880
             }
         }
     }

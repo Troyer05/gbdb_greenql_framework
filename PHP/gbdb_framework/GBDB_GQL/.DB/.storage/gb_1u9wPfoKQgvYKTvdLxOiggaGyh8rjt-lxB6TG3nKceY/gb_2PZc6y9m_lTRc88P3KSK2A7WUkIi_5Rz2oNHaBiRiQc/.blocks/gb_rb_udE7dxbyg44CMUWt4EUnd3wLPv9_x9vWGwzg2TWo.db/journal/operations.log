@@ -1,0 +1,2 @@
+{"ts":1793127880,"op":{"op":"sync","reason":"create_table","rows":0,"pages":0,"checksum":"5a0c871c7be90ba78f1d62a88c88ab00ad6ffdf8a9d5e1a8980a3e2dfce53405"},"checksum":"82f91c5d5d939b829543dd5925f77d9253db8451b10ccb0e991892b83cfad766"}
+{"ts":1793127880,"op":{"op":"sync","reason":"add_column","rows":0,"pages":0,"checksum":"2bd2263baff50ad2dc0a1a84402696f0caef23fe9a17885ec8f418cef5f4bbbb"},"checksum":"afb1b4bcd176874f6bdcf0d109432f6c0cfb17be8b55084e60084752bc8425e5"}

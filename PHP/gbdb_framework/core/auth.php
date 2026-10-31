@@ -1,6 +1,7 @@
 <?php
 
-class Auth {
+/** @internal Applications use Auth. */
+class GBDBAuthEngine {
     private const MAIL_VERIFY = "verify_mail.html";
     private const MAIL_2FA = "tfa_mail.html";
     private const COOKIE_NAME = "jwt";
@@ -15,33 +16,39 @@ class Auth {
      * @param bool $usage
      * @return void
      */
-    public static function setSrvUsage(bool $usage): void {
+    public static function setSrvUsage(bool $usage) :void {
         self::$srv = $usage;
     }
 
-    private static function instance(): string {
+    private static function instance() :string {
         return Vars::auth_instance();
     }
 
-    private static function switchInstance(string $to = ""): void {
+    private static function switchInstance(string $to = "") :void {
         if ($to == "") {
             GBDB::setInstance(self::instance());
 
             return;
         }
 
-        if (self::$return_to_instance != "") {
-            GBDB::setInstance(self::$return_to_instance);
+        if ($to == "back") {
+            if (self::$return_to_instance != "") {
+                GBDB::setInstance(self::$return_to_instance);
+
+                return;
+            }
+
+            if (Vars::main_instance() != "") {
+                GBDB::setInstance(Vars::main_instance());
+            }
 
             return;
         }
 
-        if (Vars::main_instance() != "") {
-            GBDB::setInstance(Vars::main_instance());
-        }
+        GBDB::setInstance($to);
     }
 
-    private static function cookie(string $do, string $value = ""): mixed {
+    private static function cookie(string $do, string $value = "") :mixed {
         if ($do == "get") {
             return Cookie::get(self::COOKIE_NAME);
         }
@@ -65,7 +72,7 @@ class Auth {
         return false;
     }
 
-    private static function ok(string $message = "", array $data = []): array {
+    private static function ok(string $message = "", array $data = []) :array {
         return [
             "ok" => true,
             "message" => $message,
@@ -73,7 +80,7 @@ class Auth {
         ];
     }
 
-    private static function error(string $message = "", array $data = []): array {
+    private static function error(string $message = "", array $data = []) :array {
         return [
             "ok" => false,
             "message" => $message,
@@ -81,7 +88,7 @@ class Auth {
         ];
     }
 
-    private static function exp(): array {
+    private static function exp() :array {
         return [
             "jwt" => Vars::jwt_exp(),
             "pwf" => Vars::pwf_exp(),
@@ -90,7 +97,7 @@ class Auth {
         ];
     }
 
-    private static function expires(string $key): string {
+    private static function expires(string $key) :string {
         if (!in_array($key, self::KEYS, true)) {
             throw new RuntimeException("exp-key " . $key . " not found in Auth::expires()");
         }
@@ -101,10 +108,14 @@ class Auth {
             $expiresInMinutes = 1;
         }
 
+        if ($expiresInMinutes > 5256000) {
+            $expiresInMinutes = 5256000;
+        }
+
         return date("Y-m-d H:i:s", time() + ($expiresInMinutes * 60));
     }
 
-    private static function expired(string $exp, string $ref = "jwt"): bool {
+    private static function expired(string $exp, string $ref = "jwt") :bool {
         if (!in_array($ref, self::KEYS, true)) {
             return true;
         }
@@ -122,7 +133,7 @@ class Auth {
         return $time < time();
     }
 
-    private static function isWhitelisted(): bool {
+    private static function isWhitelisted() :bool {
         $file = Vars::this_file();
         $fileWithoutExt = pathinfo($file, PATHINFO_FILENAME);
 
@@ -135,11 +146,11 @@ class Auth {
         return false;
     }
 
-    private static function randomToken(int $bytes = 32): string {
+    private static function randomToken(int $bytes = 32) :string {
         return bin2hex(random_bytes($bytes));
     }
 
-    private static function uniqueToken(string $table, string $column = "token", int $bytes = 32): string {
+    private static function uniqueToken(string $table, string $column = "token", int $bytes = 32) :string {
         do {
             $retry = false;
             $token = self::randomToken($bytes);
@@ -153,7 +164,7 @@ class Auth {
         return $token;
     }
 
-    private static function uniqueUid(): string {
+    private static function uniqueUid() :string {
         do {
             $retry = false;
             $uid = self::randomToken(32);
@@ -167,7 +178,37 @@ class Auth {
         return $uid;
     }
 
-    private static function verifyPass(string $password, string $hash): bool {
+    private static function cleanUser(array $user) :array {
+        if (isset($user["password"])) {
+            unset($user["password"]);
+        }
+
+        return $user;
+    }
+
+    private static function cleanUsers(mixed $users) :mixed {
+        if (!is_array($users)) {
+            return $users;
+        }
+
+        foreach ($users as $key => $value) {
+            if (is_array($value)) {
+                if (isset($value["password"])) {
+                    unset($value["password"]);
+
+                    $users[$key] = $value;
+
+                    continue;
+                }
+
+                $users[$key] = self::cleanUsers($value);
+            }
+        }
+
+        return $users;
+    }
+
+    private static function verifyPass(string $password, string $hash) :bool {
         if ($hash == "") {
             return false;
         }
@@ -175,7 +216,7 @@ class Auth {
         return password_verify($password, $hash);
     }
 
-    private static function createSession(string $uid): string {
+    private static function createSession(string $uid) :string {
         GBDB::delete("tokens", "jwt", "uid", $uid, true);
 
         $jwt = self::uniqueToken("jwt", "token", 32);
@@ -187,12 +228,15 @@ class Auth {
         ];
 
         GBDB::insert("tokens", "jwt", $obj);
-        self::cookie("set", $jwt);
+
+        if (!self::$srv) {
+            self::cookie("set", $jwt);
+        }
 
         return $jwt;
     }
 
-    private static function readMailTemplate(string $file): string {
+    private static function readMailTemplate(string $file) :string {
         $file = dirname(__DIR__) . "/public/includes/mail_templates/" . $file;
 
         if (!is_file($file)) {
@@ -208,11 +252,11 @@ class Auth {
         return $content;
     }
 
-    private static function cleanMailValue(mixed $value): string {
+    private static function cleanMailValue(mixed $value) :string {
         return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
     }
 
-    private static function parse_email(string $mailAsHtml, string $linkOrCode, array $user, array $meta): string {
+    private static function parse_email(string $mailAsHtml, string $linkOrCode, array $user, array $meta) :string {
         $safeLink = htmlspecialchars($linkOrCode, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
 
         $replace = [
@@ -238,7 +282,7 @@ class Auth {
         return $tmp;
     }
 
-    private static function delete_old_tokens(string $table): void {
+    private static function delete_old_tokens(string $table) :void {
         if (!in_array($table, self::KEYS, true)) {
             return;
         }
@@ -284,43 +328,52 @@ class Auth {
         }
     }
 
-    private static function send_verify_email(array $user, array $meta): string {
-        if (Vars::verify_email()) {
-            GBDB::delete("tokens", "everify", "uid", $user["uid"], true);
-
-            $token = self::uniqueToken("everify", "token", 16);
-
-            $everify = [
-                "uid" => $user["uid"],
-                "token" => $token,
-                "exp" => self::expires("everify")
-            ];
-
-            $link = Vars::auth_email_config()["verify_link"] . $token;
-            $mail_as_html = self::readMailTemplate(self::MAIL_VERIFY);
-            $mail_content = self::parse_email($mail_as_html, $link, $user, $meta);
-
-            $mail_object = [
-                "to_name" => $user["username"],
-                "to_email" => $user["email"],
-                "from_name" => Vars::auth_email_config()["from_name"],
-                "from_email" => Vars::auth_email_config()["from_email"],
-                "subject" => Vars::auth_email_config()["subject_verify"],
-                "mail_content" => $mail_content
-            ];
-
-            Http::sendMail($mail_object);
-
-            GBDB::insert("tokens", "everify", $everify);
-            self::delete_old_tokens("everify");
-
-            return "Please verify your email to be able to login.";
+    private static function send_verify_email(array $user, array $meta) :string {
+        if (!Vars::verify_email()) {
+            return "You can now login.";
         }
 
-        return "You can now login.";
+        GBDB::delete("tokens", "everify", "uid", $user["uid"], true);
+
+        $token = self::uniqueToken("everify", "token", 16);
+
+        $everify = [
+            "uid" => $user["uid"],
+            "token" => $token,
+            "exp" => self::expires("everify")
+        ];
+
+        GBDB::insert('tokens', 'everify', $everify);
+        self::delete_old_tokens('everify');
+
+        $mail_as_html = self::readMailTemplate(self::MAIL_VERIFY);
+
+        if ($mail_as_html == "") {
+            return "Verification email template not found.";
+        }
+
+        $link = Vars::auth_email_config()["verify_link"] . $token;
+        $mail_content = self::parse_email($mail_as_html, $link, $user, $meta);
+
+        $mail_object = [
+            "to_name" => $user["username"],
+            "to_email" => $user["email"],
+            "from_name" => Vars::auth_email_config()["from_name"],
+            "from_email" => Vars::auth_email_config()["from_email"],
+            "subject" => Vars::auth_email_config()["subject_verify"],
+            "mail_content" => $mail_content
+        ];
+
+        $sent = Http::sendMail($mail_object);
+
+        if ($sent !== true) {
+            return "Verification email could not be sent.";
+        }
+
+        return "Please verify your email to be able to login.";
     }
 
-    private static function start_2fa(string $uid): array {
+    private static function start_2fa(string $uid) :array {
         $user = GBDB::get("main", "users", true, "uid", $uid);
 
         if (empty($user)) {
@@ -346,6 +399,11 @@ class Auth {
         ];
 
         $mail_as_html = self::readMailTemplate(self::MAIL_2FA);
+
+        if ($mail_as_html == "") {
+            return self::error("2FA mail template not found.");
+        }
+
         $meta = GBDB::get("main", "meta", true, "uid", $uid);
 
         if (empty($meta)) {
@@ -363,7 +421,11 @@ class Auth {
             "mail_content" => $mail_content
         ];
 
-        Http::sendMail($mail_object);
+        $sent = Http::sendMail($mail_object);
+
+        if ($sent !== true) {
+            return self::error("2FA mail could not be sent.");
+        }
 
         GBDB::insert("tokens", "2fa", $obj);
         self::delete_old_tokens("2fa");
@@ -377,13 +439,56 @@ class Auth {
         ]);
     }
 
+    private static function repairAuthSchema() :void {
+        if (method_exists("GBDB", "addColumn")) {
+            GBDB::addColumn("main", "users", "date", "");
+            GBDB::addColumn('main', 'users', 'email_verified', true);
+            GBDB::addColumn("main", "meta", "adress", "");
+            GBDB::addColumn("main", "meta", "text", "");
+        }
+
+        if (!method_exists("GBDB", "setColumnType")) {
+            return;
+        }
+
+        GBDB::setColumnType("main", "users", "uid", "string");
+        GBDB::setColumnType("main", "users", "username", "string");
+        GBDB::setColumnType("main", "users", "email", "string");
+        GBDB::setColumnType("main", "users", "password", "string");
+        GBDB::setColumnType("main", "users", "active", "bool");
+        GBDB::setColumnType('main', 'users', 'email_verified', 'bool');
+        GBDB::setColumnType("main", "users", "tfa", "bool");
+        GBDB::setColumnType("main", "users", "role", "string");
+        GBDB::setColumnType("main", "users", "date", "string");
+
+        GBDB::setColumnType("main", "meta", "uid", "string");
+        GBDB::setColumnType("main", "meta", "firstname", "string");
+        GBDB::setColumnType("main", "meta", "lastname", "string");
+        GBDB::setColumnType("main", "meta", "adress", "string");
+        GBDB::setColumnType("main", "meta", "telephone", "string");
+        GBDB::setColumnType("main", "meta", "mobile", "string");
+        GBDB::setColumnType("main", "meta", "gender", "bool");
+        GBDB::setColumnType("main", "meta", "image", "string");
+        GBDB::setColumnType("main", "meta", "text", "string");
+
+        foreach (["jwt", "pwf", "2fa", "everify"] as $table) {
+            GBDB::setColumnType("tokens", $table, "uid", "string");
+            GBDB::setColumnType("tokens", $table, "exp", "datetime");
+        }
+
+        GBDB::setColumnType("tokens", "jwt", "token", "string");
+        GBDB::setColumnType("tokens", "pwf", "token", "string");
+        GBDB::setColumnType("tokens", "everify", "token", "string");
+        GBDB::setColumnType("tokens", "2fa", "code", "string");
+    }
+
     /**
      * sets the instance to return after auth operations
      *
      * @param string $instance
      * @return void
      */
-    public static function setReturnInstance(string $instance): void {
+    public static function setReturnInstance(string $instance) :void {
         self::$return_to_instance = $instance;
     }
 
@@ -392,36 +497,114 @@ class Auth {
      *
      * @return array
      */
-    public static function createStructure(): array {
+    public static function createStructure() :array {
+        $created = false;
+        $scriptResult = [];
+        $root = Vars::auth_root_user();
+
         if (!GBDB::existsInstance(self::instance())) {
-            GBDB::runScript("init_auth.gql", [
-                "instance" => self::instance(),
-                "username" => Vars::auth_root_user()["username"],
-                "email" => Vars::auth_root_user()["email"],
-                "password" => self::hashPass(Vars::auth_root_user()["password"]),
-                "active" => Vars::auth_root_user()["active"],
-                "2fa" => Vars::auth_root_user()["2fa"],
-                "role" => Vars::auth_root_user()["role"],
-                "firstname" => Vars::auth_root_user()["firstname"],
-                "lastname" => Vars::auth_root_user()["lastname"],
-                "adress" => Vars::auth_root_user()["adress"],
-                "telephone" => Vars::auth_root_user()["telephone"],
-                "mobile" => Vars::auth_root_user()["mobile"],
-                "gender" => Vars::auth_root_user()["gender"],
-                "image" => Vars::auth_root_user()["image"],
-                "text" => Vars::auth_root_user()["text"]
-            ]);
-
-            if (!self::$srv) {
-                Ref::this_file();
-
-                return [];
-            }
-
-            return self::ok("Structure created.");
+            $created = true;
         }
 
-        return [];
+        $scriptResult = GBDB::runScript("init_auth.gql", [
+            "instance" => self::instance()
+        ]);
+
+        self::switchInstance();
+        self::repairAuthSchema();
+
+        $rootUser = GBDB::get("main", "users", true, "username", $root["username"]);
+
+        if (!empty($rootUser)) {
+            self::switchInstance("back");
+
+            return self::ok("Auth structure ready.", [
+                "created" => $created,
+                "root_user_exists" => true,
+                "root_user_created" => false,
+                "script_result" => $scriptResult
+            ]);
+        }
+
+        $emailUser = GBDB::get("main", "users", true, "email", $root["email"]);
+
+        if (!empty($emailUser)) {
+            self::switchInstance("back");
+
+            return self::ok("Auth structure ready.", [
+                "created" => $created,
+                "root_user_exists" => true,
+                "root_user_created" => false,
+                "script_result" => $scriptResult
+            ]);
+        }
+
+        if ($root['password'] === '') {
+            self::switchInstance('back');
+
+            return self::ok('Auth structure ready. No automatic app admin configured.', [
+                'created' => $created,
+                'root_user_created' => false,
+            ]);
+        }
+
+        if (strlen($root['password']) < 12) {
+            self::switchInstance('back');
+            throw new RuntimeException('auth.root_password muss mindestens 12 Zeichen lang sein.');
+        }
+
+        $uid = self::uniqueUid();
+
+        $user = [
+            "uid" => $uid,
+            "username" => $root["username"],
+            "email" => $root["email"],
+            "password" => self::hashPass($root["password"]),
+            "active" => $root["active"],
+            "tfa" => $root["2fa"],
+            "role" => $root["role"],
+            "date" => date(Vars::date_format())
+        ];
+
+        $meta = [
+            "uid" => $uid,
+            "firstname" => $root["firstname"],
+            "lastname" => $root["lastname"],
+            "adress" => $root["adress"],
+            "telephone" => $root["telephone"],
+            "mobile" => $root["mobile"],
+            "gender" => $root["gender"],
+            "image" => $root["image"],
+            "text" => $root["text"] ?? ""
+        ];
+
+        $userInsert = GBDB::insert("main", "users", $user);
+        $metaInsert = GBDB::insert("main", "meta", $meta);
+
+        self::switchInstance("back");
+
+        if ((int)$userInsert <= 0) {
+            return self::error("Auth structure ready, but root user insert failed.", [
+                "created" => $created,
+                "root_user_exists" => false,
+                "root_user_created" => false,
+                "user_insert" => $userInsert,
+                "meta_insert" => $metaInsert,
+                "script_result" => $scriptResult
+            ]);
+        }
+
+        return self::ok("Auth structure ready. Root user created.", [
+            "created" => $created,
+            "root_user_exists" => false,
+            "root_user_created" => true,
+            "uid" => $uid,
+            "username" => $user["username"],
+            "email" => $user["email"],
+            "user_insert" => $userInsert,
+            "meta_insert" => $metaInsert,
+            "script_result" => $scriptResult
+        ]);
     }
 
     /**
@@ -430,7 +613,7 @@ class Auth {
      * @param string $password
      * @return string
      */
-    public static function hashPass(string $password): string {
+    public static function hashPass(string $password) :string {
         return password_hash($password, PASSWORD_ARGON2ID);
     }
 
@@ -438,20 +621,21 @@ class Auth {
      * logs out the current user
      *
      * @param string $error
+     * @param string $jwt
      * @return array
      */
-    public static function logout(string $error = ""): array {
+    public static function logout(string $error = "", string $jwt = "") :array {
         self::switchInstance();
 
-        $jwt = "";
+        if ($jwt == "" && self::cookie("exists")) {
+            $jwt = (string)self::cookie("get");
+        }
+
+        if ($jwt != "") {
+            GBDB::delete("tokens", "jwt", "token", $jwt, true);
+        }
 
         if (self::cookie("exists")) {
-            $jwt = (string)self::cookie("get");
-
-            if ($jwt != "") {
-                GBDB::delete("tokens", "jwt", "token", $jwt, true);
-            }
-
             self::cookie("delete");
         }
 
@@ -479,7 +663,7 @@ class Auth {
      *
      * @return array
      */
-    public static function init(): array {
+    public static function init() :array {
         self::createStructure();
 
         if (self::isWhitelisted()) {
@@ -487,6 +671,10 @@ class Auth {
         }
 
         if (!self::cookie("exists")) {
+            if (self::$srv) {
+                return self::error("jwt_not_found");
+            }
+
             self::logout("jwt_not_found");
 
             exit;
@@ -495,6 +683,10 @@ class Auth {
         $jwt = (string)self::cookie("get");
 
         if ($jwt == "") {
+            if (self::$srv) {
+                return self::error("jwt_not_found");
+            }
+
             self::logout("jwt_not_found");
 
             exit;
@@ -506,6 +698,11 @@ class Auth {
 
         if (empty($token)) {
             self::switchInstance("back");
+
+            if (self::$srv) {
+                return self::error("session_terminated");
+            }
+
             self::logout("session_terminated");
 
             exit;
@@ -515,6 +712,11 @@ class Auth {
             GBDB::delete("tokens", "jwt", "token", $jwt, true);
             self::cookie("delete");
             self::switchInstance("back");
+
+            if (self::$srv) {
+                return self::error("session_expired");
+            }
+
             self::logout("session_expired");
 
             exit;
@@ -524,6 +726,11 @@ class Auth {
 
         if (empty($user)) {
             self::switchInstance("back");
+
+            if (self::$srv) {
+                return self::error("user_not_found");
+            }
+
             self::logout("user_not_found");
 
             exit;
@@ -531,6 +738,11 @@ class Auth {
 
         if (!$user["active"]) {
             self::switchInstance("back");
+
+            if (self::$srv) {
+                return self::error("user_deactivated");
+            }
+
             self::logout("user_deactivated");
 
             exit;
@@ -538,7 +750,7 @@ class Auth {
 
         self::switchInstance("back");
 
-        return $user;
+        return self::cleanUser($user);
     }
 
     /**
@@ -548,7 +760,11 @@ class Auth {
      * @param string $passwordPlainText
      * @return array
      */
-    public static function login(string $usernameOrEmail, string $passwordPlainText): array {
+    public static function login(string $usernameOrEmail, string $passwordPlainText) :array {
+        if (!GBDBRateLimiter::allow('app-login', (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), (int) GBDBConfig::get('auth', 'login_attempts', 20), 900)) {
+            return self::error('Too many login attempts. Please try again later.');
+        }
+
         self::switchInstance();
 
         self::delete_old_tokens("jwt");
@@ -594,6 +810,12 @@ class Auth {
             return self::error("This user is deactivated.");
         }
 
+        if (array_key_exists('email_verified', $user) && !$user['email_verified']) {
+            self::switchInstance('back');
+
+            return self::error('Please verify your email before logging in.');
+        }
+
         $verifyed = GBDB::get("tokens", "everify", true, "uid", $user["uid"]);
 
         if (!empty($verifyed)) {
@@ -614,7 +836,8 @@ class Auth {
             return $result;
         }
 
-        self::createSession($user["uid"]);
+        $jwt = self::createSession($user["uid"]);
+
         self::switchInstance("back");
 
         if (!self::$srv) {
@@ -627,6 +850,7 @@ class Auth {
             "uid" => $user["uid"],
             "username" => $user["username"],
             "role" => $user["role"] ?? "",
+            "jwt" => $jwt,
             "redirect" => Vars::after_login()
         ]);
     }
@@ -662,8 +886,9 @@ class Auth {
         string $telephone = "",
         string $mobile = "",
         bool $gender = false,
-        string $image = ""
-    ): array {
+        string $image = "",
+        bool $verifyMail = true
+    ) :array {
         self::switchInstance();
 
         $username = trim($username);
@@ -717,6 +942,7 @@ class Auth {
             "email" => $email,
             "password" => self::hashPass($passwordAsPlain),
             "active" => $active,
+            'email_verified' => !Vars::verify_email() || !$verifyMail,
             "tfa" => $tfa,
             "role" => $role,
             "date" => date(Vars::date_format())
@@ -737,7 +963,11 @@ class Auth {
         GBDB::insert("main", "users", $user);
         GBDB::insert("main", "meta", $meta);
 
-        $zusatz = self::send_verify_email($user, $meta);
+        if ($verifyMail) {
+            $zusatz = self::send_verify_email($user, $meta);
+        } else {
+            $zusatz = "";
+        }
 
         self::switchInstance("back");
 
@@ -755,7 +985,7 @@ class Auth {
      * @param string $token
      * @return array
      */
-    public static function verify_email(string $token): array {
+    public static function verify_email(string $token) :array {
         self::switchInstance();
 
         $token = trim($token);
@@ -784,6 +1014,12 @@ class Auth {
             return self::error("Email verification failed.");
         }
 
+        if (!GBDB::edit('main', 'users', 'uid', $uid['uid'], ['email_verified' => true])) {
+            self::switchInstance('back');
+
+            return self::error('Email verification could not be saved.');
+        }
+
         self::delete_old_tokens("everify");
         self::switchInstance("back");
 
@@ -792,13 +1028,43 @@ class Auth {
         ]);
     }
 
+    /** Request a new verification email without disclosing whether the account exists. */
+    public static function resendVerification(string $usernameOrEmail) :array {
+        if (!GBDBRateLimiter::allow('resend-verification', (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), 5, 900)) {
+            return self::error('Too many requests. Please try again later.');
+        }
+
+        self::switchInstance();
+
+        try {
+            $user = GBDB::get('main', 'users', true, 'username', $usernameOrEmail);
+
+            if ($user === []) {
+                $user = GBDB::get('main', 'users', true, 'email', $usernameOrEmail);
+            }
+
+            if ($user !== [] && !($user['email_verified'] ?? true)) {
+                $meta = GBDB::get('main', 'meta', true, 'uid', $user['uid']);
+                self::send_verify_email($user, is_array($meta) ? $meta : []);
+            }
+
+            return self::ok('If verification is pending, a new email was requested.');
+        } finally {
+            self::switchInstance('back');
+        }
+    }
+
     /**
      * verifies a 2fa code
      *
      * @param string|int $code
      * @return array
      */
-    public static function verify_2fa_code(string|int $code): array {
+    public static function verify_2fa_code(string|int $code) :array {
+        if (!GBDBRateLimiter::allow('app-2fa', (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), 20, 900)) {
+            return self::error('Too many verification attempts. Please try again later.');
+        }
+
         self::switchInstance();
 
         $code = trim((string)$code);
@@ -833,14 +1099,23 @@ class Auth {
             return self::error("This user is deactivated.");
         }
 
-        self::createSession($user["uid"]);
+        $jwt = self::createSession($user["uid"]);
+
         self::delete_old_tokens("2fa");
         self::switchInstance("back");
+
+        if (!self::$srv) {
+            Ref::to(Vars::after_login());
+
+            return [];
+        }
 
         return self::ok("2FA verified. Logged in.", [
             "uid" => $user["uid"],
             "username" => $user["username"],
-            "role" => $user["role"] ?? ""
+            "role" => $user["role"] ?? "",
+            "jwt" => $jwt,
+            "redirect" => Vars::after_login()
         ]);
     }
 
@@ -880,7 +1155,7 @@ class Auth {
         bool $gender = false,
         string $image = "",
         string $text = ""
-    ): array {
+    ) :array {
         self::switchInstance();
 
         $uid = trim($uid);
@@ -968,7 +1243,7 @@ class Auth {
 
         return self::ok("User updated", [
             "uid" => $uid,
-            "main_data" => $userObj,
+            "main_data" => self::cleanUser($userObj),
             "meta_data" => $metaObj
         ]);
     }
@@ -979,7 +1254,7 @@ class Auth {
      * @param string $uid
      * @return array
      */
-    public static function delete_user(string $uid): array {
+    public static function delete_user(string $uid) :array {
         self::switchInstance();
 
         $uid = trim($uid);
@@ -1012,7 +1287,7 @@ class Auth {
      * @param string $uid
      * @return array
      */
-    public static function get_user(string $uid): array {
+    public static function get_user(string $uid) :array {
         self::switchInstance();
 
         $uid = trim($uid);
@@ -1037,7 +1312,7 @@ class Auth {
         }
 
         return [
-            "main_data" => $user,
+            "main_data" => self::cleanUser($user),
             "meta_data" => $meta
         ];
     }
@@ -1048,7 +1323,7 @@ class Auth {
      * @param string $jwt
      * @return array
      */
-    public static function get_jwt_user(string $jwt): array {
+    public static function get_jwt_user(string $jwt) :array {
         self::switchInstance();
 
         $jwt = trim($jwt);
@@ -1089,7 +1364,7 @@ class Auth {
         }
 
         return [
-            "main_data" => $user,
+            "main_data" => self::cleanUser($user),
             "meta_data" => $meta
         ];
     }
@@ -1100,7 +1375,7 @@ class Auth {
      * @param int $limit
      * @return array
      */
-    public static function getUsers(int $limit = 10000000): array {
+    public static function getUsers(int $limit = 10000000) :array {
         self::switchInstance();
 
         if ($limit <= 0) {
@@ -1122,8 +1397,10 @@ class Auth {
 
         self::switchInstance("back");
 
-        return $users;
+        if (!is_array($users)) {
+            return [];
+        }
+
+        return self::cleanUsers($users);
     }
 }
-
-?>

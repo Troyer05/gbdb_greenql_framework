@@ -3,11 +3,11 @@
 class Cache {
     private static string $return_to_instance = "";
 
-    private static function instance(): string {
+    private static function instance() :string {
         return Vars::cache_instance();
     }
 
-    private static function rememberInstance(): void {
+    private static function rememberInstance() :void {
         self::$return_to_instance = "";
 
         if (method_exists("GBDB", "getInstance")) {
@@ -16,12 +16,10 @@ class Cache {
             if (is_string($current) && $current !== "") {
                 self::$return_to_instance = $current;
             }
-
         }
-
     }
 
-    private static function switchInstance(string $to = ""): void {
+    private static function switchInstance(string $to = "") :void {
         if ($to === "") {
             self::rememberInstance();
             GBDB::setInstance(self::instance());
@@ -39,10 +37,9 @@ class Cache {
         if (Vars::main_instance() !== "") {
             GBDB::setInstance(Vars::main_instance());
         }
-
     }
 
-    protected static function ensureSession(): void {
+    protected static function ensureSession() :void {
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             session_start();
         }
@@ -61,14 +58,13 @@ class Cache {
         if (!isset($_SESSION["cache"]["data"]) || !is_array($_SESSION["cache"]["data"])) {
             $_SESSION["cache"]["data"] = [];
         }
-
     }
 
-    private static function key(string $db, string $table): string {
+    private static function key(string $db, string $table) :string {
         return $db . "::" . $table;
     }
 
-    private static function findUpdate(string $table, mixed $cache): ?string {
+    private static function findUpdate(string $table, mixed $cache) :?string {
         if (!is_array($cache)) {
             return null;
         }
@@ -85,13 +81,12 @@ class Cache {
             if ((string)$entry["table"] === $table) {
                 return (string)$entry["update"];
             }
-
         }
 
         return null;
     }
 
-    private static function ensureCacheTable(string $db): void {
+    private static function ensureCacheTable(string $db) :void {
         $dbs = GBDB::listDBs();
 
         if (!is_array($dbs) || !in_array($db, $dbs, true)) {
@@ -103,7 +98,6 @@ class Cache {
         if (!is_array($tables) || !in_array("cache", $tables, true)) {
             GBDB::createTable($db, "cache", ["table", "update"]);
         }
-
     }
 
     /**
@@ -114,7 +108,7 @@ class Cache {
      * @param mixed $cache
      * @return array
      */
-    public static function load(string $db, string $table, mixed $cache): array {
+    public static function load(string $db, string $table, mixed $cache) :array {
         self::ensureSession();
 
         $currentUpdate = self::findUpdate($table, $cache);
@@ -157,7 +151,7 @@ class Cache {
      * @param string $table
      * @return void
      */
-    public static function update(string $db, string $table): void {
+    public static function update(string $db, string $table) :void {
         self::switchInstance();
 
         try {
@@ -177,11 +171,9 @@ class Cache {
                     "update" => $newUpdate
                 ]);
             }
-
         } finally {
             self::switchInstance("restore");
         }
-
     }
 
     /**
@@ -194,7 +186,7 @@ class Cache {
      * @param string|null $db
      * @return void
      */
-    public static function clear(string $table, ?string $db = null): void {
+    public static function clear(string $table, ?string $db = null) :void {
         self::ensureSession();
 
         foreach ($_SESSION["cache"]["data"] as $key => $value) {
@@ -206,9 +198,7 @@ class Cache {
                 unset($_SESSION["cache"]["data"][$key]);
                 unset($_SESSION["cache"]["updates"][$key]);
             }
-
         }
-
     }
 
     /**
@@ -216,7 +206,7 @@ class Cache {
      *
      * @return void
      */
-    public static function flush(): void {
+    public static function flush() :void {
         self::ensureSession();
 
         $_SESSION["cache"] = [
@@ -235,7 +225,7 @@ class Cache {
      * @param string|null $db
      * @return bool
      */
-    public static function exists(string $table, ?string $db = null): bool {
+    public static function exists(string $table, ?string $db = null) :bool {
         self::ensureSession();
 
         foreach ($_SESSION["cache"]["data"] as $key => $value) {
@@ -246,7 +236,6 @@ class Cache {
             if ($db === null && str_ends_with($key, "::" . $table)) {
                 return true;
             }
-
         }
 
         return false;
@@ -259,7 +248,7 @@ class Cache {
      * @param string $table
      * @return array
      */
-    public static function get(string $db, string $table): array {
+    public static function get(string $db, string $table) :array {
         self::ensureSession();
 
         $key = self::key($db, $table);
@@ -278,7 +267,7 @@ class Cache {
      * @param string $table
      * @return string
      */
-    public static function updateKey(string $db, string $table): string {
+    public static function updateKey(string $db, string $table) :string {
         self::ensureSession();
 
         $key = self::key($db, $table);
@@ -295,7 +284,7 @@ class Cache {
      *
      * @return array
      */
-    public static function all(): array {
+    public static function all() :array {
         self::ensureSession();
 
         return $_SESSION["cache"]["data"];
@@ -306,10 +295,9 @@ class Cache {
      *
      * @return array
      */
-    public static function updates(): array {
+    public static function updates() :array {
         self::ensureSession();
 
         return $_SESSION["cache"]["updates"];
     }
-
 }

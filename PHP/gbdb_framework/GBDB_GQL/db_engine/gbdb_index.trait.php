@@ -1,8 +1,7 @@
 <?php
 
 trait GBDB_IndexTrait {
-
-    private static function nameToken(string $plain, string $ns = "g"): string {
+    private static function nameToken(string $plain, string $ns = "g") :string {
         $plain = (string)$plain;
         $key = (string)Vars::cryptKey();
 
@@ -14,23 +13,23 @@ trait GBDB_IndexTrait {
         return "gb_" . $safe;
     }
 
-    private static function instanceIndexFile(): string {
+    private static function instanceIndexFile() :string {
         return Vars::DB_PATH() . self::nameToken("__instance_index__", "meta") . Vars::data_extension();
     }
 
-    private static function dbIndexFileByInstanceToken(string $instanceToken): string {
+    private static function dbIndexFileByInstanceToken(string $instanceToken) :string {
         $dir = Vars::DB_PATH() . $instanceToken . "/";
 
         return $dir . self::nameToken("__db_index__", "meta") . Vars::data_extension();
     }
 
-    private static function tableIndexFileByTokens(string $instanceToken, string $dbToken): string {
+    private static function tableIndexFileByTokens(string $instanceToken, string $dbToken) :string {
         $dir = Vars::DB_PATH() . $instanceToken . "/" . $dbToken . "/";
 
         return $dir . self::nameToken("__table_index__", "meta") . Vars::data_extension();
     }
 
-    private static function readIndex(string $file): array {
+    private static function readIndex(string $file) :array {
         $rows = self::ini($file);
 
         if (empty($rows) || !isset($rows[0]) || !is_array($rows[0])) {
@@ -57,13 +56,12 @@ trait GBDB_IndexTrait {
             if ($plain !== "" && $token !== "") {
                 $map[$plain] = $token;
             }
-
         }
 
         return $map;
     }
 
-    private static function writeIndex(string $file, array $map): bool {
+    private static function writeIndex(string $file, array $map) :bool {
         $db = [];
 
         $db[] = [
@@ -85,7 +83,7 @@ trait GBDB_IndexTrait {
         return self::writeTable($file, $db);
     }
 
-    private static function getInstanceToken(string $instancePlain, bool $ensure = false): ?string {
+    private static function getInstanceToken(string $instancePlain, bool $ensure = false) :?string {
         $instancePlain = Format::cleanString($instancePlain);
 
         if ($instancePlain === "") {
@@ -130,7 +128,7 @@ trait GBDB_IndexTrait {
         return $token;
     }
 
-    private static function getDbToken(string $dbPlain, bool $ensure = false): ?string {
+    private static function getDbToken(string $dbPlain, bool $ensure = false) :?string {
         $instancePlain = self::instanceName();
         $dbPlain = Format::cleanString($dbPlain);
 
@@ -182,7 +180,7 @@ trait GBDB_IndexTrait {
         return $token;
     }
 
-    private static function getTableToken(string $dbPlain, string $tablePlain, bool $ensure = false): ?string {
+    private static function getTableToken(string $dbPlain, string $tablePlain, bool $ensure = false) :?string {
         $instancePlain = self::instanceName();
         $dbPlain = Format::cleanString($dbPlain);
         $tablePlain = Format::cleanString($tablePlain);
@@ -236,7 +234,7 @@ trait GBDB_IndexTrait {
         return $token;
     }
 
-    private static function dropTableFromIndex(string $dbPlain, string $tablePlain): void {
+    private static function dropTableFromIndex(string $dbPlain, string $tablePlain) :void {
         if (!Vars::crypt_data()) {
             return;
         }
@@ -255,10 +253,9 @@ trait GBDB_IndexTrait {
             unset($map[$tablePlain]);
             self::writeIndex($idxFile, $map);
         }
-
     }
 
-    private static function dropDatabaseFromIndex(string $dbPlain): void {
+    private static function dropDatabaseFromIndex(string $dbPlain) :void {
         if (!Vars::crypt_data()) {
             return;
         }
@@ -276,10 +273,9 @@ trait GBDB_IndexTrait {
             unset($map[$dbPlain]);
             self::writeIndex($idxFile, $map);
         }
-
     }
 
-    private static function dropInstanceFromIndex(string $instancePlain): void {
+    private static function dropInstanceFromIndex(string $instancePlain) :void {
         if (!Vars::crypt_data()) {
             return;
         }
@@ -291,7 +287,5 @@ trait GBDB_IndexTrait {
             unset($map[$instancePlain]);
             self::writeIndex($idxFile, $map);
         }
-
     }
-
 }

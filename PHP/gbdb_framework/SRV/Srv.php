@@ -13,7 +13,12 @@ class Srv {
         "init" => "init_auth",
         "verify_email" => "verifyEmail",
         "verify_2fa_code" => "verify2fa",
-        "get_engine_driver" => "driver"
+        "get_engine_driver" => "driver",
+        'delete_user' => 'deleteUser',
+        'edit_user' => 'editUser',
+        'get_user' => 'getUser',
+        'get_jwt_user' => 'getJwtUser',
+        'get_users' => 'getUsers'
     ];
 
     private const JOB_FUNCTIONS = [
@@ -26,9 +31,16 @@ class Srv {
      *
      * @return void
      */
-    public static function ensureInstance(): void {
-        GBDB::runScript("used_by_srv_class.gql", ["instance" => self::instance()]);
-        Ref::this_file();
+    public static function ensureInstance() :void {
+        GBDBRuntime::run(static function () :void {
+            if (!GBDB::existsInstance(self::instance())) {
+                $result = GBDB::runScript('init_srv.gql', ['instance' => self::instance()]);
+
+                if (($result['ok'] ?? false) !== true) {
+                    throw new RuntimeException('SRV-Speicher konnte nicht initialisiert werden.');
+                }
+            }
+        });
     }
 
     /**
@@ -36,14 +48,27 @@ class Srv {
      *
      * @return void
      */
-    public static function init(): void {
-        self::ensureInstance();
+    public static function init() :void {
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: no-store');
+
+        if (strlen(Vars::srvp_static_key()) < 32) {
+            self::respond(503, 'SRV endpoint is disabled until a strong static key is configured');
+        }
 
         if (($_SERVER["REQUEST_METHOD"] ?? "") != "POST") {
             self::respond(403, "request method blocked");
         }
 
-        $json = file_get_contents("php://input");
+        if (!GBDBRateLimiter::allow('srv-api', (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), 600, 60)) {
+            self::respond(429, 'rate limit exceeded');
+        }
+
+        $json = file_get_contents('php://input', false, null, 0, 4194305);
+
+        if (strlen((string) $json) > 4194304) {
+            self::respond(413, 'request body too large');
+        }
 
         if ($json === false || trim($json) == "") {
             self::respond(400, "empty request body");
@@ -58,22 +83,35 @@ class Srv {
         self::$body = $body;
 
         self::testParams(["do", "static_auth"]);
-        self::authenticate((string)self::$body["static_auth"], (string)self::$body["do"]);
+
+        foreach (["do", "static_auth", "tmp_token", "instance", "job"] as $name) {
+            if (isset(self::$body[$name]) && !is_string(self::$body[$name])) {
+                self::respond(400, $name . " must be a string");
+            }
+        }
+
+        self::authenticate(self::$body["static_auth"], self::$body["do"]);
+        GBDB::sandboxInstances(static function () :void {
+            self::dispatch();
+        });
+    }
+
+    private static function dispatch() :void {
         self::applyRequestInstance();
 
         foreach (self::FUNCTIONS as $key => $function) {
-            if (self::$body["do"] == $key) {
+            if (self::$body["do"] === $key) {
                 if (!class_exists("SrvFunctions") || !method_exists("SrvFunctions", $function)) {
                     self::respond(500, "srv function not found: " . $function);
                 }
 
-                SrvFunctions::{$function}();
+                SrvFunctions:: {$function}();
 
                 exit;
             }
         }
 
-        if (in_array((string)self::$body["do"], self::JOB_FUNCTIONS, true)) {
+        if (in_array(self::$body["do"], self::JOB_FUNCTIONS, true)) {
             if (self::$body["do"] == "start_job") {
                 self::runJob();
             }
@@ -94,14 +132,14 @@ class Srv {
      * @param string $instance
      * @return void
      */
-    public static function setInstance(string $instance): void {
+    public static function setInstance(string $instance) :void {
         $instance = trim($instance);
 
         if ($instance == "") {
             self::respond(403, "instance is empty");
         }
 
-        if (!GBDB::existsInstance($instance)) {
+        if (GBDB::isReservedInstance($instance) || !GBDB::existsInstance($instance)) {
             self::respond(403, "instance " . $instance . " not found");
         }
 
@@ -117,7 +155,7 @@ class Srv {
      * @param mixed $data
      * @return void
      */
-    public static function respond(int $status, mixed $data): void {
+    public static function respond(int $status, mixed $data) :void {
         header("Content-Type: application/json; charset=utf-8");
         http_response_code($status);
 
@@ -136,7 +174,7 @@ class Srv {
      * @param array $params
      * @return void
      */
-    public static function testParams(array $params): void {
+    public static function testParams(array $params) :void {
         foreach ($params as $param) {
             if (!isset(self::$body[$param])) {
                 self::respond(403, "parameter " . $param . " not found");
@@ -144,15 +182,15 @@ class Srv {
         }
     }
 
-    private static function instance(): string {
+    private static function instance() :string {
         return Vars::srvp_sys_instance();
     }
 
-    private static function modulePath(): string {
+    private static function modulePath() :string {
         return __DIR__ . "/srv_modules";
     }
 
-    private static function applyRequestInstance(): void {
+    private static function applyRequestInstance() :void {
         if (!isset(self::$body["instance"])) {
             return;
         }
@@ -160,7 +198,7 @@ class Srv {
         self::setInstance((string)self::$body["instance"]);
     }
 
-    private static function toggleInstance(bool $switchToTmpInstance = false): void {
+    private static function toggleInstance(bool $switchToTmpInstance = false) :void {
         if ($switchToTmpInstance) {
             if (self::$tmpInstance != "") {
                 GBDB::setInstance(self::$tmpInstance);
@@ -169,14 +207,18 @@ class Srv {
             return;
         }
 
+        if (GBDB::isReservedInstance(self::instance())) {
+            self::respond(500, "srv system instance must not use a reserved name");
+        }
+
         GBDB::setInstance(self::instance());
     }
 
-    private static function expires(): string {
+    private static function expires() :string {
         return (string)(time() + 300);
     }
 
-    private static function expired(string $time): bool {
+    private static function expired(string $time) :bool {
         if ($time == "") {
             return true;
         }
@@ -184,12 +226,14 @@ class Srv {
         return ((int)$time) < time();
     }
 
-    private static function authenticate(string $staticAuth, string $do): void {
+    private static function authenticate(string $staticAuth, string $do) :void {
         if (!hash_equals(Vars::srvp_static_key(), $staticAuth)) {
             self::respond(403, "static authentification failed");
         }
 
-        if ($do == "start_session(srvp.init)") {
+        self::ensureInstance();
+
+        if ($do === "start_session(srvp.init)") {
             self::newToken();
         }
 
@@ -197,7 +241,7 @@ class Srv {
         self::checkToken((string)self::$body["tmp_token"]);
     }
 
-    private static function newToken(): void {
+    private static function newToken() :void {
         self::toggleInstance();
 
         do {
@@ -241,7 +285,7 @@ class Srv {
         ]);
     }
 
-    private static function checkToken(string $token): void {
+    private static function checkToken(string $token) :void {
         if ($token == "") {
             self::respond(403, "srv-authentification failed");
         }
@@ -250,7 +294,7 @@ class Srv {
 
         $row = GBDB::get("main", "tokens", true, "token", $token);
 
-        if (empty($row) || !is_array($row)) {
+        if (empty($row) || !is_array($row) || !hash_equals((string)($row["token"] ?? ""), $token)) {
             self::respond(403, "srv-authentification failed");
         }
 
@@ -266,7 +310,7 @@ class Srv {
         self::toggleInstance(true);
     }
 
-    private static function loadJobModules(): void {
+    private static function loadJobModules() :void {
         $path = self::modulePath();
 
         if (!is_dir($path)) {
@@ -279,7 +323,7 @@ class Srv {
             require_once $helper;
         }
 
-        $files = glob($path . "/*.php");
+        $files = GBDBFilesystem::glob($path . "/*.php");
 
         if (!is_array($files)) {
             return;
@@ -298,7 +342,7 @@ class Srv {
         }
     }
 
-    private static function normalizeJobClass(string $job): string {
+    private static function normalizeJobClass(string $job) :string {
         $job = trim($job);
 
         if ($job == "") {
@@ -316,7 +360,7 @@ class Srv {
         return $job;
     }
 
-    private static function resolveJobClass(string $job): string {
+    private static function resolveJobClass(string $job) :string {
         self::loadJobModules();
 
         $class = self::normalizeJobClass($job);
@@ -336,7 +380,7 @@ class Srv {
         return "";
     }
 
-    private static function getJobClasses(): array {
+    private static function getJobClasses() :array {
         self::loadJobModules();
 
         $jobs = [];
@@ -360,7 +404,7 @@ class Srv {
         return $jobs;
     }
 
-    private static function getJobParameters(): array {
+    private static function getJobParameters() :array {
         if (isset(self::$body["parameters"]) && is_array(self::$body["parameters"])) {
             return self::$body["parameters"];
         }
@@ -372,14 +416,14 @@ class Srv {
         return [];
     }
 
-    private static function listJobs(): void {
+    private static function listJobs() :void {
         self::respond(200, [
             "path" => self::modulePath(),
             "jobs" => self::getJobClasses()
         ]);
     }
 
-    private static function runJob(): void {
+    private static function runJob() :void {
         self::testParams(["job"]);
 
         $class = self::resolveJobClass((string)self::$body["job"]);
@@ -443,5 +487,3 @@ class Srv {
         }
     }
 }
-
-?>

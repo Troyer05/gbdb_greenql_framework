@@ -3,7 +3,7 @@
 trait GBDB_AdvancedTrait {
     private static array $runtimeCacheV2 = [];
 
-    private static function cacheKey(string $database, string $table, array $extra = []): string {
+    private static function cacheKey(string $database, string $table, array $extra = []) :string {
         return hash('sha256', json_encode([$database, $table, $extra], JSON_UNESCAPED_UNICODE) ?: '');
     }
 
@@ -15,7 +15,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return void result.
      */
-    public static function clearRuntimeCache(?string $database = null, ?string $table = null): void {
+    public static function clearRuntimeCache(?string $database = null, ?string $table = null) :void {
         if ($database === null || $table === null) {
             self::$runtimeCacheV2 = [];
 
@@ -37,7 +37,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return mixed result.
      */
-    public static function getCachedData(string $database, string $table, bool $filter = false, mixed $where = '', mixed $is = '', int $ttl = 5): mixed {
+    public static function getCachedData(string $database, string $table, bool $filter = false, mixed $where = '', mixed $is = '', int $ttl = 5) :mixed {
         $key = hash('sha256', json_encode([$database, $table, $filter, $where, $is], JSON_UNESCAPED_UNICODE) ?: '');
         $now = time();
 
@@ -62,7 +62,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function bulkInsert(string $database, string $table, array $rows, bool $transactional = true): array {
+    public static function bulkInsert(string $database, string $table, array $rows, bool $transactional = true) :array {
         $ids = [];
         $errors = [];
         $startedTx = false;
@@ -112,18 +112,19 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function streamRows(string $database, string $table, callable $callback, int $chunkSize = 500): array {
+    public static function streamRows(string $database, string $table, callable $callback, int $chunkSize = 500) :array {
         $rows = self::getData($database, $table);
         $count = 0;
         $chunkSize = max(1, $chunkSize);
 
         foreach (array_chunk(is_array($rows) ? $rows : [], $chunkSize) as $chunk) {
             foreach ($chunk as $row) {
-                if (!is_array($row)) continue;
+                if (!is_array($row)) {
+                    continue;
+                }
                 $callback($row, $count);
                 $count++;
             }
-
         }
 
         return ['ok' => true, 'rows' => $count, 'chunk_size' => $chunkSize];
@@ -139,7 +140,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function page(string $database, string $table, int $page = 1, int $perPage = 50): array {
+    public static function page(string $database, string $table, int $page = 1, int $perPage = 50) :array {
         $page = max(1, $page);
         $perPage = max(1, min(1000, $perPage));
         $rows = self::getData($database, $table);
@@ -167,7 +168,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function cursor(string $database, string $table, int $limit = 100, ?string $cursor = null): array {
+    public static function cursor(string $database, string $table, int $limit = 100, ?string $cursor = null) :array {
         $limit = max(1, min(1000, $limit));
         $offset = 0;
 
@@ -178,7 +179,6 @@ trait GBDB_AdvancedTrait {
             if (is_array($json) && isset($json['offset'])) {
                 $offset = max(0, (int)$json['offset']);
             }
-
         }
 
         $rows = self::getData($database, $table);
@@ -204,10 +204,12 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function fulltext_search(string $database, string $table, string $query, array $columns = [], int $limit = 50): array {
+    public static function fulltext_search(string $database, string $table, string $query, array $columns = [], int $limit = 50) :array {
         $queryTokens = self::tokenizeText($query);
 
-        if (empty($queryTokens)) return [];
+        if (empty($queryTokens)) {
+            return [];
+        }
 
         $file = self::makePath($database, $table);
         $meta = self::meta($database, $table);
@@ -215,12 +217,16 @@ trait GBDB_AdvancedTrait {
         $candidateIds = [];
 
         foreach ($defs as $definition) {
-            if (($definition['type'] ?? '') !== 'fulltext') continue;
+            if (($definition['type'] ?? '') !== 'fulltext') {
+                continue;
+            }
 
             if (!empty($columns)) {
                 $defCols = (array)($definition['columns'] ?? []);
 
-                if (array_values($columns) !== array_values(array_intersect($columns, $defCols))) continue;
+                if (array_values($columns) !== array_values(array_intersect($columns, $defCols))) {
+                    continue;
+                }
             }
 
             $candidateIds = GBDBStorage::advancedIndexLookup($file, $definition, $query);
@@ -231,25 +237,37 @@ trait GBDB_AdvancedTrait {
         $hits = [];
 
         foreach (is_array($rows) ? $rows : [] as $row) {
-            if (!is_array($row)) continue;
+            if (!is_array($row)) {
+                continue;
+            }
 
-            if (!empty($candidateIds) && !in_array((int)($row['id'] ?? 0), $candidateIds, true)) continue;
+            if (!empty($candidateIds) && !in_array((int)($row['id'] ?? 0), $candidateIds, true)) {
+                continue;
+            }
 
             $haystack = '';
             $useColumns = empty($columns) ? array_keys($row) : $columns;
 
             foreach ($useColumns as $column) {
-                if ($column === 'id') continue;
+                if ($column === 'id') {
+                    continue;
+                }
 
-                if (isset($row[$column]) && (is_scalar($row[$column]) || $row[$column] === null)) $haystack .= ' ' . (string)$row[$column];
+                if (isset($row[$column]) && (is_scalar($row[$column]) || $row[$column] === null)) {
+                    $haystack .= ' ' . (string)$row[$column];
+                }
             }
 
             $tokens = array_count_values(self::tokenizeText($haystack));
             $score = 0;
 
-            foreach ($queryTokens as $token) $score += (int)($tokens[$token] ?? 0);
+            foreach ($queryTokens as $token) {
+                $score += (int)($tokens[$token] ?? 0);
+            }
 
-            if ($score > 0) $hits[] = ['score' => $score, 'row' => $row];
+            if ($score > 0) {
+                $hits[] = ['score' => $score, 'row' => $row];
+            }
         }
 
         usort($hits, fn($a, $b) => ($b['score'] <=> $a['score']));
@@ -268,7 +286,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function fulltextSearch(string $database, string $table, string $query, array $columns = [], int $limit = 50): array {
+    public static function fulltextSearch(string $database, string $table, string $query, array $columns = [], int $limit = 50) :array {
         return self::fulltext_search($database, $table, $query, $columns, $limit);
     }
 
@@ -283,11 +301,11 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function fulltext(string $database, string $table, string $query, array $columns = [], int $limit = 50): array {
+    public static function fulltext(string $database, string $table, string $query, array $columns = [], int $limit = 50) :array {
         return self::fulltext_search($database, $table, $query, $columns, $limit);
     }
 
-    private static function tokenizeText(string $text): array {
+    private static function tokenizeText(string $text) :array {
         return GBDBStorage::tokenizeFulltext($text);
     }
 
@@ -304,7 +322,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function queryPlan(string $database, string $table, string $where = '', mixed $is = '', ?string $sortField = null, ?int $limit = null, int $offset = 0): array {
+    public static function queryPlan(string $database, string $table, string $where = '', mixed $is = '', ?string $sortField = null, ?int $limit = null, int $offset = 0) :array {
         $meta = self::meta($database, $table);
         $defs = is_array($meta['index_definitions'] ?? null) ? $meta['index_definitions'] : [];
         $best = '';
@@ -327,7 +345,6 @@ trait GBDB_AdvancedTrait {
                 $strategy = 'sorted_index_scan';
                 $cost = max(1, (int)ceil($cost * 0.35));
             }
-
         }
 
         $warning = $strategy === 'full_table_scan' && (int)($meta['rows'] ?? 0) > 1000 ? 'full_table_scan' : '';
@@ -363,7 +380,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function grantAcl(string $database, string $table, string $role, string $permission): bool {
+    public static function grantAcl(string $database, string $table, string $role, string $permission) :bool {
         return self::changeAcl($database, $table, $role, $permission, true);
     }
 
@@ -377,7 +394,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function revokeAcl(string $database, string $table, string $role, string $permission): bool {
+    public static function revokeAcl(string $database, string $table, string $role, string $permission) :bool {
         return self::changeAcl($database, $table, $role, $permission, false);
     }
 
@@ -391,22 +408,28 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function checkAcl(string $database, string $table, string $role, string $permission): bool {
+    public static function checkAcl(string $database, string $table, string $role, string $permission) :bool {
         $meta = self::meta($database, $table);
         $acl = $meta['acl'] ?? [];
 
-        if (($acl['*'][$permission] ?? false) === true) return true;
+        if (($acl['*'][$permission] ?? false) === true) {
+            return true;
+        }
 
-        if (($acl[$role]['*'] ?? false) === true) return true;
+        if (($acl[$role]['*'] ?? false) === true) {
+            return true;
+        }
 
         return ($acl[$role][$permission] ?? false) === true;
     }
 
-    private static function changeAcl(string $database, string $table, string $role, string $permission, bool $allow): bool {
+    private static function changeAcl(string $database, string $table, string $role, string $permission, bool $allow) :bool {
         $role = trim($role);
         $permission = trim($permission);
 
-        if ($role === '' || $permission === '') return false;
+        if ($role === '' || $permission === '') {
+            return false;
+        }
 
         $metaFile = self::metaFileForTable($database, $table);
         $lockFile = self::lockFileForTable($database, $table);
@@ -414,16 +437,22 @@ trait GBDB_AdvancedTrait {
         return (bool)self::withTableLock($lockFile, function () use ($metaFile, $role, $permission, $allow) {
             $meta = self::readMeta($metaFile);
 
-            if (!isset($meta['acl']) || !is_array($meta['acl'])) $meta['acl'] = [];
+            if (!isset($meta['acl']) || !is_array($meta['acl'])) {
+                $meta['acl'] = [];
+            }
 
-            if (!isset($meta['acl'][$role]) || !is_array($meta['acl'][$role])) $meta['acl'][$role] = [];
+            if (!isset($meta['acl'][$role]) || !is_array($meta['acl'][$role])) {
+                $meta['acl'][$role] = [];
+            }
 
             if ($allow) {
                 $meta['acl'][$role][$permission] = true;
             } else {
                 unset($meta['acl'][$role][$permission]);
 
-                if (empty($meta['acl'][$role])) unset($meta['acl'][$role]);
+                if (empty($meta['acl'][$role])) {
+                    unset($meta['acl'][$role]);
+                }
             }
 
             return self::writeMeta($metaFile, $meta);
@@ -439,7 +468,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return int result.
      */
-    public static function audit(string $action, array $payload = [], string $actor = 'system'): int {
+    public static function audit(string $action, array $payload = [], string $actor = 'system') :int {
         $db = '_gbdb_audit';
         $table = 'audit_log';
 
@@ -469,7 +498,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function gdprExport(string $database, string $table, string $column, mixed $value): array {
+    public static function gdprExport(string $database, string $table, string $column, mixed $value) :array {
         $rows = self::getData($database, $table);
         $out = [];
 
@@ -477,7 +506,6 @@ trait GBDB_AdvancedTrait {
             if (is_array($row) && array_key_exists($column, $row) && $row[$column] == $value) {
                 $out[] = $row;
             }
-
         }
 
         self::audit('gdpr_export', compact('database', 'table', 'column'));
@@ -497,14 +525,18 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function gdprRedact(string $database, string $table, string $where, mixed $is, array $columns, string $replacement = '[redacted]'): bool {
+    public static function gdprRedact(string $database, string $table, string $where, mixed $is, array $columns, string $replacement = '[redacted]') :bool {
         $set = [];
 
         foreach ($columns as $column) {
-            if ($column !== '' && $column !== 'id') $set[(string)$column] = $replacement;
+            if ($column !== '' && $column !== 'id') {
+                $set[(string)$column] = $replacement;
+            }
         }
 
-        if (empty($set)) return false;
+        if (empty($set)) {
+            return false;
+        }
 
         $ok = self::editData($database, $table, $where, $is, $set);
 
@@ -523,7 +555,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function migrate(string $database, string $table, string $migrationId, callable $callback): array {
+    public static function migrate(string $database, string $table, string $migrationId, callable $callback) :array {
         $metaFile = self::metaFileForTable($database, $table);
         $lockFile = self::lockFileForTable($database, $table);
 
@@ -531,7 +563,9 @@ trait GBDB_AdvancedTrait {
             $meta = self::readMeta($metaFile);
             $done = $meta['migrations'] ?? [];
 
-            if (!is_array($done)) $done = [];
+            if (!is_array($done)) {
+                $done = [];
+            }
 
             if (in_array($migrationId, $done, true)) {
                 return ['ok' => true, 'already_done' => true, 'migration' => $migrationId];
@@ -546,7 +580,9 @@ trait GBDB_AdvancedTrait {
             $meta = self::readMeta($metaFile);
             $done = $meta['migrations'] ?? [];
 
-            if (!is_array($done)) $done = [];
+            if (!is_array($done)) {
+                $done = [];
+            }
 
             $done[] = $migrationId;
             $meta['migrations'] = array_values(array_unique($done));
@@ -565,7 +601,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return string result.
      */
-    public static function partitionTableName(string $table, string $partition): string {
+    public static function partitionTableName(string $table, string $partition) :string {
         return Format::cleanString($table) . '__p_' . Format::cleanString($partition);
     }
 
@@ -579,12 +615,16 @@ trait GBDB_AdvancedTrait {
      *
      * @return int result.
      */
-    public static function insertPartitioned(string $database, string $table, string $partition, array $data): int {
+    public static function insertPartitioned(string $database, string $table, string $partition, array $data) :int {
         $pTable = self::partitionTableName($table, $partition);
 
-        if (!in_array($database, self::listDBs(), true)) self::createDatabase($database);
+        if (!in_array($database, self::listDBs(), true)) {
+            self::createDatabase($database);
+        }
 
-        if (!in_array($pTable, self::listTables($database), true)) self::createTable($database, $pTable, array_keys($data));
+        if (!in_array($pTable, self::listTables($database), true)) {
+            self::createTable($database, $pTable, array_keys($data));
+        }
 
         return self::insertData($database, $pTable, $data);
     }
@@ -598,7 +638,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function getPartition(string $database, string $table, string $partition): array {
+    public static function getPartition(string $database, string $table, string $partition) :array {
         $rows = self::getData($database, self::partitionTableName($table, $partition));
 
         return is_array($rows) ? $rows : [];
@@ -613,7 +653,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return string result.
      */
-    public static function shardTableName(string $table, mixed $key, int $shards = 16): string {
+    public static function shardTableName(string $table, mixed $key, int $shards = 16) :string {
         $shards = max(1, $shards);
         $slot = hexdec(substr(hash('crc32b', (string)$key), 0, 6)) % $shards;
 
@@ -631,12 +671,16 @@ trait GBDB_AdvancedTrait {
      *
      * @return int result.
      */
-    public static function insertSharded(string $database, string $table, mixed $key, array $data, int $shards = 16): int {
+    public static function insertSharded(string $database, string $table, mixed $key, array $data, int $shards = 16) :int {
         $sTable = self::shardTableName($table, $key, $shards);
 
-        if (!in_array($database, self::listDBs(), true)) self::createDatabase($database);
+        if (!in_array($database, self::listDBs(), true)) {
+            self::createDatabase($database);
+        }
 
-        if (!in_array($sTable, self::listTables($database), true)) self::createTable($database, $sTable, array_keys($data));
+        if (!in_array($sTable, self::listTables($database), true)) {
+            self::createTable($database, $sTable, array_keys($data));
+        }
 
         return self::insertData($database, $sTable, $data);
     }
@@ -651,7 +695,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function getShard(string $database, string $table, mixed $key, int $shards = 16): array {
+    public static function getShard(string $database, string $table, mixed $key, int $shards = 16) :array {
         $rows = self::getData($database, self::shardTableName($table, $key, $shards));
 
         return is_array($rows) ? $rows : [];
@@ -665,7 +709,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function recoverWalOnly(string $database, string $table): array {
+    public static function recoverWalOnly(string $database, string $table) :array {
         return GBDBStorage::recoverWal(self::appendFileForTable($database, $table));
     }
 
@@ -678,7 +722,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function appendLog(string $database, string $table, int $limit = 100): array {
+    public static function appendLog(string $database, string $table, int $limit = 100) :array {
         $ops = self::readAppendOps(self::appendFileForTable($database, $table));
 
         return array_slice($ops, max(0, count($ops) - max(1, $limit)));
@@ -692,7 +736,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function monitor(string $database, string $table): array {
+    public static function monitor(string $database, string $table) :array {
         $file = self::makePath($database, $table);
         $append = self::appendFileForTable($database, $table);
         $meta = self::meta($database, $table);
@@ -724,7 +768,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return mixed result.
      */
-    public static function get(string $database, string $table, mixed $where = '', mixed $is = '', array $options = []): mixed {
+    public static function get(string $database, string $table, mixed $where = '', mixed $is = '', array $options = []) :mixed {
         $filtered = $where !== '' && $where !== null;
         $data = self::getData($database, $table, $filtered, $where, $is);
 
@@ -769,8 +813,10 @@ trait GBDB_AdvancedTrait {
      *
      * @return int result.
      */
-    public static function insert(string $database, string $table, array $data): int {
-        if ($database === '' || $table === '' || empty($data)) return -1;
+    public static function insert(string $database, string $table, array $data) :int {
+        if ($database === '' || $table === '' || empty($data)) {
+            return -1;
+        }
 
         if (!in_array($database, self::listDBs(), true)) {
             self::createDatabase($database);
@@ -794,7 +840,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function edit(string $database, string $table, mixed $where, mixed $is, array $data): bool {
+    public static function edit(string $database, string $table, mixed $where, mixed $is, array $data) :bool {
         return self::editData($database, $table, $where, $is, $data);
     }
 
@@ -808,7 +854,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function delete(string $database, string $table, mixed $where, mixed $is): bool {
+    public static function delete(string $database, string $table, mixed $where, mixed $is) :bool {
         return self::deleteData($database, $table, $where, $is);
     }
 
@@ -822,7 +868,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return bool result.
      */
-    public static function exists(string $database, string $table, mixed $where, mixed $is): bool {
+    public static function exists(string $database, string $table, mixed $where, mixed $is) :bool {
         return self::elementExists($database, $table, $where, $is);
     }
 
@@ -837,7 +883,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function upsert(string $database, string $table, mixed $where, mixed $is, array $data): array {
+    public static function upsert(string $database, string $table, mixed $where, mixed $is, array $data) :array {
         $row = self::get($database, $table, $where, $is);
 
         if (is_array($row) && !empty($row)) {
@@ -860,7 +906,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function stats(string $database, ?string $table = null): array {
+    public static function stats(string $database, ?string $table = null) :array {
         if ($table !== null && $table !== '') {
             $monitor = method_exists(static::class, 'monitor') ? self::monitor($database, $table) : [];
             $meta = self::meta($database, $table);
@@ -898,7 +944,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function analyze(string $database, string $table, int $sampleSize = 1000): array {
+    public static function analyze(string $database, string $table, int $sampleSize = 1000) :array {
         $rows = self::get($database, $table, '', '', ['limit' => max(1, $sampleSize)]);
         $keys = self::getKeys($database, $table);
         $meta = self::meta($database, $table);
@@ -907,19 +953,27 @@ trait GBDB_AdvancedTrait {
         $suggestions = [];
 
         foreach ($keys as $key) {
-            if ($key === 'id') continue;
+            if ($key === 'id') {
+                continue;
+            }
 
             $values = [];
             $filled = 0;
             $numeric = 0;
 
             foreach (is_array($rows) ? $rows : [] as $row) {
-                if (!is_array($row) || !array_key_exists($key, $row)) continue;
+                if (!is_array($row) || !array_key_exists($key, $row)) {
+                    continue;
+                }
                 $value = $row[$key];
 
-                if ($value !== '' && $value !== null) $filled++;
+                if ($value !== '' && $value !== null) {
+                    $filled++;
+                }
 
-                if (is_numeric($value)) $numeric++;
+                if (is_numeric($value)) {
+                    $numeric++;
+                }
 
                 $values[(string)$value] = true;
             }
@@ -943,7 +997,6 @@ trait GBDB_AdvancedTrait {
                     'distinct_ratio' => round($ratio, 4)
                 ];
             }
-
         }
 
         return [
@@ -966,14 +1019,15 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function autoIndex(string $database, string $table, array $columns = []): array {
+    public static function autoIndex(string $database, string $table, array $columns = []) :array {
         if (empty($columns)) {
             $analysis = self::analyze($database, $table);
 
             foreach ($analysis['suggested_indexes'] ?? [] as $suggestion) {
-                if (isset($suggestion['column'])) $columns[] = (string)$suggestion['column'];
+                if (isset($suggestion['column'])) {
+                    $columns[] = (string)$suggestion['column'];
+                }
             }
-
         }
 
         $created = [];
@@ -982,14 +1036,15 @@ trait GBDB_AdvancedTrait {
         foreach (array_values(array_unique($columns)) as $column) {
             $column = Format::cleanString((string)$column);
 
-            if ($column === '' || $column === 'id') continue;
+            if ($column === '' || $column === 'id') {
+                continue;
+            }
 
             if (self::createIndex($database, $table, $column)) {
                 $created[] = $column;
             } else {
                 $failed[] = $column;
             }
-
         }
 
         return ['ok' => empty($failed), 'database' => $database, 'table' => $table, 'created' => $created, 'failed' => $failed];
@@ -1005,7 +1060,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function explain(string $database, string $table, string $where = '', mixed $is = ''): array {
+    public static function explain(string $database, string $table, string $where = '', mixed $is = '') :array {
         return self::queryPlan($database, $table, $where, $is);
     }
 
@@ -1014,7 +1069,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return string result.
      */
-    public static function newQueryId(): string {
+    public static function newQueryId() :string {
         return 'q_' . date('YmdHis') . '_' . bin2hex(random_bytes(4));
     }
 
@@ -1023,7 +1078,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function activeQueries(): array {
+    public static function activeQueries() :array {
         return [];
     }
 
@@ -1034,7 +1089,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function killQuery(string $queryId): array {
+    public static function killQuery(string $queryId) :array {
         return ['ok' => false, 'query_id' => $queryId, 'message' => 'Kill Query ist vorbereitet; echte laufende Worker folgen in spaeteren Transaction/Lock-Wochen.'];
     }
 
@@ -1046,12 +1101,16 @@ trait GBDB_AdvancedTrait {
      *
      * @return void result.
      */
-    public static function slowQueryLog(array $plan, float $seconds): void {
-        if ($seconds < 0.25 && ($plan['warning'] ?? '') === '') return;
+    public static function slowQueryLog(array $plan, float $seconds) :void {
+        if ($seconds < 0.25 && ($plan['warning'] ?? '') === '') {
+            return;
+        }
 
         $dir = dirname(__DIR__, 2) . '/.logs/query';
 
-        if (!is_dir($dir)) @mkdir($dir, 0777, true);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
 
         $entry = ['ts' => time(), 'seconds' => $seconds, 'plan' => $plan];
 
@@ -1067,7 +1126,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function select(string $database, string $table, array $options = []): array {
+    public static function select(string $database, string $table, array $options = []) :array {
         $start = microtime(true);
         $where = (string)($options['where'] ?? '');
         $is = $options['is'] ?? '';
@@ -1081,14 +1140,17 @@ trait GBDB_AdvancedTrait {
 
         if ($sort !== null && $sort !== '') {
             usort($rows, function ($a, $b) use ($sort, $dir) {
-                $av = $a[$sort] ?? null; $bv = $b[$sort] ?? null;
+                $av = $a[$sort] ?? null;
+                $bv = $b[$sort] ?? null;
                 $cmp = is_numeric($av) && is_numeric($bv) ? ((float)$av <=> (float)$bv) : strnatcasecmp((string)$av, (string)$bv);
 
                 return $dir === 'DESC' ? -$cmp : $cmp;
             });
         }
 
-        if ($offset > 0 || $limit > 0) $rows = array_slice($rows, $offset, $limit > 0 ? $limit : null);
+        if ($offset > 0 || $limit > 0) {
+            $rows = array_slice($rows, $offset, $limit > 0 ? $limit : null);
+        }
 
         self::slowQueryLog($plan, microtime(true) - $start);
 
@@ -1104,10 +1166,14 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function distinct(string $database, string $table, string $column): array {
+    public static function distinct(string $database, string $table, string $column) :array {
         $seen = [];
 
-        foreach (self::getData($database, $table) as $row) if (is_array($row) && array_key_exists($column, $row)) $seen[(string)$row[$column]] = $row[$column];
+        foreach (self::getData($database, $table) as $row) {
+            if (is_array($row) && array_key_exists($column, $row)) {
+                $seen[(string)$row[$column]] = $row[$column];
+            }
+        }
 
         return array_values($seen);
     }
@@ -1124,7 +1190,7 @@ trait GBDB_AdvancedTrait {
      *
      * @return array result.
      */
-    public static function aggregate(string $database, string $table, string $fn, string $column = '*', ?string $groupBy = null, ?array $having = null): array {
+    public static function aggregate(string $database, string $table, string $fn, string $column = '*', ?string $groupBy = null, ?array $having = null) :array {
         $fn = strtoupper($fn);
         $rows = self::getData($database, $table);
         $groups = ['__all__' => []];
@@ -1132,7 +1198,11 @@ trait GBDB_AdvancedTrait {
         if ($groupBy !== null && $groupBy !== '') {
             $groups = [];
 
-            foreach ($rows as $row) if (is_array($row)) $groups[(string)($row[$groupBy] ?? '')][] = $row;
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    $groups[(string)($row[$groupBy] ?? '')][] = $row;
+                }
+            }
         } else {
             $groups['__all__'] = is_array($rows) ? $rows : [];
         }
@@ -1142,7 +1212,11 @@ trait GBDB_AdvancedTrait {
         foreach ($groups as $key => $items) {
             $values = [];
 
-            foreach ($items as $row) if (is_array($row) && ($column === '*' || array_key_exists($column, $row))) $values[] = $column === '*' ? 1 : $row[$column];
+            foreach ($items as $row) {
+                if (is_array($row) && ($column === '*' || array_key_exists($column, $row))) {
+                    $values[] = $column === '*' ? 1 : $row[$column];
+                }
+            }
 
             $numeric = array_values(array_filter($values, 'is_numeric'));
             $value = match ($fn) {
@@ -1157,10 +1231,16 @@ trait GBDB_AdvancedTrait {
             $row = ['group' => $groupBy === null ? '' : $key, strtolower($fn) => $value];
 
             if ($having !== null) {
-                $left = $value; $op = (string)($having['op'] ?? '='); $right = $having['value'] ?? null;
-                $pass = match ($op) { '>' => $left > $right, '<' => $left < $right, '>=' => $left >= $right, '<=' => $left <= $right, '!=', '<>' => $left != $right, default => $left == $right };
+                $left = $value;
+                $op = (string)($having['op'] ?? '=');
+                $right = $having['value'] ?? null;
+                $pass = match ($op) {
+                    '>' => $left > $right, '<' => $left < $right, '>=' => $left >= $right, '<=' => $left <= $right, '!=', '<>' => $left != $right, default => $left == $right
+                };
 
-                if (!$pass) continue;
+                if (!$pass) {
+                    continue;
+                }
             }
 
             $out[] = $row;
@@ -1168,5 +1248,4 @@ trait GBDB_AdvancedTrait {
 
         return $out;
     }
-
 }

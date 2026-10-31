@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 require_once __DIR__ . "/gbdb_locking.trait.php";
@@ -19,16 +20,22 @@ require_once __DIR__ . "/gbdb_jobs_security_media_social.trait.php";
 require_once __DIR__ . "/gbdb_enterprise_ops.trait.php";
 require_once __DIR__ . "/gbdb_public_v103.trait.php";
 
+/** Ein extern bestimmter Instanzname zeigte auf eine interne Instanz. */
+final class GBDBInstanceAccessDenied extends RuntimeException {
+}
+
 /**
  * Zentrale GBDB-Fassade und aktuelle instanzfähige GBDB-Engine.
  *
  * Ab dieser Struktur gibt es für Entwickler nur noch GBDB::.
  * Frühere Versionsklassen werden bewusst nicht mehr registriert.
  */
-class GBDB {
+/** @internal Implementation; applications use GBDB. */
+class GBDBEngine {
     private const SCHEMA_FILE = "GBDB_GQL/.DB/.system/schema.json";
 
     private static string $instance = "default";
+    private static int $instanceSandbox = 0;
     private static bool $txActive = false;
     private static bool $txCommitting = false;
     private static string $txId = "";
@@ -77,9 +84,9 @@ class GBDB {
      *
      * @return array result.
      */
-    public static function update(?string $pathOfOldDB = null): array {
+    public static function update(?string $pathOfOldDB = null) :array {
         $root = self::rootPath();
-        $base = $root . "/GBDB_GQL/.DB";
+        $base = Vars::data_root();
         $oldDb = self::normalizeMigrationSource($pathOfOldDB, $root);
         $report = ["ok" => true, "source" => $oldDb, "target" => $base, "created" => [], "copied" => [], "skipped" => [], "errors" => []];
 
@@ -87,29 +94,24 @@ class GBDB {
             $path = $base . "/" . $dir;
 
             if (!is_dir($path)) {
-                if (@mkdir($path, 0777, true) || is_dir($path)) $report["created"][] = $path; else {
+                if (@mkdir($path, 0750, true) || is_dir($path)) {
+                    $report["created"][] = $path;
+                } else {
                     $report["ok"] = false;
                     $report["errors"][] = "Folder could not be created: " . $path;
                 }
-
             }
-
         }
 
-        $htaccess = $base . "/.htaccess"; if (!is_file($htaccess)) { @file_put_contents($htaccess, "Require all denied
-"); $report["created"][] = $htaccess; }
+        $htaccess = $base . "/.htaccess";
+        if (!is_file($htaccess)) {
+            @file_put_contents($htaccess, "Require all denied
+");
+            $report["created"][] = $htaccess;
+        }
         self::copyMissingTree($oldDb, $base . "/.storage/default", $report);
         self::copyMissingTree($root . "/scripts/greenql", $base . "/.scripts", $report);
         self::mergeOldSchemas($root, $base . "/.system/schema.json", $report);
-
-        $envFile = $root . "/.config/.greenql.env.php";
-
-        if (!is_file($envFile)) { @file_put_contents($envFile, "<?php
-
-return [
-    'api_auth' => '',
-];
-"); $report["created"][] = $envFile; }
 
         return $report;
     }
@@ -121,11 +123,23 @@ return [
      *
      * @return mixed result.
      */
-    public static function migrate(?string $pathOfOldDB = null): array { return self::update($pathOfOldDB); }
+    public static function migrate(?string $pathOfOldDB = null) :array {
+        return self::update($pathOfOldDB);
+    }
 
-    private static function normalizeMigrationSource(?string $pathOfOldDB, string $root): string { $path=trim((string)$pathOfOldDB); if ($path==='') return $root . "/assets/DB/GBDB"; $path=str_replace('\\','/',$path); if (!str_starts_with($path,'/')) $path=$root.'/'.ltrim($path,'/'); return rtrim($path,'/'); }
+    private static function normalizeMigrationSource(?string $pathOfOldDB, string $root) :string {
+        $path = trim((string)$pathOfOldDB);
+        if ($path === '') {
+            return $root . "/assets/DB/GBDB";
+        }
+        $path = str_replace('\\', '/', $path);
+        if (!str_starts_with($path, '/')) {
+            $path = $root . '/' . ltrim($path, '/');
+        }
+        return rtrim($path, '/');
+    }
 
-    private static function copyMissingTree(string $from, string $to, array &$report): void {
+    private static function copyMissingTree(string $from, string $to, array &$report) :void {
         if (!is_dir($from)) {
             $report["skipped"][] = "Quelle fehlt: " . $from;
 
@@ -133,15 +147,19 @@ return [
         }
 
         if (!is_dir($to)) {
-            @mkdir($to, 0777, true);
+            @mkdir($to, 0750, true);
         }
 
         $items = scandir($from);
 
-        if (!is_array($items)) return;
+        if (!is_array($items)) {
+            return;
+        }
 
         foreach ($items as $item) {
-            if ($item === "." || $item === "..") continue;
+            if ($item === "." || $item === "..") {
+                continue;
+            }
 
             $src = $from . "/" . $item;
             $dst = $to . "/" . $item;
@@ -162,35 +180,41 @@ return [
                 $report["ok"] = false;
                 $report["errors"][] = "Datei konnte nicht kopiert werden: " . $src;
             }
-
         }
-
     }
 
-    private static function mergeOldSchemas(string $root, string $target, array &$report): void {
+    private static function mergeOldSchemas(string $root, string $target, array &$report) :void {
         $schema = [];
 
         if (is_file($target)) {
             $current = json_decode((string)@file_get_contents($target), true);
 
-            if (is_array($current)) $schema = $current;
+            if (is_array($current)) {
+                $schema = $current;
+            }
         }
 
-        foreach ([
+        foreach (
+            [
             $root . "/json/schema.json",
             $root . "/json/schema_v2.json"
-        ] as $file) {
-            if (!is_file($file)) continue;
+            ] as $file
+        ) {
+            if (!is_file($file)) {
+                continue;
+            }
 
             $data = json_decode((string)@file_get_contents($file), true);
 
-            if (!is_array($data)) continue;
+            if (!is_array($data)) {
+                continue;
+            }
 
             $schema = array_replace_recursive($schema, $data);
         }
 
         if (!is_dir(dirname($target))) {
-            @mkdir(dirname($target), 0777, true);
+            @mkdir(dirname($target), 0750, true);
         }
 
         $json = json_encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -204,5 +228,4 @@ return [
 
         $report["copied"][] = $target;
     }
-
 }

@@ -5,11 +5,11 @@ class Crypt {
     private const LEGACY_IV = '1234567891011121';
     private const PREFIX = 'enc1.';
 
-    private static function getKey(): string {
+    private static function getKey() :string {
         return hash('sha256', Vars::cryptKey(), true);
     }
 
-    private static function randomIV(): string {
+    private static function randomIV() :string {
         return random_bytes(openssl_cipher_iv_length(self::METHOD));
     }
 
@@ -18,7 +18,7 @@ class Crypt {
      * @param string $data
      * @return string
      */
-    public static function encode(string $data): string {
+    public static function encode(string $data) :string {
         $key = self::getKey();
         $iv  = self::randomIV();
 
@@ -29,6 +29,10 @@ class Crypt {
             OPENSSL_RAW_DATA,
             $iv
         );
+
+        if ($cipher === false) {
+            throw new RuntimeException('GBDB-Verschlüsselung fehlgeschlagen.');
+        }
 
         $hmac = hash_hmac('sha256', $iv . $cipher, $key, true);
 
@@ -46,7 +50,7 @@ class Crypt {
      * @param string $data
      * @return bool|string|null
      */
-    public static function decode(string $data): ?string {
+    public static function decode(string $data) :?string {
         $data = strtr($data, ['-' => '+', '_' => '/']);
 
         if (str_starts_with($data, self::PREFIX)) {
@@ -57,9 +61,13 @@ class Crypt {
                 return null;
             }
 
-            $iv     = base64_decode($parts[0]);
-            $hmac   = base64_decode($parts[1]);
-            $cipher = base64_decode($parts[2]);
+            $iv     = base64_decode($parts[0], true);
+            $hmac   = base64_decode($parts[1], true);
+            $cipher = base64_decode($parts[2], true);
+
+            if ($iv === false || $hmac === false || $cipher === false || strlen($iv) !== 16 || strlen($hmac) !== 32) {
+                return null;
+            }
 
             $key = self::getKey();
 
@@ -69,13 +77,15 @@ class Crypt {
                 return null;
             }
 
-            return openssl_decrypt(
+            $plain = openssl_decrypt(
                 $cipher,
                 self::METHOD,
                 $key,
                 OPENSSL_RAW_DATA,
                 $iv
             );
+
+            return is_string($plain) ? $plain : null;
         }
 
         $base = base64_decode($data);
@@ -92,13 +102,14 @@ class Crypt {
             16
         );
 
-        return openssl_decrypt(
+        $plain = openssl_decrypt(
             $base,
             self::METHOD,
             $key,
             OPENSSL_RAW_DATA,
             $iv
         );
-    }
 
+        return is_string($plain) ? $plain : null;
+    }
 }

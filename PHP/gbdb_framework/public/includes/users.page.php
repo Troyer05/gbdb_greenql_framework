@@ -8,13 +8,13 @@ require_once __DIR__ . '/greenql_v2_helper.php';
 GreenQLUIv2Helper::boot();
 gbdbui_require_tool('users');
 
-function gbdbui_users_redirect(): void {
+function gbdbui_users_redirect() :void {
     header('Location: ' . gbdbui_url('users'));
 
     exit;
 }
 
-function gbdbui_csv_items(string $value): array {
+function gbdbui_csv_items(string $value) :array {
     $value = trim($value);
 
     if ($value === '') {
@@ -22,12 +22,12 @@ function gbdbui_csv_items(string $value): array {
     }
 
     $parts = preg_split('/\s*,\s*/', $value) ?: [];
-    $parts = array_values(array_filter(array_map('trim', $parts), static fn($item): bool => $item !== ''));
+    $parts = array_values(array_filter(array_map('trim', $parts), static fn($item) :bool => $item !== ''));
 
     return $parts;
 }
 
-function gbdbui_render_chip_group(string $value, string $fallback = '—'): string {
+function gbdbui_render_chip_group(string $value, string $fallback = '—') :string {
     $items = gbdbui_csv_items($value);
 
     if ($items === []) {
@@ -101,11 +101,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['user_actio
         gbdbui_users_redirect();
     }
 
+    if ($action === 'ack_permission_migration') {
+        $ok = GreenQLUIv2Helper::acknowledgePermissionMigration();
+        gbdbui_flash($ok ? 'ok' : 'bad', $ok ? 'Hinweis zur Rechte-Umstellung ausgeblendet.' : 'Nur Admins können den Hinweis ausblenden.');
+        gbdbui_users_redirect();
+    }
 }
 
 $users = GreenQLUIv2Helper::users();
 $csrf = GreenQLUIv2Helper::csrf();
-$roles = ['viewer', 'editor', 'maintainer', 'admin'];
+$isAdmin = GreenQLUIv2Helper::isAdmin();
+// Admin-Konten und die Rolle "admin" verwalten nur Admins (serverseitig in GreenQLUIv2Helper geprüft).
+$roles = $isAdmin ? ['viewer', 'editor', 'maintainer', 'admin'] : ['viewer', 'editor', 'maintainer'];
+$migration = GreenQLUIv2Helper::permissionMigrationNotice();
 $langs = [
     'en' => 'English',
     'de' => 'Deutsch',
@@ -141,34 +149,33 @@ arsort($langCounter);
 $topRole = (string) array_key_first($roleCounter);
 $topLang = (string) array_key_first($langCounter);
 ?>
-<!doctype html>
-<html lang="en">
+<?php gbdbui_layout_start('users', 'Benutzer & Rechte', 'UI-Benutzer, Rollen, Berechtigungen (read, write, structure, maintenance, jobs, backup, config, dev, users, danger) und Werkzeugfreigaben verwalten.', ['eyebrow' => 'Zugriff']); ?>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB UI Users</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
+        <?php if ($migration !== null) : ?>
+            <section class="gbdbui-panel gbdbui-migration-notice">
+                <div class="gbdbui-panel-head compact">
+                    <div>
+                        <h2>Rechte-Umstellung: <?= count($migration['accounts']) === 1 ? '1 Konto' : count($migration['accounts']) . ' Konten' ?> prüfen</h2>
+                        <p>Ein leeres Rechtefeld bedeutete bisher <strong>alle Rechte</strong>, jetzt <strong>nur die Rechte der Rolle</strong>. Damit sich nichts unbemerkt ändert, haben diese Nicht-Admin-Konten am <?= gbdbui_e($migration['migrated_at']) ?> ausdrücklich <code>*</code> erhalten. Prüfe, ob sie wirklich alle Rechte brauchen, und trage sonst gezielt Rechte ein oder leere das Feld.</p>
+                    </div>
+                    <span class="gbdbui-pill warn">Zugriff unverändert</span>
+                </div>
+                <div class="chip-stack">
+                    <?php foreach ($migration['accounts'] as $account) : ?>
+                        <span class="gb-chip"><?= gbdbui_e((string) ($account['username'] ?? '')) ?> · <?= gbdbui_e((string) ($account['role'] ?? '')) ?><?= (string) ($account['active'] ?? '1') === '1' ? '' : ' · deaktiviert' ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <?php if ($isAdmin) : ?>
+                    <form method="post" class="gbdbui-action-row">
+                        <input type="hidden" name="csrf" value="<?= gbdbui_e($csrf) ?>">
+                        <input type="hidden" name="user_action" value="ack_permission_migration">
+                        <button class="secondary" type="submit">Geprüft – Hinweis ausblenden</button>
+                    </form>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
 
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('users'); ?>
-    <main class="gbdbui-wide">
-        <?php gbdbui_render_flashes(); ?>
-
-        <section class="gbdbui-hero access-hero">
-            <div class="access-hero-copy">
-                <p class="gbdbui-kicker">Access Control</p>
-                <h1>User administration</h1>
-                <p>
-                    Manage UI users, roles, granular permissions and tool restrictions in one place.
-                    Use roles as the foundation and refine access with permissions like <code>read</code>,
-                    <code>write</code>, <code>structure</code>, <code>maintenance</code>, <code>jobs</code>,
-                    <code>backup</code>, <code>config</code>, <code>dev</code>, <code>users</code> or
-                    <code>danger</code>.
-                </p>
-            </div>
-
+        <section class="gbdbui-hero-stats">
             <div class="users-overview-grid">
                 <article class="users-stat-card">
                     <span>Total users</span>
@@ -214,7 +221,7 @@ $topLang = (string) array_key_first($langCounter);
                     <label>
                         <span>Role</span>
                         <select name="role">
-                            <?php foreach ($roles as $role): ?>
+                            <?php foreach ($roles as $role) : ?>
                                 <option value="<?= gbdbui_e($role) ?>"><?= gbdbui_e($role) ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -223,7 +230,7 @@ $topLang = (string) array_key_first($langCounter);
                     <label>
                         <span>Language</span>
                         <select name="language">
-                            <?php foreach ($langs as $code => $label): ?>
+                            <?php foreach ($langs as $code => $label) : ?>
                                 <option value="<?= gbdbui_e($code) ?>"><?= gbdbui_e($label) ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -240,8 +247,8 @@ $topLang = (string) array_key_first($langCounter);
                     </label>
 
                     <label class="field-span-2">
-                        <span>Permissions</span>
-                        <input name="permissions" placeholder="read,write,maintenance,jobs">
+                        <span>Permissions (leer = nur Rolle, * = alle)</span>
+                        <input name="permissions" placeholder="z. B. backup,jobs – leer lassen für nur die Rechte der Rolle">
                     </label>
 
                     <label class="field-span-2">
@@ -259,7 +266,7 @@ $topLang = (string) array_key_first($langCounter);
                 <div class="gbdbui-panel-head compact">
                     <div>
                         <h3>Role model</h3>
-                        <p>Use a simple role baseline and keep special access in permissions/tools.</p>
+                        <p>Use a simple role baseline and keep special access in permissions/tools. Ein leeres Rechtefeld gibt nur die Rechte der Rolle, <code>*</code> gibt alle.</p>
                     </div>
                 </div>
 
@@ -303,7 +310,7 @@ $topLang = (string) array_key_first($langCounter);
                     <div class="user-help-chips">
                         <span class="gb-chip">dashboard</span>
                         <span class="gb-chip">migration</span>
-                        <span class="gb-chip">crypto</span>
+                        <span class="gb-chip">cryption</span>
                         <span class="gb-chip">optimize</span>
                         <span class="gb-chip">env</span>
                         <span class="gb-chip">plugins</span>
@@ -345,7 +352,7 @@ $topLang = (string) array_key_first($langCounter);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($users as $user):
+                        <?php foreach ($users as $user) :
                             $id = (int) ($user['id'] ?? 0);
                             $role = (string) ($user['role'] ?? 'viewer');
                             $active = (string) ($user['active'] ?? '1') === '1';
@@ -376,12 +383,15 @@ $topLang = (string) array_key_first($langCounter);
                                     <div class="chip-stack"><?= gbdbui_render_chip_group($bases, 'none') ?></div>
                                 </td>
                                 <td>
-                                    <div class="chip-stack"><?= gbdbui_render_chip_group($permissions, 'none') ?></div>
+                                    <div class="chip-stack"><?= gbdbui_render_chip_group($permissions, $role === 'admin' ? 'alle (Admin)' : 'nur Rolle') ?></div>
                                 </td>
                                 <td>
                                     <div class="chip-stack"><?= gbdbui_render_chip_group($tools, 'none') ?></div>
                                 </td>
                                 <td>
+                                    <?php if ($role === 'admin' && !$isAdmin) : ?>
+                                    <span class="gb-chip gb-chip-muted">nur Admins</span>
+                                    <?php else : ?>
                                     <div class="user-action-group">
                                         <button type="button" class="secondary xs"
                                             data-toggle="edit-<?= $id ?>">Edit</button>
@@ -394,6 +404,7 @@ $topLang = (string) array_key_first($langCounter);
                                             <button class="danger xs" type="submit">Delete</button>
                                         </form>
                                     </div>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <tr id="edit-<?= $id ?>" class="user-expand-row" hidden>
@@ -412,7 +423,7 @@ $topLang = (string) array_key_first($langCounter);
                                         <label>
                                             <span>Role</span>
                                             <select name="role">
-                                                <?php foreach ($roles as $roleOption): ?>
+                                                <?php foreach ($roles as $roleOption) : ?>
                                                     <option value="<?= gbdbui_e($roleOption) ?>" <?= $role === $roleOption ? 'selected' : '' ?>>
                                                         <?= gbdbui_e($roleOption) ?>
                                                     </option>
@@ -431,7 +442,7 @@ $topLang = (string) array_key_first($langCounter);
                                         <label>
                                             <span>Language</span>
                                             <select name="language">
-                                                <?php foreach ($langs as $code => $label): ?>
+                                                <?php foreach ($langs as $code => $label) : ?>
                                                     <option value="<?= gbdbui_e($code) ?>" <?= $lang === $code ? 'selected' : '' ?>>
                                                         <?= gbdbui_e($label) ?>
                                                     </option>
@@ -450,8 +461,8 @@ $topLang = (string) array_key_first($langCounter);
                                         </label>
 
                                         <label class="field-span-2">
-                                            <span>Permissions</span>
-                                            <input name="permissions" value="<?= gbdbui_e($permissions) ?>">
+                                            <span>Permissions (leer = nur Rolle, * = alle)</span>
+                                            <input name="permissions" value="<?= gbdbui_e($permissions) ?>" placeholder="leer = nur die Rechte der Rolle">
                                         </label>
 
                                         <label class="field-span-2">
@@ -493,7 +504,7 @@ $topLang = (string) array_key_first($langCounter);
                 </table>
             </div>
         </section>
-    </main>
+
     <script>
         document.querySelectorAll('[data-toggle]').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -507,6 +518,4 @@ $topLang = (string) array_key_first($langCounter);
             });
         });
     </script>
-</body>
-
-</html>
+<?php gbdbui_layout_end(); ?>

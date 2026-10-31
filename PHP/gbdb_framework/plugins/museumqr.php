@@ -10,13 +10,13 @@
  */
 
 class MqrApi {
-    private static function base(): array {
+    private static function base() :array {
         return [
             "auth_key" => Vars::mqr_api_key()
         ];
     }
 
-    private static function fetch(array $data): array {
+    private static function fetch(array $data) :array {
         $url = Vars::mqr_api_url();
 
         $payload = json_encode(array_merge(self::base(), $data), JSON_UNESCAPED_UNICODE);
@@ -73,7 +73,7 @@ class MqrApi {
      * @param string $item_id
      * @return array
      */
-    public static function getFeedback(string $item_id = ""): array {
+    public static function getFeedback(string $item_id = "") :array {
         $data = [
             "get" => "feedback"
         ];
@@ -89,7 +89,7 @@ class MqrApi {
      * gets objects
      * @return array
      */
-    public static function getObjects(): array {
+    public static function getObjects() :array {
         return self::fetch([
             "get" => "object"
         ]);
@@ -100,7 +100,7 @@ class MqrApi {
      * @param string $oid
      * @return array
      */
-    public static function getObject(string $oid): array {
+    public static function getObject(string $oid) :array {
         return self::fetch([
             "get" => "object",
             "oid" => $oid
@@ -111,7 +111,7 @@ class MqrApi {
      * get settings
      * @return array
      */
-    public static function getSettings(): array {
+    public static function getSettings() :array {
         return self::fetch([
             "get" => "settings"
         ]);
@@ -121,7 +121,7 @@ class MqrApi {
      * get languages
      * @return array
      */
-    public static function getLangs(): array {
+    public static function getLangs() :array {
         return self::fetch([
             "get" => "langs"
         ]);
@@ -131,10 +131,9 @@ class MqrApi {
      * get tours
      * @return array
      */
-    public static function getTours(): array {
+    public static function getTours() :array {
         return self::fetch([
             "get" => "tours"
         ]);
     }
-
 }

@@ -6,7 +6,7 @@ class GetForm {
      * @param mixed $dropdown
      * @return mixed
      */
-    public static function getDropdown(mixed $dropdown): mixed {
+    public static function getDropdown(mixed $dropdown) :mixed {
         $e = "";
 
         foreach ($dropdown as $val) {
@@ -23,7 +23,7 @@ class GetForm {
      * @param string $useName
      * @return bool
      */
-    public static function upload(mixed $file, string $path = "./", string $useName = ""): bool {
+    public static function upload(mixed $file, string $path = "./", string $useName = "") :bool {
         if (
             !isset($file['tmp_name']) ||
             empty($file['tmp_name']) ||
@@ -58,10 +58,9 @@ class GetForm {
         }
 
         if (!is_dir($path)) {
-            if (!mkdir($path, 0777, true)) {
+            if (!mkdir($path, 0750, true)) {
                 return false;
             }
-
         }
 
         if (!is_writable($path)) {
@@ -87,7 +86,6 @@ class GetForm {
             if (!in_array($mime, $allowedMime)) {
                 return false;
             }
-
         }
 
         return move_uploaded_file($file['tmp_name'], $target);
@@ -98,7 +96,7 @@ class GetForm {
      * @param mixed $post_data
      * @return array|int
      */
-    public static function check_required_fields(mixed $post_data): mixed {
+    public static function check_required_fields(mixed $post_data) :mixed {
         $empty = [];
 
         foreach ($post_data as $field => $value) {
@@ -109,7 +107,6 @@ class GetForm {
             if (trim((string)$value) === "") {
                 $empty[] = $field;
             }
-
         }
 
         return empty($empty) ? 0 : $empty;
@@ -125,7 +122,7 @@ class GetForm {
      * @param string $id
      * @return string
      */
-    public static function createInput(string $name, string $type, mixed $form_data, string $placeholder = "", string $class = "", string $id = ""): string {
+    public static function createInput(string $name, string $type, mixed $form_data, string $placeholder = "", string $class = "", string $id = "") :string {
         $value = htmlspecialchars($form_data[$name] ?? '', ENT_QUOTES, 'UTF-8');
 
         $element = '<input type="' . $type . '" name="' . $name . '" placeholder="' . htmlspecialchars($placeholder) . '" value="' . $value . '"';
@@ -147,8 +144,7 @@ class GetForm {
      * checks post request
      * @return bool
      */
-    public static function checkPost(): bool {
+    public static function checkPost() :bool {
         return ($_SERVER['REQUEST_METHOD'] === 'POST');
     }
-
 }

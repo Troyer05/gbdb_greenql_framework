@@ -1,21 +1,22 @@
 <?php
 
 class Cookie {
-    private const DUR = 60 * 60 * 24 * 360; // 1 year
+    private const DUR = 60 * 60 * 24 * 360;
+    // 1 year
 
-    protected static function validateName(string $name): string {
+    protected static function validateName(string $name) :string {
         return preg_replace('/[^a-zA-Z0-9_]/', '', $name);
     }
 
     protected static function options(
         int $expiration,
         ?bool $secureOverride = null
-    ): array {
+    ) :array {
         $https = (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off");
 
         // Automatische HTTPS / DEV-Behandlung
         $secure = $secureOverride ??
-                  ($https && !Vars::__DEV__());
+                  $https;
 
         return [
             "expires"  => time() + $expiration,
@@ -27,10 +28,12 @@ class Cookie {
         ];
     }
 
-    protected static function send(string $name, string $value, int $expiration): void {
+    protected static function send(string $name, string $value, int $expiration) :void {
         $name = self::validateName($name);
 
-        if ($name === "") return;
+        if ($name === "") {
+            return;
+        }
 
         $opts = self::options($expiration);
 
@@ -48,7 +51,7 @@ class Cookie {
      * @param int $expiration
      * @return void
      */
-    public static function set(string $name, string $value, int $expiration = self::DUR): void {
+    public static function set(string $name, string $value, int $expiration = self::DUR) :void {
         self::send($name, $value, $expiration);
     }
 
@@ -59,10 +62,12 @@ class Cookie {
      * @param int $expiration
      * @return void
      */
-    public static function setSecure(string $name, string $value, int $expiration = self::DUR): void {
+    public static function setSecure(string $name, string $value, int $expiration = self::DUR) :void {
         $name = self::validateName($name);
 
-        if ($name === "") return;
+        if ($name === "") {
+            return;
+        }
 
         $opts = self::options($expiration, true);
 
@@ -77,11 +82,10 @@ class Cookie {
      * @param string $value
      * @return void
      */
-    public static function add(string $name, string $value): void {
+    public static function add(string $name, string $value) :void {
         if (!self::exists($name)) {
             self::set($name, $value);
         }
-
     }
 
     /**
@@ -89,7 +93,7 @@ class Cookie {
      * @param string $name
      * @return mixed
      */
-    public static function get(string $name): mixed {
+    public static function get(string $name) :mixed {
         return $_COOKIE[$name] ?? null;
     }
 
@@ -98,12 +102,15 @@ class Cookie {
      * @param string $name
      * @return void
      */
-    public static function delete(string $name): void {
+    public static function delete(string $name) :void {
         $name = self::validateName($name);
 
-        if ($name === "") return;
+        if ($name === "") {
+            return;
+        }
 
-        $opts = self::options(-3600); // expired
+        $opts = self::options(-3600);
+        // expired
 
         @setcookie($name, "", $opts);
 
@@ -116,7 +123,7 @@ class Cookie {
      * @param string $value
      * @return void
      */
-    public static function edit(string $name, string $value): void {
+    public static function edit(string $name, string $value) :void {
         self::set($name, $value);
     }
 
@@ -125,30 +132,30 @@ class Cookie {
      * @param int $thresholdSeconds
      * @return void
      */
-    public static function refresh(int $thresholdSeconds = 3600): void {
+    public static function refresh(int $thresholdSeconds = 3600) :void {
         foreach ($_COOKIE as $name => $value) {
             $nameClean = self::validateName($name);
 
-            if ($nameClean === "") continue;
+            if ($nameClean === "") {
+                continue;
+            }
 
             // Wir kennen das Ablaufdatum nicht → nur erneuern, wenn sinnvoll
             self::set($nameClean, $value);
         }
-
     }
 
     /**
      * initializes cookies from env
      * @return void
      */
-    public static function init(): void {
+    public static function init() :void {
         foreach (Vars::init_cookies() as $r) {
             $name  = $r["cookie_name"] ?? "";
             $value = $r["cookie_value"] ?? "";
 
             self::add($name, $value);
         }
-
     }
 
     /**
@@ -156,8 +163,7 @@ class Cookie {
      * @param string $name
      * @return bool
      */
-    public static function exists(string $name): bool {
+    public static function exists(string $name) :bool {
         return isset($_COOKIE[self::validateName($name)]);
     }
-
 }

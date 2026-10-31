@@ -1,8 +1,7 @@
 <?php
 
 trait GBDB_StorageTrait {
-
-    private static function instancePath(bool $ensure = false): string {
+    private static function instancePath(bool $ensure = false) :string {
         $instance = self::instanceName();
 
         if (Vars::crypt_data()) {
@@ -18,7 +17,7 @@ trait GBDB_StorageTrait {
         return Vars::DB_PATH() . $instance . "/";
     }
 
-    private static function makePath(string $database, string $table, bool $ensure = false): string {
+    private static function makePath(string $database, string $table, bool $ensure = false) :string {
         $database = Format::cleanString($database);
         $table = Format::cleanString($table);
 
@@ -37,41 +36,33 @@ trait GBDB_StorageTrait {
         return self::instancePath($ensure) . $database . "/" . $table . Vars::data_extension();
     }
 
-    private static function ini(string $file): array {
+    private static function ini(string $file) :array {
         if (!is_file($file)) {
             return [];
         }
 
-        $raw = @file_get_contents($file);
+        return GBDBRuntime::remember('decode:' . $file, [$file], static fn() :array => GBDBRuntime::validated($file, static function (string $raw) :array {
+            $plain = Vars::crypt_data() ? Crypt::decode($raw) : $raw;
 
-        if ($raw === false) {
-            error_log("[GBDB] Konnte Datei nicht lesen: {$file}");
-
-            return [];
-        }
-
-        if (Vars::crypt_data()) {
-            $decoded = Crypt::decode($raw);
-
-            if ($decoded === null) {
-                error_log("[GBDB] Crypt::decode() fehlgeschlagen für: {$file}");
-
-                return [];
+            if (!is_string($plain)) {
+                throw new UnexpectedValueException('GBDB-Daten konnten nicht entschlüsselt werden.');
             }
 
-            $db = json_decode($decoded, true);
-        } else {
-            $db = json_decode($raw, true);
-        }
+            $rows = json_decode($plain, true, 512, JSON_THROW_ON_ERROR);
 
-        return is_array($db) ? $db : [];
+            if (!is_array($rows)) {
+                throw new UnexpectedValueException('GBDB erwartet ein Daten-Array.');
+            }
+
+            return $rows;
+        }));
     }
 
-    private static function writeTable(string $file, array $db): bool {
+    private static function writeTable(string $file, array $db) :bool {
         $dir = dirname($file);
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         $json = json_encode($db, Vars::jpretty());
@@ -87,11 +78,11 @@ trait GBDB_StorageTrait {
         return GBDBStorage::atomicWrite($file, $payload);
     }
 
-    private static function lockFileForTable(string $database, string $table, bool $ensure = false): string {
+    private static function lockFileForTable(string $database, string $table, bool $ensure = false) :string {
         return self::makePath($database, $table, $ensure) . ".lock";
     }
 
-    private static function metaFileForTable(string $database, string $table, bool $ensure = false): string {
+    private static function metaFileForTable(string $database, string $table, bool $ensure = false) :string {
         $dataFile = self::makePath($database, $table, $ensure);
         $dir = dirname($dataFile) . "/";
 
@@ -110,7 +101,7 @@ trait GBDB_StorageTrait {
         return $dir . self::nameToken("__meta__|" . $tbToken, "meta") . Vars::data_extension();
     }
 
-    private static function appendFileForTable(string $database, string $table, bool $ensure = false): string {
+    private static function appendFileForTable(string $database, string $table, bool $ensure = false) :string {
         $dataFile = self::makePath($database, $table, $ensure);
         $dir = dirname($dataFile) . "/";
 
@@ -129,11 +120,11 @@ trait GBDB_StorageTrait {
         return $dir . self::nameToken("__append__|" . $tbToken, "meta") . Vars::data_extension();
     }
 
-    private static function withTableLock(string $lockFile, callable $fn): mixed {
+    private static function withTableLock(string $lockFile, callable $fn) :mixed {
         $dir = dirname($lockFile);
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         $engineLock = method_exists(static::class, "acquireLock") ? self::acquireLock("table-file:" . $lockFile, "write") : false;
@@ -147,7 +138,9 @@ trait GBDB_StorageTrait {
         $handle = @fopen($lockFile, "c+");
 
         if (!$handle) {
-            if ($engineLock !== false) self::releaseLock($engineLock);
+            if ($engineLock !== false) {
+                self::releaseLock($engineLock);
+            }
             error_log("[GBDB] Konnte Lockfile nicht öffnen: {$lockFile}");
 
             return false;
@@ -165,12 +158,13 @@ trait GBDB_StorageTrait {
             @flock($handle, LOCK_UN);
             @fclose($handle);
 
-            if ($engineLock !== false) self::releaseLock($engineLock);
+            if ($engineLock !== false) {
+                self::releaseLock($engineLock);
+            }
         }
-
     }
 
-    private static function readMeta(string $metaFile): array {
+    private static function readMeta(string $metaFile) :array {
         $meta = self::ini($metaFile);
 
         if (isset($meta[0]) && is_array($meta[0])) {
@@ -180,17 +174,17 @@ trait GBDB_StorageTrait {
         return GBDBStorage::normalizeMeta();
     }
 
-    private static function writeMeta(string $metaFile, array $meta): bool {
+    private static function writeMeta(string $metaFile, array $meta) :bool {
         $meta = GBDBStorage::touchMeta($meta);
 
         return self::writeTable($metaFile, [$meta]);
     }
 
-    private static function isHeaderRow(array $row): bool {
+    private static function isHeaderRow(array $row) :bool {
         return isset($row["id"]) && (int)$row["id"] === -1;
     }
 
-    private static function ensureHeader(array &$tableData, array $cols): void {
+    private static function ensureHeader(array &$tableData, array $cols) :void {
         if (!empty($tableData) && isset($tableData[0]) && is_array($tableData[0])) {
             return;
         }
@@ -210,7 +204,7 @@ trait GBDB_StorageTrait {
         $tableData = [$header];
     }
 
-    private static function buildRowFromHeader(array $header, array $data, int $id): array {
+    private static function buildRowFromHeader(array $header, array $data, int $id) :array {
         $row = [];
 
         foreach ($header as $col => $default) {
@@ -230,11 +224,11 @@ trait GBDB_StorageTrait {
         return $row;
     }
 
-    private static function appendOp(string $appendFile, array $op): bool {
+    private static function appendOp(string $appendFile, array $op) :bool {
         $dir = dirname($appendFile);
 
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
 
         $json = json_encode($op, 0);
@@ -263,7 +257,11 @@ trait GBDB_StorageTrait {
         return true;
     }
 
-    private static function readAppendOps(string $appendFile): array {
+    private static function readAppendOps(string $appendFile) :array {
+        return GBDBRuntime::remember('append:' . $appendFile, [$appendFile, $appendFile . '.wal'], static fn() :array => self::readAppendOpsUncached($appendFile));
+    }
+
+    private static function readAppendOpsUncached(string $appendFile) :array {
         GBDBStorage::recoverWal($appendFile);
 
         if (!is_file($appendFile)) {
@@ -298,8 +296,7 @@ trait GBDB_StorageTrait {
                     $decoded = Crypt::decode($line);
 
                     if ($decoded === null) {
-                        error_log("[GBDB] Append decode fehlgeschlagen: {$appendFile}");
-                        continue;
+                        throw new GBDBPrimaryFailure("GBDB-Append-Daten beschädigt: {$appendFile}");
                     }
 
                     $json = $decoded;
@@ -307,12 +304,12 @@ trait GBDB_StorageTrait {
 
                 $op = json_decode($json, true);
 
-                if (is_array($op) && isset($op["op"])) {
-                    $ops[] = $op;
+                if (!is_array($op) || !isset($op['op'])) {
+                    throw new GBDBPrimaryFailure('Ungültige GBDB-Append-Operation: ' . $appendFile);
                 }
 
+                $ops[] = $op;
             }
-
         } finally {
             @fclose($handle);
         }
@@ -320,13 +317,13 @@ trait GBDB_StorageTrait {
         return $ops;
     }
 
-    private static function applyOps(array $base, array $ops): array {
+    private static function applyOps(array $base, array $ops) :array {
         if (empty($base) || empty($ops)) {
             return $base;
         }
 
         $header = isset($base[0]) && is_array($base[0]) && self::isHeaderRow($base[0]) ? $base[0] : [];
-        $normalize = function (array $row) use (&$header): array {
+        $normalize = function (array $row) use (&$header) :array {
             if (empty($header)) {
                 return $row;
             }
@@ -345,7 +342,6 @@ trait GBDB_StorageTrait {
                 if (is_string($extraKey) && str_starts_with($extraKey, "_gbdb_") && $extraKey !== "id") {
                     $tmp[$extraKey] = $extraValue;
                 }
-
             }
 
             if (isset($row["id"])) {
@@ -379,7 +375,6 @@ trait GBDB_StorageTrait {
                 $order[] = $id;
                 $seen[$id] = true;
             }
-
         }
 
         foreach ($ops as $op) {
@@ -425,7 +420,6 @@ trait GBDB_StorageTrait {
                     if (empty($header) || array_key_exists($key, $header) || array_key_exists($key, $rowsById[$id])) {
                         $rowsById[$id][$key] = $value;
                     }
-
                 }
 
                 $rowsById[$id] = $normalize($rowsById[$id]);
@@ -435,7 +429,6 @@ trait GBDB_StorageTrait {
             if ($type === "del" && isset($op["id"])) {
                 unset($rowsById[(int)$op["id"]]);
             }
-
         }
 
         $out = [];
@@ -448,13 +441,12 @@ trait GBDB_StorageTrait {
             if (isset($rowsById[$id]) && is_array($rowsById[$id])) {
                 $out[] = $rowsById[$id];
             }
-
         }
 
         return $out;
     }
 
-    private static function syncStorageForTable(string $database, string $table, string $reason = "sync"): array {
+    private static function syncStorageForTable(string $database, string $table, string $reason = "sync") :array {
         $file = self::makePath($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
         $appendFile = self::appendFileForTable($database, $table);
@@ -515,10 +507,12 @@ trait GBDB_StorageTrait {
      *
      * @return array result.
      */
-    public static function verifyStorage(string $database, string $table): array {
+    public static function verifyStorage(string $database, string $table) :array {
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return ["ok" => false, "errors" => ["table_not_found"], "warnings" => []];
+        if (!is_file($file)) {
+            return ["ok" => false, "errors" => ["table_not_found"], "warnings" => []];
+        }
 
         return GBDBStorage::verifyStorage($file);
     }
@@ -531,10 +525,12 @@ trait GBDB_StorageTrait {
      *
      * @return array result.
      */
-    public static function storageStats(string $database, string $table): array {
+    public static function storageStats(string $database, string $table) :array {
         $file = self::makePath($database, $table);
 
-        if (!is_file($file)) return ["ok" => false, "error" => "table_not_found"];
+        if (!is_file($file)) {
+            return ["ok" => false, "error" => "table_not_found"];
+        }
 
         $dir = GBDBStorage::storageDir($file);
         $verify = GBDBStorage::verifyStorage($file);
@@ -546,9 +542,10 @@ trait GBDB_StorageTrait {
             $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
 
             foreach ($it as $item) {
-                if ($item->isFile()) $bytes += (int)$item->getSize();
+                if ($item->isFile()) {
+                    $bytes += (int)$item->getSize();
+                }
             }
-
         }
 
         return [
@@ -559,5 +556,4 @@ trait GBDB_StorageTrait {
             "verify" => $verify
         ];
     }
-
 }

@@ -1,7 +1,7 @@
 <?php
 
 class SrvAuth {
-    private static function run(callable $callback): array {
+    private static function run(callable $callback) :array {
         Auth::setSrvUsage(true);
 
         try {
@@ -43,7 +43,7 @@ class SrvAuth {
         string $mobile = "",
         bool $gender = false,
         string $image = ""
-    ): array {
+    ) :array {
         return self::run(function () use (
             $username,
             $email,
@@ -58,7 +58,7 @@ class SrvAuth {
             $mobile,
             $gender,
             $image
-        ): array {
+        ) :array {
             return Auth::user_registration(
                 $username,
                 $email,
@@ -84,8 +84,8 @@ class SrvAuth {
      * @param string $passwordAsPlainText
      * @return array
      */
-    public static function login(string $usernameOrEmail, string $passwordAsPlainText): array {
-        return self::run(function () use ($usernameOrEmail, $passwordAsPlainText): array {
+    public static function login(string $usernameOrEmail, string $passwordAsPlainText) :array {
+        return self::run(function () use ($usernameOrEmail, $passwordAsPlainText) :array {
             return Auth::login($usernameOrEmail, $passwordAsPlainText);
         });
     }
@@ -96,9 +96,9 @@ class SrvAuth {
      * @param string $error
      * @return array
      */
-    public static function logout(string $error = ""): array {
-        return self::run(function () use ($error): array {
-            return Auth::logout($error);
+    public static function logout(string $error = "", string $jwt = "") :array {
+        return self::run(function () use ($error, $jwt) :array {
+            return Auth::logout($error, $jwt);
         });
     }
 
@@ -107,8 +107,8 @@ class SrvAuth {
      *
      * @return array
      */
-    public static function init(): array {
-        return self::run(function (): array {
+    public static function init() :array {
+        return self::run(function () :array {
             return Auth::init();
         });
     }
@@ -119,8 +119,8 @@ class SrvAuth {
      * @param string|int $code
      * @return array
      */
-    public static function verify_2fa_code(string|int $code): array {
-        return self::run(function () use ($code): array {
+    public static function verify_2fa_code(string|int $code) :array {
+        return self::run(function () use ($code) :array {
             return Auth::verify_2fa_code($code);
         });
     }
@@ -131,8 +131,8 @@ class SrvAuth {
      * @param string $token
      * @return array
      */
-    public static function verify_email(string $token): array {
-        return self::run(function () use ($token): array {
+    public static function verify_email(string $token) :array {
+        return self::run(function () use ($token) :array {
             return Auth::verify_email($token);
         });
     }
@@ -173,7 +173,7 @@ class SrvAuth {
         bool $gender = false,
         string $image = "",
         string $text = ""
-    ): array {
+    ) :array {
         return self::run(function () use (
             $uid,
             $username,
@@ -190,7 +190,7 @@ class SrvAuth {
             $gender,
             $image,
             $text
-        ): array {
+        ) :array {
             return Auth::edit_user(
                 $uid,
                 $username,
@@ -217,8 +217,8 @@ class SrvAuth {
      * @param string $uid
      * @return array
      */
-    public static function deleteUser(string $uid): array {
-        return self::run(function () use ($uid): array {
+    public static function deleteUser(string $uid) :array {
+        return self::run(function () use ($uid) :array {
             return Auth::delete_user($uid);
         });
     }
@@ -229,8 +229,8 @@ class SrvAuth {
      * @param string $uid
      * @return array
      */
-    public static function getUser(string $uid): array {
-        return self::run(function () use ($uid): array {
+    public static function getUser(string $uid) :array {
+        return self::run(function () use ($uid) :array {
             return Auth::get_user($uid);
         });
     }
@@ -241,8 +241,8 @@ class SrvAuth {
      * @param string $jwt
      * @return array
      */
-    public static function getJwtUser(string $jwt): array {
-        return self::run(function () use ($jwt): array {
+    public static function getJwtUser(string $jwt) :array {
+        return self::run(function () use ($jwt) :array {
             return Auth::get_jwt_user($jwt);
         });
     }
@@ -253,11 +253,9 @@ class SrvAuth {
      * @param int $limit
      * @return array
      */
-    public static function getUsers(int $limit = 10000000): array {
-        return self::run(function () use ($limit): array {
+    public static function getUsers(int $limit = 10000000) :array {
+        return self::run(function () use ($limit) :array {
             return Auth::getUsers($limit);
         });
     }
 }
-
-?>

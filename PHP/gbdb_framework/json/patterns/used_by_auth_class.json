@@ -1,5 +1,5 @@
 {
-    "name": "Pattern used by Auth-Class",
+    "name": "used_by_auth_class",
     "active": true,
     "description": "Auth-Class Pattern (core/auth.php)",
     "structure": [
@@ -17,7 +17,7 @@
                         },
                         {
                             "rowName": "username",
-                            "defaultValue": "Max M.",
+                            "defaultValue": "",
                             "dataType": "string"
                         },
                         {
@@ -42,13 +42,18 @@
                         },
                         {
                             "rowName": "role",
-                            "defaultValue": "",
+                            "defaultValue": "user",
                             "dataType": "string"
                         },
                         {
                             "rowName": "date",
-                            "defaultValue": 0,
+                            "defaultValue": "",
                             "dataType": "string"
+                        },
+                        {
+                            "rowName": "email_verified",
+                            "defaultValue": true,
+                            "dataType": "bool"
                         }
                     ]
                 },
@@ -88,7 +93,7 @@
                         },
                         {
                             "rowName": "gender",
-                            "defaultValue": "",
+                            "defaultValue": false,
                             "dataType": "bool"
                         },
                         {
@@ -124,8 +129,8 @@
                         },
                         {
                             "rowName": "exp",
-                            "defaultValue": "",
-                            "dataType": "string"
+                            "defaultValue": "1970-01-01 00:00:00",
+                            "dataType": "datetime"
                         }
                     ]
                 },
@@ -145,8 +150,8 @@
                         },
                         {
                             "rowName": "exp",
-                            "defaultValue": "",
-                            "dataType": "string"
+                            "defaultValue": "1970-01-01 00:00:00",
+                            "dataType": "datetime"
                         }
                     ]
                 },
@@ -166,8 +171,8 @@
                         },
                         {
                             "rowName": "exp",
-                            "defaultValue": "",
-                            "dataType": "string"
+                            "defaultValue": "1970-01-01 00:00:00",
+                            "dataType": "datetime"
                         }
                     ]
                 },
@@ -183,12 +188,12 @@
                         {
                             "rowName": "code",
                             "defaultValue": "",
-                            "dataType": "int"
+                            "dataType": "string"
                         },
                         {
                             "rowName": "exp",
-                            "defaultValue": "",
-                            "dataType": "string"
+                            "defaultValue": "1970-01-01 00:00:00",
+                            "dataType": "datetime"
                         }
                     ]
                 }

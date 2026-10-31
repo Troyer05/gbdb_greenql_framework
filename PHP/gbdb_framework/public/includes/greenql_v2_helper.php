@@ -5,6 +5,7 @@ declare(strict_types=1);
 class GreenQLUIv2Helper {
     private static ?array $requestUserCache = null;
     private static bool $authStoreReady = false;
+    private static string $setupError = '';
 
     private const SYSTEM_INSTANCE = "__greenql_ui_v2_system";
     private const HIDDEN_INSTANCES = ["default", "__greenql_ui_v2_system", "greenqluiv2system", "__public_api"];
@@ -15,9 +16,37 @@ class GreenQLUIv2Helper {
     private const PAPI_KEYS_TABLE = "keys";
     private const PAPI_FETCH_LOG_TABLE = "fetches";
     private const PAPI_KEY_LOG_TABLE = "key_log";
+    // Werkzeuge mit Code-Ausführung oder Totalverlust: nur per Datei-Schalter in UI freigebbar.
+    private const TOOL_SWITCHES = ['php_exec' => 'allow_php_exec', 'plugins' => 'allow_plugin_upload', 'reinstall' => 'allow_reinstall'];
+    private const SETTINGS_TABLE = "settings";
+    // Merker der einmaligen Umstellung "leeres Rechtefeld = keine Zusatzrechte".
+    private const PERMISSION_MIGRATION = "permissions_empty_means_none";
 
-    public static function boot(): void {
+    public static function boot() :void {
         if (session_status() !== PHP_SESSION_ACTIVE) {
+            if (ini_get('session.save_handler') === 'files') {
+                $savePath = explode(';', (string) session_save_path());
+                $savePath = (string) end($savePath);
+
+                if ($savePath === '' || !is_dir($savePath) || !is_writable($savePath)) {
+                    $savePath = GBDBRuntime::lockDirectory() . '/sessions';
+
+                    if (!is_dir($savePath) && !mkdir($savePath, 0700, true) && !is_dir($savePath)) {
+                        throw new RuntimeException('GBDB kann seinen Sitzungsspeicher nicht initialisieren.');
+                    }
+
+                    session_save_path($savePath);
+                }
+            }
+
+            ini_set('session.use_strict_mode', '1');
+            session_name('gbdbui_' . substr(hash('sha256', GBDBConfig::root()), 0, 12));
+            session_set_cookie_params([
+                'httponly' => true,
+                'secure' => ($_SERVER['HTTPS'] ?? '') === 'on',
+                'samesite' => 'Strict',
+                'path' => '/',
+            ]);
             session_start();
         }
 
@@ -28,35 +57,35 @@ class GreenQLUIv2Helper {
         self::ensureAuthStore();
     }
 
-    public static function csrf(): string {
+    public static function csrf() :string {
         return (string) ($_SESSION["gqlui_v2_csrf"] ?? "");
     }
 
-    public static function checkCsrf(string $token): bool {
-        return hash_equals(self::csrf(), $token);
+    public static function checkCsrf(string $token) :bool {
+        return $token !== '' && self::csrf() !== '' && hash_equals(self::csrf(), $token);
     }
 
-    public static function systemInstance(): string {
+    public static function systemInstance() :string {
         return self::SYSTEM_INSTANCE;
     }
 
-    private static function inSystem(callable $fn): mixed {
+    private static function inSystem(callable $fn) :mixed {
         $old = class_exists("GBDB") ? GBDB::getInstance() : "default";
 
-        try {
-            GBDB::setInstance(self::SYSTEM_INSTANCE);
+        return GBDBRuntime::run(static function () use ($fn, $old) :mixed {
+            try {
+                GBDB::setInstance(self::SYSTEM_INSTANCE);
 
-            return $fn();
-        } finally {
-            if (class_exists("GBDB")) {
-                GBDB::setInstance($old);
+                return $fn();
+            } finally {
+                if (class_exists("GBDB")) {
+                    GBDB::setInstance($old);
+                }
             }
-
-        }
-
+        });
     }
 
-    private static function ensureAuthStore(): void {
+    private static function ensureAuthStore() :void {
         if (self::$authStoreReady || !class_exists("GBDB")) {
             return;
         }
@@ -122,37 +151,154 @@ class GreenQLUIv2Helper {
                 if (!in_array($col, GBDB::getKeys(self::SYSTEM_DB, self::USERS_TABLE), true)) {
                     GBDB::addColumn(self::SYSTEM_DB, self::USERS_TABLE, $col, $default);
                 }
-
             }
 
             $users = GBDB::getData(self::SYSTEM_DB, self::USERS_TABLE);
 
             if (is_array($users)) {
                 foreach ($users as $user) {
-                    if (!is_array($user) || (int) ($user["id"] ?? 0) < 1)
+                    if (!is_array($user) || (int) ($user["id"] ?? 0) < 1) {
                         continue;
+                    }
                     $fix = [];
 
                     foreach ($need as $col => $default) {
-                        if (!array_key_exists($col, $user) || (string) ($user[$col] ?? "") === "-header-")
+                        if (!array_key_exists($col, $user) || (string) ($user[$col] ?? "") === "-header-") {
                             $fix[$col] = $default;
+                        }
                     }
 
-                    if ($fix)
+                    if ($fix) {
                         GBDB::editData(self::SYSTEM_DB, self::USERS_TABLE, "id", (int) $user["id"], $fix);
+                    }
                 }
-
             }
-
         });
 
+        self::migrateEmptyPermissions();
         self::ensurePublicApiStore();
 
         self::$authStoreReady = true;
     }
 
+    /**
+     * Einmalige Umstellung: Ein leeres Rechtefeld bedeutete früher alle Rechte, jetzt keine Zusatzrechte.
+     * Nicht-Admins mit leerem Feld erhalten ausdrücklich "*", damit sich ihr Zugriff nicht unbemerkt ändert;
+     * die betroffenen Konten bleiben für die Benutzerverwaltung festgehalten.
+     */
+    private static function migrateEmptyPermissions() :void {
+        self::inSystem(function () {
+            if (!in_array(self::SETTINGS_TABLE, GBDB::listTables(self::SYSTEM_DB), true)) {
+                GBDB::createTable(self::SYSTEM_DB, self::SETTINGS_TABLE, ["key", "value"]);
+            }
 
-    private static function ensurePublicApiStore(): void {
+            $row = GBDB::getData(self::SYSTEM_DB, self::SETTINGS_TABLE, true, "key", self::PERMISSION_MIGRATION);
+            $state = is_array($row) && !empty($row) ? json_decode((string) ($row["value"] ?? ""), true) : null;
+
+            if (is_array($state) && !empty($state["done"])) {
+                return;
+            }
+
+            $users = GBDB::getData(self::SYSTEM_DB, self::USERS_TABLE);
+            $users = is_array($users) ? $users : [];
+
+            if (!is_array($state)) {
+                // Zuerst die Liste sichern: Bricht der Lauf ab, setzt der nächste Aufruf genau diese Konten fort.
+                $accounts = [];
+
+                foreach ($users as $user) {
+                    if (!is_array($user) || (int) ($user["id"] ?? 0) < 1 || self::normalizeRole((string) ($user["role"] ?? "viewer")) === "admin") {
+                        continue;
+                    }
+
+                    if (self::normalizePermissions((string) ($user["permissions"] ?? "")) === "") {
+                        $accounts[] = [
+                            "username" => (string) ($user["username"] ?? ""),
+                            "role" => self::normalizeRole((string) ($user["role"] ?? "viewer")),
+                            "active" => (string) ($user["active"] ?? "1") === "1" ? "1" : "0",
+                        ];
+                    }
+                }
+
+                $state = ["migrated_at" => date("d.m.Y H:i"), "accounts" => $accounts, "acknowledged" => $accounts === [], "done" => false];
+
+                GBDB::insertData(self::SYSTEM_DB, self::SETTINGS_TABLE, ["key" => self::PERMISSION_MIGRATION, "value" => json_encode($state, JSON_UNESCAPED_UNICODE)]);
+
+                if (empty(GBDB::getData(self::SYSTEM_DB, self::SETTINGS_TABLE, true, "key", self::PERMISSION_MIGRATION))) {
+                    throw new RuntimeException('Rechte-Umstellung konnte nicht vorgemerkt werden.');
+                }
+            }
+
+            $listed = array_column(is_array($state["accounts"] ?? null) ? $state["accounts"] : [], "username");
+
+            foreach ($users as $user) {
+                if (!is_array($user) || !in_array((string) ($user["username"] ?? ""), $listed, true)) {
+                    continue;
+                }
+
+                if (self::normalizePermissions((string) ($user["permissions"] ?? "")) === ""
+                    && !GBDB::editData(self::SYSTEM_DB, self::USERS_TABLE, "id", (int) ($user["id"] ?? 0), ["permissions" => "*"])) {
+                    throw new RuntimeException('Rechte-Umstellung für ' . (string) ($user["username"] ?? "") . ' fehlgeschlagen.');
+                }
+            }
+
+            $state["done"] = true;
+            GBDB::editData(self::SYSTEM_DB, self::SETTINGS_TABLE, "key", self::PERMISSION_MIGRATION, ["value" => json_encode($state, JSON_UNESCAPED_UNICODE)]);
+        });
+    }
+
+    /**
+     * Konten, die bei der Rechte-Umstellung ausdrücklich "*" erhalten haben und noch nicht geprüft wurden.
+     *
+     * @return array{migrated_at:string, accounts:list<array{username:string, role:string, active:string}>}|null
+     */
+    public static function permissionMigrationNotice() :?array {
+        $state = self::permissionMigrationState();
+
+        if ($state === null || !empty($state["acknowledged"]) || empty($state["accounts"]) || !is_array($state["accounts"])) {
+            return null;
+        }
+
+        return ["migrated_at" => (string) ($state["migrated_at"] ?? ""), "accounts" => array_values($state["accounts"])];
+    }
+
+    /**
+     * Blendet den Hinweis zur Rechte-Umstellung aus, nachdem ein Admin die Konten geprüft hat.
+     */
+    public static function acknowledgePermissionMigration() :bool {
+        if (!self::isAdmin()) {
+            return false;
+        }
+
+        $state = self::permissionMigrationState();
+
+        if ($state === null) {
+            return false;
+        }
+
+        $state["acknowledged"] = true;
+        $state["acknowledged_by"] = (string) (self::user()["username"] ?? "");
+
+        return (bool) self::inSystem(function () use ($state) {
+            return GBDB::editData(self::SYSTEM_DB, self::SETTINGS_TABLE, "key", self::PERMISSION_MIGRATION, [
+                "value" => json_encode($state, JSON_UNESCAPED_UNICODE),
+            ]);
+        });
+    }
+
+    private static function permissionMigrationState() :?array {
+        self::ensureAuthStore();
+
+        $row = self::inSystem(function () {
+            return GBDB::getData(self::SYSTEM_DB, self::SETTINGS_TABLE, true, "key", self::PERMISSION_MIGRATION);
+        });
+        $state = is_array($row) ? json_decode((string) ($row["value"] ?? ""), true) : null;
+
+        return is_array($state) ? $state : null;
+    }
+
+
+    private static function ensurePublicApiStore() :void {
         self::inSystem(function () {
             if (!in_array(self::PAPI_SYS_DB, GBDB::listDBs(), true)) {
                 GBDB::createDatabase(self::PAPI_SYS_DB);
@@ -228,7 +374,7 @@ class GreenQLUIv2Helper {
      *
      * @return string
      */
-    public static function publicApiEndpoint(): string {
+    public static function publicApiEndpoint() :string {
         $scheme = (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off") ? "https" : "http";
         $host = (string) ($_SERVER["HTTP_HOST"] ?? "localhost");
         $script = (string) ($_SERVER["SCRIPT_NAME"] ?? "/gbdb_ui.php");
@@ -242,7 +388,7 @@ class GreenQLUIv2Helper {
      *
      * @return array
      */
-    public static function publicApiKeys(): array {
+    public static function publicApiKeys() :array {
         return (array) self::inSystem(function () {
             self::ensurePublicApiStore();
             $rows = GBDB::getData(self::PAPI_SYS_DB, self::PAPI_KEYS_TABLE);
@@ -260,7 +406,7 @@ class GreenQLUIv2Helper {
      * @param string $active
      * @return string
      */
-    public static function createPublicApiKey(string $name, string $rights, string $exp = "", string $active = "1"): string {
+    public static function createPublicApiKey(string $name, string $rights, string $exp = "", string $active = "1") :string {
         $name = trim($name);
         $key = "gbdb_" . bin2hex(random_bytes(24));
         $rights = self::normalizePublicApiRights($rights);
@@ -272,7 +418,7 @@ class GreenQLUIv2Helper {
             $name = "api-key-" . date("Ymd-His");
         }
 
-        self::inSystem(function () use ($key, $name, $rights, $exp, $active, $user): void {
+        self::inSystem(function () use ($key, $name, $rights, $exp, $active, $user) :void {
             self::ensurePublicApiStore();
             GBDB::insertData(self::PAPI_SYS_DB, self::PAPI_KEYS_TABLE, [
                 "key" => $key,
@@ -295,7 +441,7 @@ class GreenQLUIv2Helper {
      * @param array $data
      * @return bool
      */
-    public static function updatePublicApiKey(int $id, array $data): bool {
+    public static function updatePublicApiKey(int $id, array $data) :bool {
         if ($id <= 0) {
             return false;
         }
@@ -334,7 +480,7 @@ class GreenQLUIv2Helper {
      * @param int $id
      * @return bool
      */
-    public static function deletePublicApiKey(int $id): bool {
+    public static function deletePublicApiKey(int $id) :bool {
         if ($id <= 0) {
             return false;
         }
@@ -352,7 +498,7 @@ class GreenQLUIv2Helper {
      * @param string $key
      * @return string
      */
-    public static function maskPublicApiKey(string $key): string {
+    public static function maskPublicApiKey(string $key) :string {
         if (strlen($key) <= 14) {
             return str_repeat("•", max(6, strlen($key)));
         }
@@ -367,7 +513,7 @@ class GreenQLUIv2Helper {
      * @param int $limit
      * @return array
      */
-    public static function publicApiLogs(string $table, int $limit = 50): array {
+    public static function publicApiLogs(string $table, int $limit = 50) :array {
         $table = $table === self::PAPI_KEY_LOG_TABLE ? self::PAPI_KEY_LOG_TABLE : self::PAPI_FETCH_LOG_TABLE;
         $limit = max(1, min(300, $limit));
 
@@ -380,7 +526,7 @@ class GreenQLUIv2Helper {
             }
 
             $rows = array_values($rows);
-            usort($rows, function ($a, $b): int {
+            usort($rows, function ($a, $b) :int {
                 return (int) ($b["id"] ?? 0) <=> (int) ($a["id"] ?? 0);
             });
 
@@ -393,7 +539,7 @@ class GreenQLUIv2Helper {
      *
      * @return array
      */
-    public static function publicApiModules(): array {
+    public static function publicApiModules() :array {
         $apiDir = __DIR__ . "/public_api";
         $files = [];
 
@@ -470,7 +616,7 @@ class GreenQLUIv2Helper {
      * @param string $rights
      * @return string
      */
-    public static function normalizePublicApiRights(string $rights): string {
+    public static function normalizePublicApiRights(string $rights) :string {
         $rights = trim($rights);
 
         if ($rights === "") {
@@ -514,7 +660,7 @@ class GreenQLUIv2Helper {
         return json_encode(array_values($out), JSON_UNESCAPED_UNICODE) ?: "[]";
     }
 
-    private static function normalizeDateTime(string $value): string {
+    private static function normalizeDateTime(string $value) :string {
         $value = trim($value);
 
         if ($value === "") {
@@ -530,7 +676,7 @@ class GreenQLUIv2Helper {
         return date("Y-m-d H:i:s", $ts);
     }
 
-    public static function hasUsers(): bool {
+    public static function hasUsers() :bool {
         if (!class_exists("GBDB")) {
             return false;
         }
@@ -542,16 +688,77 @@ class GreenQLUIv2Helper {
         });
     }
 
-    public static function createUser(string $username, string $password, string $role = "admin", string $instances = "*", string $bases = "*", string $language = "en", string $permissions = "", string $tools = ""): bool {
+    public static function setupConfigurationError() :string {
+        $token = (string) GBDBConfig::get('ui', 'setup_token', '');
+
+        return strlen($token) < 24
+            ? 'In .config/.framework.env.php unter UI muss setup_token mindestens 24 Zeichen lang sein. Aktuell: ' . strlen($token) . ' Zeichen.'
+            : '';
+    }
+
+    public static function setupError() :string {
+        return self::$setupError;
+    }
+
+    public static function createInitialAdmin(string $username, string $password, string $language, string $token) :bool {
+        self::$setupError = self::setupConfigurationError();
+
+        if (self::$setupError !== '') {
+            return false;
+        }
+
+        if (!hash_equals((string) GBDBConfig::get('ui', 'setup_token', ''), $token)) {
+            self::$setupError = 'Setup-Token stimmt nicht mit UI.setup_token in .config/.framework.env.php überein.';
+
+            return false;
+        }
+
+        if (self::clean($username) === '') {
+            self::$setupError = 'Bitte einen gültigen Benutzernamen eingeben.';
+
+            return false;
+        }
+
+        if (strlen($password) < 12) {
+            self::$setupError = 'Das Admin-Passwort muss mindestens 12 Zeichen lang sein.';
+
+            return false;
+        }
+
+        try {
+            return GBDBRuntime::run(static function () use ($username, $password, $language) :bool {
+                if (self::hasUsers()) {
+                    self::$setupError = 'Setup ist bereits abgeschlossen. Bitte einloggen.';
+
+                    return false;
+                }
+
+                if (!self::createUser($username, $password, 'admin', '*', '*', $language, '*', '*')) {
+                    self::$setupError = 'Admin konnte nicht gespeichert werden. Schreibzugriff auf den GBDB-Datenspeicher prüfen.';
+
+                    return false;
+                }
+
+                return true;
+            });
+        } catch (Throwable $exception) {
+            error_log('[GBDB Setup] ' . $exception->getMessage());
+            self::$setupError = 'Setup konnte die Daten nicht speichern. Datenspeicher und PHP-Fehlerprotokoll prüfen.';
+
+            return false;
+        }
+    }
+
+    public static function createUser(string $username, string $password, string $role = "admin", string $instances = "*", string $bases = "*", string $language = "en", string $permissions = "", string $tools = "") :bool {
         $username = self::clean($username);
         $role = self::normalizeRole($role);
         $instances = self::normalizeAccessValue($instances);
         $bases = self::normalizeAccessValue($bases);
         $language = self::normalizeLanguage($language);
-        $permissions = self::normalizeAccessValue($permissions);
+        $permissions = self::normalizePermissions($permissions);
         $tools = self::normalizeAccessValue($tools);
 
-        if ($username === "" || strlen($password) < 8) {
+        if ($username === "" || strlen($password) < 8 || ($role === "admin" && !self::mayManageAdmins())) {
             return false;
         }
 
@@ -583,7 +790,7 @@ class GreenQLUIv2Helper {
         });
     }
 
-    public static function updateUser(int $id, array $data): bool {
+    public static function updateUser(int $id, array $data) :bool {
         if ($id <= 0) {
             return false;
         }
@@ -626,17 +833,21 @@ class GreenQLUIv2Helper {
                 $set["instances"] = self::normalizeAccessValue((string) $data["instances"]);
             }
 
-            if (isset($data["bases"]))
+            if (isset($data["bases"])) {
                 $set["bases"] = self::normalizeAccessValue((string) $data["bases"]);
+            }
 
-            if (isset($data["language"]))
+            if (isset($data["language"])) {
                 $set["language"] = self::normalizeLanguage((string) $data["language"]);
+            }
 
-            if (isset($data["permissions"]))
-                $set["permissions"] = self::normalizeAccessValue((string) $data["permissions"]);
+            if (isset($data["permissions"])) {
+                $set["permissions"] = self::normalizePermissions((string) $data["permissions"]);
+            }
 
-            if (isset($data["tools"]))
+            if (isset($data["tools"])) {
                 $set["tools"] = self::normalizeAccessValue((string) $data["tools"]);
+            }
 
             if (!empty((string) ($data["password"] ?? ""))) {
                 if (strlen((string) $data["password"]) < 8) {
@@ -647,6 +858,10 @@ class GreenQLUIv2Helper {
             }
 
             if (empty($set)) {
+                return false;
+            }
+
+            if (((string) ($user["role"] ?? "") === "admin" || ($set["role"] ?? "") === "admin") && !self::mayManageAdmins()) {
                 return false;
             }
 
@@ -664,18 +879,25 @@ class GreenQLUIv2Helper {
                     $_SESSION["gqlui_v2_user_checked_at"] = time();
                     self::$requestUserCache = $_SESSION["gqlui_v2_user"];
                 }
-
             }
 
             return $ok;
         });
     }
 
-    public static function resetPassword(int $id, string $password): bool {
+    public static function resetPassword(int $id, string $password) :bool {
         return self::updateUser($id, ["password" => $password]);
     }
 
-    private static function changeKeepsAdminSafety(int $id, array $oldUser, array $set): bool {
+    /**
+     * Admin-Konten anlegen, ändern, löschen oder die Rolle "admin" vergeben dürfen nur Admins.
+     * Ohne angemeldeten Benutzer (Ersteinrichtung, CLI) greift die Prüfung nicht.
+     */
+    private static function mayManageAdmins() :bool {
+        return self::user() === [] || self::isAdmin();
+    }
+
+    private static function changeKeepsAdminSafety(int $id, array $oldUser, array $set) :bool {
         $oldIsAdmin = (string) ($oldUser["role"] ?? "") === "admin" && (string) ($oldUser["active"] ?? "1") === "1";
 
         if (!$oldIsAdmin) {
@@ -703,13 +925,12 @@ class GreenQLUIv2Helper {
             if ((string) ($user["role"] ?? "") === "admin" && (string) ($user["active"] ?? "1") === "1") {
                 return true;
             }
-
         }
 
         return false;
     }
 
-    public static function deleteUser(int $id): bool {
+    public static function deleteUser(int $id) :bool {
         if ($id <= 0) {
             return false;
         }
@@ -727,6 +948,10 @@ class GreenQLUIv2Helper {
                 return false;
             }
 
+            if ((string) ($user["role"] ?? "") === "admin" && !self::mayManageAdmins()) {
+                return false;
+            }
+
             if (!self::changeKeepsAdminSafety($id, $user, ["active" => "0"])) {
                 return false;
             }
@@ -735,8 +960,12 @@ class GreenQLUIv2Helper {
         });
     }
 
-    public static function login(string $username, string $password): bool {
+    public static function login(string $username, string $password) :bool {
         $username = self::clean($username);
+
+        if (!GBDBRateLimiter::allow('ui-login', (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli'), (int) GBDBConfig::get('ui', 'login_attempts', 10), (int) GBDBConfig::get('ui', 'login_window_seconds', 900))) {
+            return false;
+        }
 
         if ($username === "" || $password === "") {
             return false;
@@ -757,6 +986,11 @@ class GreenQLUIv2Helper {
                 return false;
             }
 
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_regenerate_id(true);
+            }
+
+            $_SESSION['gqlui_v2_csrf'] = bin2hex(random_bytes(24));
             $_SESSION["gqlui_v2_user"] = self::publicUser($user);
             $_SESSION["gqlui_v2_user_checked_at"] = time();
             self::$requestUserCache = $_SESSION["gqlui_v2_user"];
@@ -769,18 +1003,24 @@ class GreenQLUIv2Helper {
         });
     }
 
-    public static function logout(): void {
+    public static function logout() :void {
         unset($_SESSION["gqlui_v2_user"], $_SESSION["gqlui_v2_user_checked_at"]);
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+
+        $_SESSION['gqlui_v2_csrf'] = bin2hex(random_bytes(24));
         self::$requestUserCache = [];
     }
 
-    public static function user(): array {
+    public static function user() :array {
         $user = $_SESSION["gqlui_v2_user"] ?? [];
 
         return is_array($user) ? $user : [];
     }
 
-    public static function freshUser(): array {
+    public static function freshUser() :array {
         if (self::$requestUserCache !== null) {
             return self::$requestUserCache;
         }
@@ -820,11 +1060,11 @@ class GreenQLUIv2Helper {
         return self::$requestUserCache;
     }
 
-    public static function loggedIn(): bool {
+    public static function loggedIn() :bool {
         return !empty(self::freshUser());
     }
 
-    private static function publicUser(array $user): array {
+    private static function publicUser(array $user) :array {
         return [
             "id" => (int) ($user["id"] ?? 0),
             "uid" => (string) ($user["uid"] ?? ""),
@@ -834,12 +1074,12 @@ class GreenQLUIv2Helper {
             "instances" => self::normalizeAccessValue((string) ($user["instances"] ?? "*")),
             "bases" => self::normalizeAccessValue((string) ($user["bases"] ?? "*")),
             "language" => self::normalizeLanguage((string) ($user["language"] ?? ($_SESSION["gbdbui_lang"] ?? "en"))),
-            "permissions" => self::normalizeAccessValue((string) ($user["permissions"] ?? "")),
+            "permissions" => self::normalizePermissions((string) ($user["permissions"] ?? "")),
             "tools" => self::normalizeAccessValue((string) ($user["tools"] ?? ""))
         ];
     }
 
-    public static function users(): array {
+    public static function users() :array {
         return (array) self::inSystem(function () {
             $users = GBDB::getData(self::SYSTEM_DB, self::USERS_TABLE);
 
@@ -857,41 +1097,65 @@ class GreenQLUIv2Helper {
         });
     }
 
-    public static function normalizeRole(string $role): string {
+    public static function normalizeRole(string $role) :string {
         $role = strtolower(self::clean($role));
 
         return in_array($role, ["admin", "maintainer", "editor", "viewer"], true) ? $role : "viewer";
     }
 
-    public static function normalizeLanguage(string $language): string {
+    public static function normalizeLanguage(string $language) :string {
         $language = strtolower(trim($language));
 
         return in_array($language, ["de", "en", "fr", "es", "it", "nl"], true) ? $language : "en";
     }
 
-    public static function setLanguage(string $language): void {
+    public static function setLanguage(string $language) :void {
         $_SESSION["gbdbui_lang"] = self::normalizeLanguage($language);
     }
 
-    public static function language(): string {
+    public static function language() :string {
         $u = self::user();
 
         return self::normalizeLanguage((string) ($u["language"] ?? $_SESSION["gbdbui_lang"] ?? "en"));
     }
 
-    public static function t(string $key): string {
+    public static function t(string $key) :string {
         $d = ["de" => ["setup_text" => "Ersteinrichtung der zentralen Admin-Oberfläche.", "login_text" => "Einloggen, um die Framework-Tools zu nutzen.", "username" => "Benutzername", "password" => "Passwort", "password_repeat" => "Passwort wiederholen", "language" => "Sprache", "create_admin" => "Admin anlegen", "login" => "Einloggen"], "en" => ["setup_text" => "First-time setup for the central admin interface.", "login_text" => "Sign in to use the framework tools.", "username" => "Username", "password" => "Password", "password_repeat" => "Repeat password", "language" => "Language", "create_admin" => "Create admin", "login" => "Sign in"], "fr" => ["setup_text" => "Configuration initiale de l’interface admin.", "login_text" => "Connectez-vous pour utiliser les outils.", "username" => "Utilisateur", "password" => "Mot de passe", "password_repeat" => "Répéter le mot de passe", "language" => "Langue", "create_admin" => "Créer admin", "login" => "Connexion"], "es" => ["setup_text" => "Configuración inicial de la interfaz admin.", "login_text" => "Inicia sesión para usar las herramientas.", "username" => "Usuario", "password" => "Contraseña", "password_repeat" => "Repetir contraseña", "language" => "Idioma", "create_admin" => "Crear admin", "login" => "Entrar"], "it" => ["setup_text" => "Configurazione iniziale dell’interfaccia admin.", "login_text" => "Accedi per usare gli strumenti.", "username" => "Utente", "password" => "Password", "password_repeat" => "Ripeti password", "language" => "Lingua", "create_admin" => "Crea admin", "login" => "Accedi"], "nl" => ["setup_text" => "Eerste configuratie van de admininterface.", "login_text" => "Log in om de tools te gebruiken.", "username" => "Gebruiker", "password" => "Wachtwoord", "password_repeat" => "Wachtwoord herhalen", "language" => "Taal", "create_admin" => "Admin maken", "login" => "Inloggen"]];
         $lang = self::language();
 
         return (string) ($d[$lang][$key] ?? $d["en"][$key] ?? $key);
     }
 
-    private static function normalizeAccessValue(string $value): string {
+    /**
+     * Zusatzrechte eines Kontos: '' heißt keine Zusatzrechte (nur die Rolle), '*' heißt alle.
+     */
+    private static function normalizePermissions(string $value) :string {
         $value = trim($value);
 
-        if ($value === "-header-")
-
+        if ($value === "" || $value === "-header-") {
             return "";
+        }
+
+        $json = json_decode($value, true);
+        $raw = is_array($json) ? $json : explode(",", $value);
+
+        if (in_array("*", array_map(static fn($item) :string => trim((string) $item), $raw), true)) {
+            return "*";
+        }
+
+        $items = array_values(array_unique(array_filter(array_map(function ($item) {
+            return self::clean(trim((string) $item));
+        }, $raw), static fn(string $item) :bool => $item !== "")));
+
+        return implode(",", $items);
+    }
+
+    private static function normalizeAccessValue(string $value) :string {
+        $value = trim($value);
+
+        if ($value === "-header-") {
+            return "";
+        }
 
         if ($value === "") {
             return "*";
@@ -914,66 +1178,97 @@ class GreenQLUIv2Helper {
         return empty($items) ? "*" : implode(",", $items);
     }
 
-    public static function isAdmin(): bool {
+    public static function isAdmin() :bool {
         return (string) (self::user()["role"] ?? "") === "admin";
     }
 
-    public static function canWrite(): bool {
+    public static function canWrite() :bool {
         return self::hasPermission("write") || in_array((string) (self::user()["role"] ?? ""), ["admin", "maintainer", "editor"], true);
     }
 
-    public static function canStructure(): bool {
+    public static function canStructure() :bool {
         return self::isAdmin() || self::hasPermission("structure") || (string) (self::user()["role"] ?? "") === "maintainer";
     }
 
-    public static function hasPermission(string $permission, ?array $user = null): bool {
+    public static function hasPermission(string $permission, ?array $user = null) :bool {
         $permission = self::clean(strtolower($permission));
         $user = $user ?? self::user();
         $role = (string) ($user["role"] ?? "viewer");
 
-        if ($role === "admin")
-
+        if ($role === "admin") {
             return true;
+        }
         $map = ["maintainer" => ["read", "write", "structure", "maintenance", "jobs", "backup"], "editor" => ["read", "write"], "viewer" => ["read"]];
 
-        if (in_array($permission, $map[$role] ?? [], true))
-
+        if (in_array($permission, $map[$role] ?? [], true)) {
             return true;
-        $allowed = self::accessValue((string) ($user["permissions"] ?? ""));
+        }
 
-        if ($allowed === "*")
+        $value = self::normalizePermissions((string) ($user["permissions"] ?? ""));
 
+        // Leer heißt: keine Zusatzrechte über die Rolle hinaus (bis zur Umstellung bedeutete leer "alle").
+        if ($value === "") {
+            return false;
+        }
+
+        $allowed = self::accessValue($value);
+
+        if ($allowed === "*") {
             return true;
+        }
 
         return is_array($allowed) && in_array($permission, array_map("strval", $allowed), true);
     }
 
-    public static function canUseTool(string $tool): bool {
+    /**
+     * Schalter aus UI in .framework.env.php, der ein Werkzeug sperrt, oder '' wenn es freigegeben ist.
+     */
+    public static function disabledToolSwitch(string $tool) :string {
+        $switch = self::TOOL_SWITCHES[self::clean($tool)] ?? '';
+
+        return $switch !== '' && !GBDBConfig::flag('ui', $switch) ? $switch : '';
+    }
+
+    public static function canUseTool(string $tool) :bool {
         $tool = self::clean($tool);
 
-        if ($tool === "dashboard" || $tool === "greenql_v2")
+        if (self::disabledToolSwitch($tool) !== '') {
+            return false;
+        }
 
+        // Code-Ausführung, Plugin-Upload und Re-Install bleiben auch bei gesetztem Schalter Admins vorbehalten.
+        if (isset(self::TOOL_SWITCHES[$tool]) || in_array($tool, ['storage', 'public_api', 'distributed'], true)) {
+            return self::isAdmin();
+        }
+
+        // Admins erreichen die Framework-Konfiguration immer; allow_config_edit gibt sie zusätzlich für Rollen mit "config" frei.
+        if ($tool === 'env' && !self::isAdmin() && !GBDBConfig::flag('ui', 'allow_config_edit')) {
+            return false;
+        }
+
+        if ($tool === "dashboard" || $tool === "greenql_v2") {
             return self::hasPermission("read");
+        }
 
-        if (self::isAdmin())
-
+        if (self::isAdmin()) {
             return true;
+        }
         $u = self::user();
         $allowed = self::accessValue((string) ($u["tools"] ?? ""));
 
-        if ($allowed === "*")
-
+        if ($allowed === "*") {
             return true;
+        }
 
-        if (is_array($allowed) && in_array($tool, array_map("strval", $allowed), true))
-
+        if (is_array($allowed) && in_array($tool, array_map("strval", $allowed), true)) {
             return true;
+        }
         $perm = ["users" => "users", "public_api" => "users", "php_exec" => "dev", "env" => "config", "plugins" => "config", "migration" => "maintenance", "cryption" => "maintenance", "optimize" => "maintenance", "backup" => "backup", "import_export" => "backup", "enterprise" => "maintenance", "monitoring" => "jobs", "gql_scripts" => "write", "reinstall" => "danger"];
 
         return isset($perm[$tool]) && self::hasPermission($perm[$tool]);
     }
 
-    public static function clean(string $value): string {
+    public static function clean(string $value) :string {
         if (class_exists("GreenQL")) {
             return GreenQL::cleanName($value);
         }
@@ -983,11 +1278,11 @@ class GreenQLUIv2Helper {
         return preg_replace('/[^a-zA-Z0-9_\-]/', '', $value) ?? "";
     }
 
-    private static function reservedSlug(string $value): string {
+    private static function reservedSlug(string $value) :string {
         return preg_replace('/[^a-z0-9]/', '', strtolower($value)) ?? "";
     }
 
-    public static function reservedInstance(string $instance): bool {
+    public static function reservedInstance(string $instance) :bool {
         $instance = self::clean($instance);
         $slug = self::reservedSlug($instance);
         $systemSlug = self::reservedSlug(self::SYSTEM_INSTANCE);
@@ -999,18 +1294,18 @@ class GreenQLUIv2Helper {
             || str_starts_with($slug, "greenqlui");
     }
 
-    public static function reservedName(string $name): bool {
+    public static function reservedName(string $name) :bool {
         $name = self::clean($name);
 
         return $name === "" || str_starts_with($name, "__greenql_ui") || $name === self::SYSTEM_DB && class_exists("GBDB") && GBDB::getInstance() === self::SYSTEM_INSTANCE;
     }
 
-    private static function accessValue(string $value): mixed {
+    private static function accessValue(string $value) :mixed {
         $value = trim($value);
 
-        if ($value === "-header-")
-
+        if ($value === "-header-") {
             return [];
+        }
 
         if ($value === "" || $value === "*") {
             return "*";
@@ -1027,7 +1322,7 @@ class GreenQLUIv2Helper {
         }, explode(",", $value))));
     }
 
-    public static function canAccessInstance(string $instance, ?array $user = null): bool {
+    public static function canAccessInstance(string $instance, ?array $user = null) :bool {
         $instance = self::clean($instance);
         $user = $user ?? self::user();
 
@@ -1048,7 +1343,7 @@ class GreenQLUIv2Helper {
         return is_array($allowed) && in_array($instance, array_map("strval", $allowed), true);
     }
 
-    public static function canAccessDb(string $instance, string $db, ?array $user = null): bool {
+    public static function canAccessDb(string $instance, string $db, ?array $user = null) :bool {
         $instance = self::clean($instance);
         $db = self::clean($db);
         $user = $user ?? self::user();
@@ -1088,7 +1383,7 @@ class GreenQLUIv2Helper {
         return false;
     }
 
-    public static function instances(): array {
+    public static function instances() :array {
         $items = class_exists("GBDB") ? GBDB::listInstances() : [];
         $user = self::user();
 
@@ -1099,7 +1394,7 @@ class GreenQLUIv2Helper {
         }));
     }
 
-    public static function databases(string $instance): array {
+    public static function databases(string $instance) :array {
         $instance = self::clean($instance);
 
         if (!self::canAccessInstance($instance)) {
@@ -1120,7 +1415,7 @@ class GreenQLUIv2Helper {
         }));
     }
 
-    public static function tables(string $instance, string $database): array {
+    public static function tables(string $instance, string $database) :array {
         $instance = self::clean($instance);
         $database = self::clean($database);
 
@@ -1142,7 +1437,7 @@ class GreenQLUIv2Helper {
         }));
     }
 
-    public static function parseParams(string $raw): array {
+    public static function parseParams(string $raw) :array {
         $raw = trim($raw);
 
         if ($raw === "") {
@@ -1176,30 +1471,28 @@ class GreenQLUIv2Helper {
             if ($key !== "") {
                 $params[$key] = $value;
             }
-
         }
 
         return self::guardParams($params);
     }
 
-    private static function guardParams(array $params): array {
+    private static function guardParams(array $params) :array {
         foreach ($params as $key => $value) {
             if (is_string($value) && self::containsReserved($value)) {
                 unset($params[$key]);
             }
-
         }
 
         return $params;
     }
 
-    private static function scriptRequiresInstance(string $script): bool {
+    private static function scriptRequiresInstance(string $script) :bool {
         $pattern = '/(?:\b(?:USE\s+INSTANCE|ROOT\s+INSTANCE|GROW\s+INSTANCE|DROP\s+INSTANCE|SHOW\s+INSTANCES|ROOT|BRANCH|SHOW\s+BASES|SHOW\s+TABLES|GROW\s+BASE|DROP\s+BASE|GROW\s+TABLE|DROP\s+TABLE|ALTER\s+TABLE|DESCRIBE|PACK|PEEK|PICK|SEED|RESHAPE|ERASE)\b|\bEXISTS\s+(?:BASE|TABLE|DATA)\b|\b(?:base_exists|table_exists|data_exists|get_bases|bases|get_tables|tables|get_data|fetch_data|fetch|monitor|recover|page|cursor)\s*\()/i';
 
         return preg_match($pattern, $script) === 1;
     }
 
-    public static function scriptAllowed(string $script, string $instance): array {
+    public static function scriptAllowed(string $script, string $instance) :array {
         if (self::containsReserved($script)) {
             return ["ok" => false, "message" => "Dieses Script enthält reservierte Systemnamen und wurde blockiert."];
         }
@@ -1208,8 +1501,7 @@ class GreenQLUIv2Helper {
             if (self::scriptRequiresInstance($script)) {
                 return ["ok" => false, "message" => "Bitte wähle eine Instanz aus oder nutze USE INSTANCE <name>; im Script."];
             }
-
-        } else if (!self::canAccessInstance($instance)) {
+        } elseif (!self::canAccessInstance($instance)) {
             return ["ok" => false, "message" => "Du hast keinen Zugriff auf diese Instanz."];
         }
 
@@ -1231,17 +1523,14 @@ class GreenQLUIv2Helper {
                     if ($db !== "" && !self::canAccessDb($instance, $db)) {
                         return ["ok" => false, "message" => "Kein Zugriff auf Base: " . $db];
                     }
-
                 }
-
             }
-
         }
 
         return ["ok" => true, "message" => ""];
     }
 
-    private static function containsReserved(string $value): bool {
+    private static function containsReserved(string $value) :bool {
         $low = strtolower($value);
         $slug = self::reservedSlug($value);
 
@@ -1250,7 +1539,7 @@ class GreenQLUIv2Helper {
             || str_contains($slug, self::reservedSlug(self::SYSTEM_INSTANCE));
     }
 
-    public static function readScriptPath(string $path): array {
+    public static function readScriptPath(string $path) :array {
         $path = trim($path);
 
         if ($path === "") {
@@ -1261,15 +1550,17 @@ class GreenQLUIv2Helper {
             return ["ok" => false, "script" => "", "message" => "Es sind nur .gql Dateien erlaubt."];
         }
 
-        $root = realpath(dirname(__DIR__, 6));
-        $full = realpath($path);
+        $root = Vars::data_root() . '/.scripts';
+        $relative = str_replace('\\', '/', $path);
 
-        if ($full === false && $root !== false) {
-            $full = realpath($root . "/" . ltrim($path, "/"));
+        if (str_contains($relative, '..') || str_contains($relative, "\0")) {
+            return ['ok' => false, 'script' => '', 'message' => 'Ungültiger Script-Pfad.'];
         }
 
-        if ($root === false || $full === false || !str_starts_with($full, $root)) {
-            return ["ok" => false, "script" => "", "message" => "Script liegt nicht innerhalb des Projekts."];
+        $full = str_starts_with($relative, $root . '/') ? $relative : $root . '/' . ltrim($relative, '/');
+
+        if (!is_file($full)) {
+            return ['ok' => false, 'script' => '', 'message' => 'Script wurde nicht gefunden.'];
         }
 
         $script = @file_get_contents($full);
@@ -1281,7 +1572,7 @@ class GreenQLUIv2Helper {
         return ["ok" => true, "script" => $script, "message" => "Script geladen: " . str_replace($root . "/", "", $full)];
     }
 
-    private static function instanceFromScript(string $script): string {
+    private static function instanceFromScript(string $script) :string {
         if (preg_match('/\bUSE\s+INSTANCE\s+([a-zA-Z0-9_\-]+)/i', $script, $m)) {
             return self::clean((string) $m[1]);
         }
@@ -1293,7 +1584,7 @@ class GreenQLUIv2Helper {
         return "";
     }
 
-    public static function runScript(string $script, string $instance, array $params = []): array {
+    public static function runScript(string $script, string $instance, array $params = []) :array {
         $instance = self::clean($instance);
 
         if ($instance === "") {
@@ -1316,7 +1607,7 @@ class GreenQLUIv2Helper {
         return self::filterResult($result);
     }
 
-    private static function filterResult(array $result): array {
+    private static function filterResult(array $result) :array {
         if (isset($result["rows"]) && is_array($result["rows"])) {
             $result["rows"] = self::filterSystemRows($result["rows"]);
         }
@@ -1326,15 +1617,13 @@ class GreenQLUIv2Helper {
                 if (isset($r["rows"]) && is_array($r["rows"])) {
                     $result["results"][$i]["rows"] = self::filterSystemRows($r["rows"]);
                 }
-
             }
-
         }
 
         return $result;
     }
 
-    private static function filterSystemRows(array $rows): array {
+    private static function filterSystemRows(array $rows) :array {
         return array_values(array_filter($rows, function ($row) {
             if (!is_array($row)) {
                 return true;
@@ -1344,14 +1633,13 @@ class GreenQLUIv2Helper {
                 if (isset($row[$key]) && self::containsReserved((string) $row[$key])) {
                     return false;
                 }
-
             }
 
             return true;
         }));
     }
 
-    public static function errorResult(string $message): array {
+    public static function errorResult(string $message) :array {
         return [
             "ok" => false,
             "messages" => [
@@ -1366,8 +1654,7 @@ class GreenQLUIv2Helper {
         ];
     }
 
-    public static function e(mixed $value): string {
+    public static function e(mixed $value) :string {
         return htmlspecialchars((string) $value, ENT_QUOTES, "UTF-8");
     }
-
 }

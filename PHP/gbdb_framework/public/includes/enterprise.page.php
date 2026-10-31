@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/_shared.php';
@@ -71,7 +72,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $action !== '') {
         gbdbui_flash('ok', 'Quota-Limits gespeichert.');
         gbdbui_redirect('enterprise');
     }
-
 }
 
 $data = GBDB::adminUiData();
@@ -109,34 +109,16 @@ $quotaWarnings = count($quota['current']['warnings'] ?? []);
 $quotaOk = (bool) ($quota['current']['ok'] ?? true);
 
 ?>
-<!doctype html>
-<html lang="de">
+<?php gbdbui_layout_start('enterprise', 'Enterprise', 'Intranet-Pattern, Mandantengrenzen, Quotas, Monitoring, Import/Export und Dokumentation gebündelt für größere Installationen.', ['eyebrow' => 'Betrieb']); ?>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Enterprise Ops</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro gbdbui-enterprise-body">
-    <?php gbdbui_nav('enterprise'); ?>
-    <main class="gbdbui-wide">
-
-        <section class="enterprise-hero-shell">
-            <div class="enterprise-hero-copy">
-                <p class="gbdbui-kicker">GBDB Enterprise Ops</p>
-                <h1>Enterprise Control Center</h1>
-                <p>Intranet-Pattern, Tenant-Grenzen, Quotas, Monitoring, Import/Export und Doku an einer Stelle – sauber
-                    gebündelt für größere Setups.</p>
-                <div class="enterprise-hero-actions">
-                    <a class="primary gbdbui-btn" href="<?= gbdbui_e(gbdbui_url('monitoring')) ?>">Monitoring öffnen</a>
+        <section class="gbdbui-hero-stats enterprise-hero-actions-row">
+            <div class="enterprise-hero-actions">
+                <a class="primary gbdbui-btn" href="<?= gbdbui_e(gbdbui_url('monitoring')) ?>">Monitoring öffnen</a>
                     <form method="post">
                         <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                         <input type="hidden" name="enterprise_action" value="selftest">
                         <button class="secondary">Self-Test starten</button>
                     </form>
-                </div>
             </div>
             <div class="enterprise-hero-status">
                 <span class="enterprise-orb"></span>
@@ -187,10 +169,10 @@ $quotaOk = (bool) ($quota['current']['ok'] ?? true);
                     <input type="hidden" name="enterprise_action" value="install_pattern">
                     <label>Pattern
                         <select name="pattern">
-                            <?php foreach ($patterns as $pattern):
-
-                                if (empty($pattern['active']))
-                                    continue; ?>
+                            <?php foreach ($patterns as $pattern) :
+                                if (empty($pattern['active'])) {
+                                    continue;
+                                } ?>
                                 <option value="<?= gbdbui_e((string) $pattern['name']) ?>">
                                     <?= gbdbui_e((string) $pattern['name']) ?></option>
                             <?php endforeach; ?>
@@ -246,7 +228,7 @@ $quotaOk = (bool) ($quota['current']['ok'] ?? true);
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($patterns as $pattern): ?>
+                            <?php foreach ($patterns as $pattern) : ?>
                                 <?php $patternName = (string) $pattern['name'];
                                 $fileName = (string) ($pattern['_file'] ?? ($patternName . '.json')); ?>
                                 <tr>
@@ -290,10 +272,11 @@ $quotaOk = (bool) ($quota['current']['ok'] ?? true);
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if (empty($patterns)): ?>
+                            <?php if (empty($patterns)) : ?>
                                 <tr>
                                     <td colspan="3" class="muted">Keine Patterns gefunden.</td>
-                                </tr><?php endif; ?>
+                                </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -329,7 +312,8 @@ $quotaOk = (bool) ($quota['current']['ok'] ?? true);
                     <div class="gbdbui-highlight-editor enterprise-json-editor" data-lang="json">
                         <pre aria-hidden="true"></pre>
                         <textarea id="enterprise-pattern-json" name="pattern_json" rows="18" spellcheck="false"
-                            autocomplete="off"><?= gbdbui_e($patternTemplateJson) ?></textarea>
+                            autocomplete="off">
+<?= gbdbui_e($patternTemplateJson) ?></textarea>
                     </div>
                     <button class="primary">Pattern speichern</button>
                 </form>
@@ -375,19 +359,19 @@ $quotaOk = (bool) ($quota['current']['ok'] ?? true);
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($tableRows as $row): ?>
+                            <?php foreach ($tableRows as $row) : ?>
                                 <tr>
                                     <td><strong><?= gbdbui_e((string) $row['database']) ?></strong></td>
                                     <td>
                                         <div class="enterprise-chip-wrap">
-                                            <?php foreach (($row['tables'] ?? []) as $table): ?>
+                                            <?php foreach (($row['tables'] ?? []) as $table) : ?>
                                                 <span class="enterprise-chip"><?= gbdbui_e((string) $table) ?></span>
                                             <?php endforeach; ?>
                                         </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if (empty($tableRows)): ?>
+                            <?php if (empty($tableRows)) : ?>
                                 <tr>
                                     <td colspan="2" class="muted">Keine Tabellen gefunden.</td>
                                 </tr>
@@ -406,22 +390,20 @@ $quotaOk = (bool) ($quota['current']['ok'] ?? true);
                     </div>
                 </div>
                 <div class="enterprise-doc-list">
-                    <?php foreach ($docList as $doc): ?>
+                    <?php foreach ($docList as $doc) : ?>
                         <code><?= gbdbui_e((string) $doc) ?></code>
                     <?php endforeach; ?>
-                    <?php if (empty($docList)): ?>
+                    <?php if (empty($docList)) : ?>
                         <span class="muted">Keine Doku-Dateien gefunden.</span>
                     <?php endif; ?>
                 </div>
             </article>
         </section>
-    </main>
+
     <script>
         window.GBDB_ENTERPRISE_PATTERN_TEMPLATE = <?= json_encode($patternTemplateJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         window.GBDB_ENTERPRISE_PATTERNS = <?= $patternJsonMapRaw ?>;
     </script>
-    <script src="gbdb_framework/public/js/gbdbui_highlight.js?v=2026.8"></script>
-    <script src="gbdb_framework/public/js/gbdbui_enterprise.js?v=2026.8"></script>
-</body>
-
-</html>
+    <script src="<?= gbdbui_e(gbdbui_asset('js/gbdbui_highlight.js')) ?>"></script>
+    <script src="<?= gbdbui_e(gbdbui_asset('js/gbdbui_enterprise.js')) ?>"></script>
+<?php gbdbui_layout_end(); ?>

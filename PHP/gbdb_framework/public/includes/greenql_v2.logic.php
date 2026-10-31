@@ -1,14 +1,14 @@
 <?php
 
-function e(mixed $value): string {
+function e(mixed $value) :string {
     return GreenQLUIv2Helper::e($value);
 }
 
-function csrf(): string {
+function csrf() :string {
     return GreenQLUIv2Helper::csrf();
 }
 
-function selfUrl(array $params = []): string {
+function selfUrl(array $params = []) :string {
     $script = (string) ($_SERVER["SCRIPT_NAME"] ?? "");
 
     if ($script === "") {
@@ -28,30 +28,30 @@ function selfUrl(array $params = []): string {
     return $script . ($query !== "" ? "?" . $query : "");
 }
 
-function redirectSelf(array $params = []): void {
+function redirectSelf(array $params = []) :void {
     header("Location: " . selfUrl($params));
 
     exit;
 }
 
-function flash(string $type, string $text): void {
+function flash(string $type, string $text) :void {
     $_SESSION["gqlui_v2_flash"][] = ["type" => $type, "text" => $text];
 }
 
-function flashes(): array {
+function flashes() :array {
     $items = $_SESSION["gqlui_v2_flash"] ?? [];
     unset($_SESSION["gqlui_v2_flash"]);
 
     return is_array($items) ? $items : [];
 }
 
-function selectedMode(): string {
+function selectedMode() :string {
     $mode = (string) ($_GET["mode"] ?? $_POST["mode"] ?? "ui");
 
     return in_array($mode, ["ui", "query"], true) ? $mode : "ui";
 }
 
-function selectedInstance(): string {
+function selectedInstance() :string {
     if (!isset($_GET["instance"]) && !isset($_POST["instance"])) {
         return "";
     }
@@ -65,7 +65,7 @@ function selectedInstance(): string {
     return "";
 }
 
-function selectedDb(string $instance): string {
+function selectedDb(string $instance) :string {
     $db = GreenQLUIv2Helper::clean((string) ($_GET["db"] ?? $_POST["db"] ?? ""));
 
     if ($db !== "" && GreenQLUIv2Helper::canAccessDb($instance, $db)) {
@@ -75,7 +75,7 @@ function selectedDb(string $instance): string {
     return "";
 }
 
-function selectedTable(string $instance, string $db): string {
+function selectedTable(string $instance, string $db) :string {
     $table = GreenQLUIv2Helper::clean((string) ($_GET["table"] ?? $_POST["table"] ?? ""));
     $tables = ($instance !== "" && $db !== "") ? GreenQLUIv2Helper::tables($instance, $db) : [];
 
@@ -86,7 +86,7 @@ function selectedTable(string $instance, string $db): string {
     return "";
 }
 
-function queryResultBox(array $result): void {
+function queryResultBox(array $result) :void {
     if (empty($result)) {
         return;
     }
@@ -163,11 +163,11 @@ function queryResultBox(array $result): void {
     echo '</section>';
 }
 
-function paramTextFromPost(): string {
+function paramTextFromPost() :string {
     return (string) ($_POST["params"] ?? "");
 }
 
-function uiValue(mixed $value): mixed {
+function uiValue(mixed $value) :mixed {
     if (!is_string($value)) {
         return $value;
     }
@@ -175,21 +175,21 @@ function uiValue(mixed $value): mixed {
     $value = trim($value);
     $low = strtolower($value);
 
-    if ($low === "true")
-
+    if ($low === "true") {
         return 1;
+    }
 
-    if ($low === "false")
-
+    if ($low === "false") {
         return 0;
+    }
 
-    if ($low === "null")
-
+    if ($low === "null") {
         return null;
+    }
 
-    if (is_numeric($value))
-
+    if (is_numeric($value)) {
         return $value + 0;
+    }
 
     if (($value !== "") && (($value[0] === "[" && substr($value, -1) === "]") || ($value[0] === "{" && substr($value, -1) === "}"))) {
         $json = json_decode($value, true);
@@ -197,14 +197,13 @@ function uiValue(mixed $value): mixed {
         if (json_last_error() === JSON_ERROR_NONE) {
             return $json;
         }
-
     }
 
     return $value;
 }
 
-function tableDefaults(string $instance, string $db, string $table): array {
-    $file = dirname(__DIR__, 2) . "/GBDB_GQL/.DB/.system/schema.json";
+function tableDefaults(string $instance, string $db, string $table) :array {
+    $file = Vars::data_root() . '/.system/schema.json';
 
     if (!is_file($file)) {
         return [];
@@ -242,13 +241,13 @@ if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
 
         if (GreenQLUIv2Helper::hasUsers()) {
             flash("bad", "Setup ist bereits abgeschlossen.");
-        } else if ($password !== $password2) {
+        } elseif ($password !== $password2) {
             flash("bad", "Passwörter stimmen nicht überein.");
-        } else if (GreenQLUIv2Helper::createUser($username, $password, "admin", "*", "*", $language, "*", "*")) {
+        } elseif (GreenQLUIv2Helper::createInitialAdmin($username, $password, $language, (string) ($_POST['setup_token'] ?? ''))) {
             GreenQLUIv2Helper::login($username, $password);
             flash("ok", "Admin angelegt und eingeloggt.");
         } else {
-            flash("bad", "Admin konnte nicht angelegt werden. Benutzername prüfen, Passwort mindestens 8 Zeichen.");
+            flash("bad", GreenQLUIv2Helper::setupError());
         }
 
         redirectSelf();
@@ -269,7 +268,6 @@ if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
         flash("ok", "Du wurdest ausgeloggt.");
         redirectSelf();
     }
-
 }
 
 $needsSetup = !GreenQLUIv2Helper::hasUsers();
@@ -292,7 +290,7 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
 
         if ($name === "" || GreenQLUIv2Helper::reservedInstance($name)) {
             flash("bad", "Ungültiger Instanzname.");
-        } else if (GBDB::createInstance($name)) {
+        } elseif (GBDB::createInstance($name)) {
             flash("ok", "Instanz erstellt: " . $name);
             redirectSelf(["mode" => "ui", "instance" => $name]);
         } else {
@@ -340,14 +338,16 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
         foreach (explode(",", (string) ($_POST["cols"] ?? "")) as $rawCol) {
             $rawCol = trim($rawCol);
 
-            if ($rawCol === "")
+            if ($rawCol === "") {
                 continue;
+            }
             $parts = array_map('trim', explode(':', $rawCol, 2));
             $col = GreenQLUIv2Helper::clean($parts[0] ?? "");
             $type = strtolower(trim((string) ($parts[1] ?? "mixed")));
 
-            if ($col === "" || $col === "id")
+            if ($col === "" || $col === "id") {
                 continue;
+            }
             $cols[] = $col;
             $schema[$col] = ["type" => $type, "default" => "", "nullable" => true, "required" => false, "unique" => false];
         }
@@ -358,12 +358,14 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             GBDB::setInstance($instance);
 
             if (GBDB::createTable($db, $name, $cols)) {
-                if (method_exists('GBDB', 'enableSchemaTypes'))
+                if (method_exists('GBDB', 'enableSchemaTypes')) {
                     GBDB::enableSchemaTypes($db, $name, $typesEnabled);
+                }
 
                 if ($typesEnabled && method_exists('GBDB', 'setColumnType')) {
-                    foreach ($schema as $col => $def)
+                    foreach ($schema as $col => $def) {
                         GBDB::setColumnType($db, $name, $col, (string) $def["type"], $def);
+                    }
                 }
 
                 flash("ok", "Tabelle erstellt: " . $name . ($typesEnabled ? " (Types aktiv)" : " (ohne Types)"));
@@ -386,7 +388,7 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
 
         if ($name === "" || GreenQLUIv2Helper::reservedInstance($name)) {
             flash("bad", "Diese Instanz darf nicht gelöscht werden.");
-        } else if (GBDB::deleteInstance($name, true)) {
+        } elseif (GBDB::deleteInstance($name, true)) {
             flash("ok", "Instanz gelöscht: " . $name);
             redirectSelf(["mode" => "ui"]);
         } else {
@@ -416,7 +418,6 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             if ($ok) {
                 redirectSelf(["mode" => "ui", "instance" => $targetInstance]);
             }
-
         }
 
         redirectSelf(["mode" => "ui", "instance" => $targetInstance, "db" => $db, "table" => $table]);
@@ -443,7 +444,6 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             if ($ok) {
                 redirectSelf(["mode" => "ui", "instance" => $targetInstance, "db" => $targetDb]);
             }
-
         }
 
         redirectSelf(["mode" => "ui", "instance" => $targetInstance, "db" => $targetDb, "table" => $table]);
@@ -467,16 +467,17 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             if ($ok) {
                 $rowsForDefault = GBDB::getData($db, $table);
 
-                if (is_array($rowsForDefault))
-
+                if (is_array($rowsForDefault)) {
                     foreach ($rowsForDefault as $rowForDefault) {
-                        if (!is_array($rowForDefault) || (int) ($rowForDefault["id"] ?? 0) < 0)
+                        if (!is_array($rowForDefault) || (int) ($rowForDefault["id"] ?? 0) < 0) {
                             continue;
+                        }
 
-                        if (!array_key_exists($column, $rowForDefault) || (string) ($rowForDefault[$column] ?? "") === "-header-")
+                        if (!array_key_exists($column, $rowForDefault) || (string) ($rowForDefault[$column] ?? "") === "-header-") {
                             GBDB::editData($db, $table, "id", (int) $rowForDefault["id"], [$column => $default]);
+                        }
                     }
-
+                }
             }
 
             flash($ok ? "ok" : "bad", $ok ? "Spalte verarbeitet: " . $column . " (Default wurde in Schema und bestehende Rows übernommen)" : "Spalte konnte nicht verarbeitet werden: " . $column);
@@ -565,13 +566,12 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
         if ($action === "run_uploaded") {
             if (!isset($_FILES["gql_file"]) || !is_uploaded_file((string) ($_FILES["gql_file"]["tmp_name"] ?? ""))) {
                 $queryResult = GreenQLUIv2Helper::errorResult("Keine .gql Datei hochgeladen.");
-            } else if (strtolower(pathinfo((string) $_FILES["gql_file"]["name"], PATHINFO_EXTENSION)) !== "gql") {
+            } elseif (strtolower(pathinfo((string) $_FILES["gql_file"]["name"], PATHINFO_EXTENSION)) !== "gql") {
                 $queryResult = GreenQLUIv2Helper::errorResult("Nur .gql Dateien sind erlaubt.");
             } else {
                 $script = (string) file_get_contents((string) $_FILES["gql_file"]["tmp_name"]);
                 $loadedScript = $script;
             }
-
         }
 
         if ($action === "run_path") {
@@ -586,7 +586,6 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
 
                 flash("ok", (string) $read["message"]);
             }
-
         }
 
         if (empty($queryResult)) {
@@ -595,9 +594,7 @@ if ($loggedIn && ($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             $_SESSION["gqlui_v2_last_path"] = $loadedPath;
             $queryResult = GreenQLUIv2Helper::runScript($script, $instance, $params);
         }
-
     }
-
 }
 
 $mode = selectedMode();
@@ -640,5 +637,4 @@ if ($loggedIn && $instance !== "" && $db !== "" && $table !== "" && GreenQLUIv2H
             return mb_stripos(mb_strtolower(json_encode($row, JSON_UNESCAPED_UNICODE) ?: ""), $needle) !== false;
         }));
     }
-
 }

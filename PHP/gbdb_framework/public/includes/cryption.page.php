@@ -5,28 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/cryption.logic.php';
 ?>
-<!doctype html>
-<html lang="de">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>GBDB Crypto Migrator</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-    <link rel="stylesheet" href="gbdb_framework/public/css/cryption.css">
-</head>
-
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('cryption'); ?>
-    <main class="gbdbui-wide legacy-tool-page">
-        <section class="gbdbui-hero legacy-tool-hero">
-            <p class="gbdbui-kicker">Crypto</p>
-            <h1>GBDB Crypto Migrator</h1>
-            <p>
-                Convert the complete GBDB storage between plain and encrypted mode.
-                The migrator creates a backup and then rewrites the structure based on the selected target format.
-            </p>
-        </section>
+<?php gbdbui_layout_start('cryption', 'Verschlüsselung', 'Legacy-Konverter für historische, flache Datenbestände. GBDB-Full-Instanzen werden zum Schutz vor Datenverlust nicht konvertiert; vor jeder Umstellung entsteht ein Backup.', ['eyebrow' => 'Zugriff']); ?>
 
         <section class="gbdbui-panel legacy-tool-panel">
             <div class="gbdbui-panel-head compact">
@@ -41,21 +20,22 @@ require_once __DIR__ . '/cryption.logic.php';
                 </div>
             </div>
 
-            <?php if ($errors): ?>
+            <?php if ($errors) : ?>
                 <div class="err">
-                    <?php foreach ($errors as $error): ?>
+                    <?php foreach ($errors as $error) : ?>
                         <div>❌ <?= h($error) ?></div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
 
-            <?php if ($logs): ?>
+            <?php if ($logs) : ?>
                 <div class="ok">
                     <div>✅ Vorgang abgeschlossen. Details unten.</div>
                 </div>
             <?php endif; ?>
 
             <form method="post">
+                <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                 <fieldset>
                     <legend>Aktion wählen</legend>
 
@@ -87,7 +67,7 @@ require_once __DIR__ . '/cryption.logic.php';
                             <div><b>Ich bestätige:</b> Es wird ein Backup des kompletten <code>GBDB</code>-Ordners
                                 erstellt und danach umgeschaltet.</div>
                             <div class="note warn">.framework.env.php wird NICHT angefasst – danach musst du
-                                <b>crypt_data()</b> manuell passend setzen.</div>
+                                <b>SECURITY → crypt_data</b> manuell passend setzen.</div>
                         </div>
                     </label>
                 </fieldset>
@@ -97,18 +77,16 @@ require_once __DIR__ . '/cryption.logic.php';
                 </div>
             </form>
 
-            <?php if ($logs): ?>
+            <?php if ($logs) : ?>
                 <pre><?php foreach ($logs as $line) {
                     echo h($line) . "\n";
-                } ?></pre>
-            <?php else: ?>
+                     } ?></pre>
+            <?php else : ?>
                 <p class="note">
                     Tipp: Wenn „Erkannt: unknown“ angezeigt wird, kann das heißen, dass der Ordner leer ist oder gemischte
                     Daten enthält.
                 </p>
             <?php endif; ?>
         </section>
-    </main>
-</body>
 
-</html>
+<?php gbdbui_layout_end(); ?>

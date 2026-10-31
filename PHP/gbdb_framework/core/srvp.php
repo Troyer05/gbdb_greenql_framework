@@ -3,11 +3,13 @@
 class SecondServer {
     private const DO_START_SESSION = "start_session(srvp.init)";
 
-    private static function endpoint(): string {
-        return rtrim(Vars::srvp_ip(), "/") . "/backend.php";
+    private static function endpoint() :string {
+        $url = rtrim(Vars::srvp_ip(), '/');
+
+        return str_ends_with($url, '.php') ? $url : $url . '/backend.php';
     }
 
-    private static function error(string $message = "", array $data = []): array {
+    private static function error(string $message = "", array $data = []) :array {
         return [
             "ok" => false,
             "message" => $message,
@@ -15,7 +17,11 @@ class SecondServer {
         ];
     }
 
-    private static function send(array $body): array {
+    private static function send(array $body) :array {
+        if (!preg_match('~^https?://~i', self::endpoint()) || strlen(Vars::srvp_static_key()) < 32) {
+            return self::error('SecondServer URL/static key is not configured.');
+        }
+
         $body["static_auth"] = Vars::srvp_static_key();
 
         $tmp = Http::post(self::endpoint(), $body);
@@ -35,7 +41,7 @@ class SecondServer {
         return $response;
     }
 
-    private static function getToken(): string {
+    private static function getToken() :string {
         $response = self::send([
             "do" => self::DO_START_SESSION
         ]);
@@ -55,7 +61,7 @@ class SecondServer {
         return (string)$response["data"]["token"];
     }
 
-    private static function sendInstruction(array $body): array {
+    private static function sendInstruction(array $body) :array {
         $token = self::getToken();
 
         if ($token == "") {
@@ -72,7 +78,7 @@ class SecondServer {
      *
      * @return bool
      */
-    public static function ping(): bool {
+    public static function ping() :bool {
         $res = self::sendInstruction([
             "do" => "ping"
         ]);
@@ -84,7 +90,7 @@ class SecondServer {
      * returns second-servers db driver
      * @return array
      */
-    public static function driver(): array {
+    public static function driver() :array {
         return self::sendInstruction([
             "do" => "get_engine_driver"
         ]);
@@ -97,7 +103,7 @@ class SecondServer {
      * @param array $parameters
      * @return array
      */
-    public static function startJob(string $job, array $parameters = []): array {
+    public static function startJob(string $job, array $parameters = []) :array {
         return self::sendInstruction([
             "do" => "start_job",
             "job" => $job,
@@ -109,7 +115,7 @@ class SecondServer {
      * lists all jobs
      * @return array
      */
-    public static function listJobs(): array {
+    public static function listJobs() :array {
         return self::sendInstruction([
             "do" => "list_jobs"
         ]);
@@ -121,7 +127,7 @@ class SecondServer {
      * @param array $data
      * @return array
      */
-    public static function registerUser(array $data): array {
+    public static function registerUser(array $data) :array {
         return self::sendInstruction([
             "do" => "register_user",
             "user_data" => $data
@@ -135,7 +141,7 @@ class SecondServer {
      * @param string $password
      * @return array
      */
-    public static function login(string $user, string $password): array {
+    public static function login(string $user, string $password) :array {
         return self::sendInstruction([
             "do" => "login_user",
             "user_data" => [
@@ -151,7 +157,7 @@ class SecondServer {
      * @param array $data
      * @return array
      */
-    public static function loginUser(array $data): array {
+    public static function loginUser(array $data) :array {
         return self::sendInstruction([
             "do" => "login_user",
             "user_data" => $data
@@ -163,9 +169,10 @@ class SecondServer {
      *
      * @return array
      */
-    public static function logout(): array {
+    public static function logout(string $jwt = '') :array {
         return self::sendInstruction([
-            "do" => "logout_user"
+            "do" => "logout_user",
+            'user_data' => ['jwt' => $jwt],
         ]);
     }
 
@@ -174,7 +181,7 @@ class SecondServer {
      *
      * @return array
      */
-    public static function initAuth(): array {
+    public static function initAuth() :array {
         return self::sendInstruction([
             "do" => "init"
         ]);
@@ -186,7 +193,7 @@ class SecondServer {
      * @param string $token
      * @return array
      */
-    public static function verifyEmail(string $token): array {
+    public static function verifyEmail(string $token) :array {
         return self::sendInstruction([
             "do" => "verify_email",
             "tmp_token" => $token
@@ -199,7 +206,7 @@ class SecondServer {
      * @param string|int $code
      * @return array
      */
-    public static function verify2fa(string|int $code): array {
+    public static function verify2fa(string|int $code) :array {
         return self::sendInstruction([
             "do" => "verify_2fa_code",
             "code" => (string)$code
@@ -212,7 +219,7 @@ class SecondServer {
      * @param string $uid
      * @return array
      */
-    public static function deleteUser(string $uid): array {
+    public static function deleteUser(string $uid) :array {
         return self::sendInstruction([
             "do" => "delete_user",
             "uid" => $uid
@@ -226,7 +233,7 @@ class SecondServer {
      * @param array $data
      * @return array
      */
-    public static function editUser(string $uid, array $data): array {
+    public static function editUser(string $uid, array $data) :array {
         return self::sendInstruction([
             "do" => "edit_user",
             "uid" => $uid,
@@ -240,7 +247,7 @@ class SecondServer {
      * @param string $uid
      * @return array
      */
-    public static function getUser(string $uid): array {
+    public static function getUser(string $uid) :array {
         return self::sendInstruction([
             "do" => "get_user",
             "uid" => $uid
@@ -253,7 +260,7 @@ class SecondServer {
      * @param string $jwt
      * @return array
      */
-    public static function getJwtUser(string $jwt): array {
+    public static function getJwtUser(string $jwt) :array {
         return self::sendInstruction([
             "do" => "get_jwt_user",
             "jwt" => $jwt
@@ -266,7 +273,7 @@ class SecondServer {
      * @param int $limit
      * @return array
      */
-    public static function getUsers(int $limit = 10000000): array {
+    public static function getUsers(int $limit = 10000000) :array {
         return self::sendInstruction([
             "do" => "get_users",
             "limit" => $limit
@@ -280,7 +287,7 @@ class SecondServer {
      * @param array $data
      * @return array
      */
-    public static function userAuth(string $do, array $data = []): array {
+    public static function userAuth(string $do, array $data = []) :array {
         if ($do == "register_user") {
             return self::registerUser($data);
         }
@@ -331,5 +338,3 @@ class SecondServer {
         return self::error("Unknown auth action: " . $do);
     }
 }
-
-?>

@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . '/_shared.php';
 require_once __DIR__ . '/greenql_v2_helper.php';
 
@@ -35,10 +37,9 @@ foreach ($dbs as $db) {
             'value' => $selectedInstance . '|' . $db . '|' . $table,
         ];
     }
-
 }
 
-function gbdbui_import_export_target(string $value): array {
+function gbdbui_import_export_target(string $value) :array {
     $parts = explode('|', $value, 3);
 
     return [
@@ -48,15 +49,19 @@ function gbdbui_import_export_target(string $value): array {
     ];
 }
 
-function gbdbui_import_export_valid_target(string $instance, string $db, string $table): bool {
-    if ($instance === '' || $db === '' || $table === '') return false;
+function gbdbui_import_export_valid_target(string $instance, string $db, string $table) :bool {
+    if ($instance === '' || $db === '' || $table === '') {
+        return false;
+    }
 
-    if (!GreenQLUIv2Helper::canAccessInstance($instance) || !GreenQLUIv2Helper::canAccessDb($instance, $db)) return false;
+    if (!GreenQLUIv2Helper::canAccessInstance($instance) || !GreenQLUIv2Helper::canAccessDb($instance, $db)) {
+        return false;
+    }
 
     return in_array($table, GreenQLUIv2Helper::tables($instance, $db), true);
 }
 
-function gbdbui_import_export_with_instance(string $instance, callable $callback): mixed {
+function gbdbui_import_export_with_instance(string $instance, callable $callback) :mixed {
     $old = GBDB::getInstance();
     try {
         GBDB::setInstance($instance);
@@ -65,10 +70,9 @@ function gbdbui_import_export_with_instance(string $instance, callable $callback
     } finally {
         GBDB::setInstance($old);
     }
-
 }
 
-function gbdbui_export_filename(string $instance, string $db, string $table, string $format): string {
+function gbdbui_export_filename(string $instance, string $db, string $table, string $format) :string {
     return date('Ymd_His') . '_' . GreenQLUIv2Helper::clean($instance) . '_' . GreenQLUIv2Helper::clean($db) . '_' . GreenQLUIv2Helper::clean($table) . '.' . strtolower($format);
 }
 
@@ -80,7 +84,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $action = (string)($_POST['gbdbui_import_export_action'] ?? '');
         $format = strtolower((string)($_POST['format'] ?? 'json'));
 
-        if (!array_key_exists($format, $formats)) $format = 'json';
+        if (!array_key_exists($format, $formats)) {
+            $format = 'json';
+        }
 
         if ($action === 'export') {
             [$targetInstance, $db, $table] = gbdbui_import_export_target((string)($_POST['target'] ?? ''));
@@ -88,7 +94,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if (!gbdbui_import_export_valid_target($targetInstance, $db, $table)) {
                 $msg = 'Export-Ziel ist ungültig.';
                 $report = ['ok' => false, 'error' => 'invalid_target'];
-            } else if (!method_exists('GBDB', 'exportRows')) {
+            } elseif (!method_exists('GBDB', 'exportRows')) {
                 $msg = 'GBDB::exportRows ist in dieser Framework-Version nicht verfügbar.';
                 $report = ['ok' => false, 'error' => 'method_missing'];
             } else {
@@ -108,7 +114,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
                 $msg = 'Export konnte nicht erstellt werden.';
             }
-
         }
 
         if ($action === 'import') {
@@ -118,10 +123,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if (!gbdbui_import_export_valid_target($targetInstance, $db, $table)) {
                 $msg = 'Import-Ziel ist ungültig.';
                 $report = ['ok' => false, 'error' => 'invalid_target'];
-            } else if (!method_exists('GBDB', 'importRows')) {
+            } elseif (!method_exists('GBDB', 'importRows')) {
                 $msg = 'GBDB::importRows ist in dieser Framework-Version nicht verfügbar.';
                 $report = ['ok' => false, 'error' => 'method_missing'];
-            } else if (!is_array($upload) || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($upload['tmp_name'] ?? ''))) {
+            } elseif (!is_array($upload) || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($upload['tmp_name'] ?? ''))) {
                 $msg = 'Keine gültige Import-Datei hochgeladen.';
                 $report = ['ok' => false, 'error' => 'upload_failed'];
             } else {
@@ -129,46 +134,30 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 gbdbui_cache_clear();
                 $msg = !empty($report['ok']) ? 'Import abgeschlossen.' : 'Import mit Fehlern oder ungültigen Spalten.';
             }
-
         }
-
     }
-
 }
 
 ?>
-<!doctype html>
-<html lang="de">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GBDB Import / Export</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-</head>
-<body class="gbdbui-dashboard gbdbui-pro">
-    <?php gbdbui_nav('import_export'); ?>
-    <main class="gbdbui-wide">
-        <section class="gbdbui-hero">
-            <p class="gbdbui-kicker">Data</p>
-            <h1>Import / Export</h1>
-            <p>Tabellen direkt aus der aktiven GBDB-Instanz exportieren oder geprüfte Datensätze importieren. Unterstützt JSON, NDJSON und CSV; Imports laufen über die vorhandene GBDB-Validierung und erstellen bei aktivierter Enterprise-Logik ein Rollback-Backup.</p>
-        </section>
+<?php gbdbui_layout_start('import_export', 'Import / Export', 'Tabellen der aktiven Instanz als JSON, NDJSON oder CSV exportieren und geprüfte Datensätze über die GBDB-Validierung importieren.', ['eyebrow' => 'Daten']); ?>
 
-        <?php if ($msg): ?><div class="gbdbui-flash <?= !empty($report['ok']) ? 'ok' : 'bad' ?>"><?= gbdbui_e($msg) ?></div><?php endif; ?>
+        <?php if ($msg) :
+            ?><div class="gbdbui-flash <?= !empty($report['ok']) ? 'ok' : 'bad' ?>"><?= gbdbui_e($msg) ?></div><?php
+        endif; ?>
 
         <section class="gbdbui-panel gbdbui-import-export-filter">
             <form method="get" class="gbdbui-inline-form">
                 <input type="hidden" name="tool" value="import_export">
                 <label>Aktive Instanz
                     <select name="instance" onchange="this.form.submit()">
-                        <?php foreach ($instances as $inst): ?>
+                        <?php foreach ($instances as $inst) : ?>
                         <option value="<?= gbdbui_e($inst) ?>" <?= $inst === $selectedInstance ? 'selected' : '' ?>><?= gbdbui_e($inst) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
                 <button class="secondary" type="submit">Instanz laden</button>
             </form>
-            <?php if ($selectedInstance !== ''): ?>
+            <?php if ($selectedInstance !== '') : ?>
                 <p class="gbdbui-help">Angezeigt werden nur Bases und Tabellen aus <strong><?= gbdbui_e($selectedInstance) ?></strong>, auf die dein UI-User Zugriff hat.</p>
             <?php endif; ?>
         </section>
@@ -182,23 +171,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     </div>
                     <span class="gbdbui-pill ok">Download</span>
                 </div>
-                <?php if (!$pairs): ?>
+                <?php if (!$pairs) : ?>
                     <div class="gbdbui-empty">Keine Tabellen in der aktiven Instanz gefunden.</div>
-                <?php else: ?>
+                <?php else : ?>
                 <form method="post">
                     <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                     <input type="hidden" name="gbdbui_import_export_action" value="export">
                     <div class="gbdbui-form-grid">
                         <label class="field-8">Tabelle
                             <select name="target" required>
-                                <?php foreach ($pairs as $pair): ?>
+                                <?php foreach ($pairs as $pair) : ?>
                                 <option value="<?= gbdbui_e($pair['value']) ?>"><?= gbdbui_e($pair['instance'] . ' / ' . $pair['db'] . ' / ' . $pair['table']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
                         <label class="field-4">Format
                             <select name="format">
-                                <?php foreach ($formats as $value => $label): ?>
+                                <?php foreach ($formats as $value => $label) : ?>
                                 <option value="<?= gbdbui_e($value) ?>"><?= gbdbui_e($label) ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -219,23 +208,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     </div>
                     <span class="gbdbui-pill">Append</span>
                 </div>
-                <?php if (!$pairs): ?>
+                <?php if (!$pairs) : ?>
                     <div class="gbdbui-empty">Lege zuerst mindestens eine Base und Tabelle an.</div>
-                <?php else: ?>
+                <?php else : ?>
                 <form method="post" enctype="multipart/form-data">
                     <input type="hidden" name="csrf" value="<?= gbdbui_e(GreenQLUIv2Helper::csrf()) ?>">
                     <input type="hidden" name="gbdbui_import_export_action" value="import">
                     <div class="gbdbui-form-grid">
                         <label class="field-8">Zieltabelle
                             <select name="target" required>
-                                <?php foreach ($pairs as $pair): ?>
+                                <?php foreach ($pairs as $pair) : ?>
                                 <option value="<?= gbdbui_e($pair['value']) ?>"><?= gbdbui_e($pair['instance'] . ' / ' . $pair['db'] . ' / ' . $pair['table']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
                         <label class="field-4">Format
                             <select name="format">
-                                <?php foreach ($formats as $value => $label): ?>
+                                <?php foreach ($formats as $value => $label) : ?>
                                 <option value="<?= gbdbui_e($value) ?>"><?= gbdbui_e($label) ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -259,13 +248,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         <p>Zeigt Validierung, eingefügte Zeilen, Backup-Pfad oder Fehler des letzten Import-/Export-Laufs.</p>
                     </div>
                 </div>
-                <?php if ($report): ?>
+                <?php if ($report) : ?>
                     <pre><?= gbdbui_e($report) ?></pre>
-                <?php else: ?>
+                <?php else : ?>
                     <div class="gbdbui-empty">Noch keine Aktion in dieser Sitzung ausgeführt.</div>
                 <?php endif; ?>
             </div>
         </section>
-    </main>
-</body>
-</html>
+
+<?php gbdbui_layout_end(); ?>

@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . "/_shared.php";
 require_once __DIR__ . "/greenql_v2_helper.php";
 
@@ -7,57 +9,26 @@ GreenQLUIv2Helper::boot();
 
 require_once __DIR__ . "/greenql_v2.logic.php";
 ?>
-<!doctype html>
-<html lang="de">
+<?php
+$studioActions = '';
 
-<head>
-    <link rel="stylesheet" href="gbdb_framework/public/css/gbdb_ui.css?v=2026.10">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>GreenQL Studio · GBDB UI</title>
-    <link rel="stylesheet" href="gbdb_framework/public/css/greenql_ui.v2.css?v=2026.3">
-</head>
+if ($loggedIn && GreenQLUIv2Helper::canStructure()) {
+    $studioActions .= '<button class="btn btn-secondary" type="button" data-toggle="create-instance">' . gbdbui_icon('database', 16) . ' Neue Instanz</button>';
+}
 
-<body class="greenql-studio-body">
-    <?php gbdbui_nav('greenql_v2'); ?>
-    <?php if (!$loggedIn): ?>
-        <main class="auth-shell">
-            <section class="auth-card">
-                <div class="brand-mark">G2</div>
-                <p class="eyebrow">greenbucket®</p>
-                <h1>GreenQL v2</h1>
-                <p class="muted">
-                    <?= $needsSetup ? "Ersteinrichtung der lokalen Admin-Oberfläche." : "Einloggen, um Instanzen, Bases und Tabellen zu verwalten." ?>
-                </p>
+if ($loggedIn) {
+    $otherMode = $mode === 'query' ? 'ui' : 'query';
+    $studioActions .= '<a class="btn btn-primary" href="' . e(selfUrl(['mode' => $otherMode, 'instance' => $instance, 'db' => $db, 'table' => $table])) . '">' . gbdbui_icon($otherMode === 'query' ? 'edit' : 'panel', 16) . ($otherMode === 'query' ? ' Query öffnen' : ' Zur Tabellenansicht') . '</a>';
+}
 
-                <?php foreach (flashes() as $f): ?>
-                    <div class="flash <?= e($f["type"] ?? "") ?>"><?= e($f["text"] ?? "") ?></div>
-                <?php endforeach; ?>
-
-                <form method="post" class="stack-form">
-                    <input type="hidden" name="csrf" value="<?= e(csrf()) ?>">
-                    <input type="hidden" name="action" value="<?= $needsSetup ? 'setup' : 'login' ?>">
-                    <label>Benutzername<input name="username" autocomplete="username" required></label>
-                    <label>Passwort<input name="password" type="password"
-                            autocomplete="<?= $needsSetup ? 'new-password' : 'current-password' ?>" required></label>
-                    <?php if ($needsSetup): ?>
-                        <label>Passwort wiederholen<input name="password2" type="password" autocomplete="new-password"
-                                required></label>
-                    <?php endif; ?>
-                    <button class="primary"><?= $needsSetup ? "Admin anlegen" : "Einloggen" ?></button>
-                </form>
-            </section>
-        </main>
-    <?php else: ?>
-        <div class="app-shell">
-            <aside class="sidebar">
-                <div class="side-top">
-                    <div class="brand-mark small">G2</div>
-                    <div>
-                        <strong>GreenQL Studio</strong>
-                        <span><?= e($user["username"] ?? "") ?> · <?= e($user["role"] ?? "") ?></span>
-                    </div>
-                </div>
+$studioPath = trim(($instance ?: 'keine Instanz') . ($db ? ' / ' . $db : '') . ($table ? ' / ' . $table : ''));
+gbdbui_layout_start('greenql_v2', 'GreenQL Studio', ($mode === 'query' ? 'Query-Modus' : 'Tabellenansicht') . ' · ' . $studioPath, ['eyebrow' => 'Daten', 'actions' => $studioActions, 'body_class' => 'greenql-studio-body', 'css' => ['greenql_ui.v2.css']]);
+?>
+    <?php if (!$loggedIn) : ?>
+        <section class="panel padded"><h2>Anmeldung erforderlich</h2><p>Bitte über die GBDB-Oberfläche anmelden.</p></section>
+<?php else : ?>
+        <div class="gql-shell">
+            <aside class="gql-sidebar panel">
 
                 <nav class="mode-switch">
                     <a class="<?= $mode === 'ui' ? 'active' : '' ?>"
@@ -68,26 +39,27 @@ require_once __DIR__ . "/greenql_v2.logic.php";
 
                 <div class="tree-head"><span>Instanzen</span><span><?= count($instances) ?></span></div>
                 <div class="tree">
-                    <?php if (empty($instances)): ?>
+                    <?php if (empty($instances)) : ?>
                         <div class="empty-state"><strong>Keine sichtbare Instanz</strong><span>Die reservierte default-Instanz
                                 wird bewusst ausgeblendet. Lege eine eigene Instanz an, um im Studio zu arbeiten.</span></div>
                     <?php endif; ?>
-                    <?php foreach ($instances as $inst): ?>
+                    <?php foreach ($instances as $inst) : ?>
                         <?php $instDbs = GreenQLUIv2Helper::databases($inst); ?>
                         <details <?= $inst === $instance ? 'open' : '' ?>>
                             <summary class="tree-summary"><a
-                                    href="<?= e(selfUrl(['mode' => $mode, 'instance' => $inst])) ?>"><?= e($inst) ?></a><?php if (GreenQLUIv2Helper::canStructure()): ?>
+                                    href="<?= e(selfUrl(['mode' => $mode, 'instance' => $inst])) ?>"><?= e($inst) ?></a><?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                     <form method="post" class="tree-action"
                                         onsubmit="return confirm('Instanz wirklich vollständig löschen?')"><input type="hidden"
                                             name="csrf" value="<?= e(csrf()) ?>"><input type="hidden" name="action"
                                             value="delete_instance"><input type="hidden" name="name" value="<?= e($inst) ?>"><button
-                                            class="danger mini" title="Instanz löschen">×</button></form><?php endif; ?>
+                                            class="danger mini" title="Instanz löschen">×</button></form>
+                                          <?php endif; ?>
                             </summary>
-                            <?php foreach ($instDbs as $dbName): ?>
+                            <?php foreach ($instDbs as $dbName) : ?>
                                 <?php $dbTables = GreenQLUIv2Helper::tables($inst, $dbName); ?>
                                 <details class="level-db" <?= $inst === $instance && $dbName === $db ? 'open' : '' ?>>
                                     <summary class="tree-summary"><a
-                                            href="<?= e(selfUrl(['mode' => $mode, 'instance' => $inst, 'db' => $dbName])) ?>"><?= e($dbName) ?></a><?php if (GreenQLUIv2Helper::canStructure()): ?>
+                                            href="<?= e(selfUrl(['mode' => $mode, 'instance' => $inst, 'db' => $dbName])) ?>"><?= e($dbName) ?></a><?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                             <form method="post" class="tree-action"
                                                 onsubmit="return confirm('Base wirklich löschen? Tabellen müssen leer/gelöscht sein.')">
                                                 <input type="hidden" name="csrf" value="<?= e(csrf()) ?>"><input type="hidden"
@@ -95,12 +67,13 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                                                     value="<?= e($inst) ?>"><input type="hidden" name="name"
                                                     value="<?= e($dbName) ?>"><button class="danger mini"
                                                     title="Base löschen">×</button>
-                                            </form><?php endif; ?>
+                                            </form>
+                                                  <?php endif; ?>
                                     </summary>
-                                    <?php foreach ($dbTables as $tableName): ?>
+                                    <?php foreach ($dbTables as $tableName) : ?>
                                         <div class="leaf-row"><a
                                                 class="leaf <?= $inst === $instance && $dbName === $db && $tableName === $table ? 'active' : '' ?>"
-                                                href="<?= e(selfUrl(['mode' => $mode, 'instance' => $inst, 'db' => $dbName, 'table' => $tableName])) ?>"><?= e($tableName) ?></a><?php if (GreenQLUIv2Helper::canStructure()): ?>
+                                                href="<?= e(selfUrl(['mode' => $mode, 'instance' => $inst, 'db' => $dbName, 'table' => $tableName])) ?>"><?= e($tableName) ?></a><?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                                 <form method="post" class="tree-action leaf-delete"
                                                     onsubmit="return confirm('Tabelle wirklich löschen?')"><input type="hidden" name="csrf"
                                                         value="<?= e(csrf()) ?>"><input type="hidden" name="action"
@@ -108,16 +81,17 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                                                         value="<?= e($inst) ?>"><input type="hidden" name="db"
                                                         value="<?= e($dbName) ?>"><input type="hidden" name="name"
                                                         value="<?= e($tableName) ?>"><button class="danger mini"
-                                                        title="Tabelle löschen">×</button></form><?php endif; ?>
+                                                        title="Tabelle löschen">×</button></form>
+                                                      <?php endif; ?>
                                         </div>
                                     <?php endforeach; ?>
-                                    <?php if (GreenQLUIv2Helper::canStructure()): ?>
+                                    <?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                         <button class="tiny-link" type="button" data-toggle="create-table"
                                             data-instance="<?= e($inst) ?>" data-db="<?= e($dbName) ?>">+ Tabelle</button>
                                     <?php endif; ?>
                                 </details>
                             <?php endforeach; ?>
-                            <?php if (GreenQLUIv2Helper::canStructure()): ?>
+                            <?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                 <button class="tiny-link tree-db" type="button" data-toggle="create-db"
                                     data-instance="<?= e($inst) ?>">+ Base</button>
                             <?php endif; ?>
@@ -125,42 +99,18 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                     <?php endforeach; ?>
                 </div>
 
-                <?php if (GreenQLUIv2Helper::canStructure()): ?>
+                <?php if (GreenQLUIv2Helper::canStructure()) : ?>
                     <button class="secondary full" type="button" data-toggle="create-instance">Instanz erstellen</button>
                 <?php endif; ?>
-
-                <form method="post" class="logout-form">
-                    <input type="hidden" name="csrf" value="<?= e(csrf()) ?>">
-                    <input type="hidden" name="gbdbui_action" value="logout">
-                    <button class="ghost full">Logout</button>
-                </form>
             </aside>
 
-            <main class="main">
-                <header class="topbar">
-                    <div>
-                        <p class="eyebrow">GreenQL Studio</p>
-                        <h1><?= $mode === 'query' ? 'Query Mode' : 'UI Mode' ?>
-                        </h1>
-                        <p class="muted">
-                            <?= e($instance ?: 'keine instanz') ?>    <?= $db ? ' / ' . e($db) : '' ?>    <?= $table ? ' / ' . e($table) : '' ?>
-                        </p>
-                    </div>
-                    <div class="top-actions">
-                        <?php if (GreenQLUIv2Helper::canStructure()): ?>
-                            <button class="secondary" type="button" data-toggle="create-instance">Neue Instanz</button>
-                        <?php endif; ?>
-                        <a class="secondary"
-                            href="<?= e(selfUrl(['mode' => 'query', 'instance' => $instance, 'db' => $db, 'table' => $table])) ?>">Query
-                            öffnen</a>
-                    </div>
-                </header>
+            <div class="gql-main">
 
-                <?php foreach (flashes() as $f): ?>
+                <?php foreach (flashes() as $f) : ?>
                     <div class="flash <?= e($f["type"] ?? "") ?>"><?= e($f["text"] ?? "") ?></div>
                 <?php endforeach; ?>
 
-                <?php if (GreenQLUIv2Helper::canStructure()): ?>
+                <?php if (GreenQLUIv2Helper::canStructure()) : ?>
                     <section id="create-instance" class="inline-card hidden">
                         <form method="post" class="inline-form">
                             <input type="hidden" name="csrf" value="<?= e(csrf()) ?>">
@@ -196,7 +146,7 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                     </section>
                 <?php endif; ?>
 
-                <?php if ($mode === 'query'): ?>
+                <?php if ($mode === 'query') : ?>
                     <section class="panel query-panel">
                         <div class="panel-head">
                             <div>
@@ -211,13 +161,15 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                             <input type="hidden" name="db" value="<?= e($db) ?>">
                             <input type="hidden" name="table" value="<?= e($table) ?>">
                             <input type="hidden" name="mode" value="query">
-                            <div class="editor-shell">
+                            <div class="editor-shell" data-lang="gql">
                                 <pre id="gql-highlight" aria-hidden="true"></pre>
-                                <textarea id="gql-editor" name="script" spellcheck="false"><?= e($loadedScript) ?></textarea>
+                                <textarea id="gql-editor" name="script" spellcheck="false" autocomplete="off">
+<?= e($loadedScript) ?></textarea>
                             </div>
                             <div class="query-grid">
                                 <label>Parameter JSON oder key=value<textarea name="params" class="small-area"
-                                        placeholder='{"uid":"abc123"}'><?= e($paramsText) ?></textarea></label>
+                                        placeholder='{"uid":"abc123"}'>
+<?= e($paramsText) ?></textarea></label>
                                 <label>.gql Script-Pfad<input name="script_path" value="<?= e($loadedPath) ?>"
                                         placeholder="scripts/greenql/makeUser.gql"></label>
                                 <label>.gql hochladen<input type="file" name="gql_file" accept=".gql"></label>
@@ -230,34 +182,49 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                         </form>
                     </section>
                     <?php queryResultBox($queryResult); ?>
-                <?php else: ?>
-                    <?php if ($instance === ""): ?>
+                <?php else : ?>
+                    <?php if ($instance === "") : ?>
                         <section class="empty-state">
                             <h2>Keine sichtbare Instanz</h2>
                             <p>Admins können eine neue Instanz erstellen. Eingeschränkte Nutzer brauchen erst eine Freigabe.</p>
                         </section>
-                    <?php elseif ($db === ""): ?>
+                    <?php elseif ($db === "") : ?>
                         <section class="empty-state">
-                            <h2>Keine Base sichtbar</h2>
-                            <p>In dieser Instanz gibt es keine für dich freigegebene Base.</p>
-                            <?php if (GreenQLUIv2Helper::canStructure()): ?><button type="button" class="primary"
-                                    data-toggle="create-db">Base erstellen</button><?php endif; ?>
+                            <?php if ($dbs !== []) : ?>
+                                <h2>Base auswählen</h2>
+                                <p>Wähle links in <strong><?= e($instance) ?></strong> eine Base, um ihre Tabellen zu sehen.</p>
+                            <?php else : ?>
+                                <h2>Keine Base sichtbar</h2>
+                                <p>In dieser Instanz gibt es keine für dich freigegebene Base.</p>
+                            <?php endif; ?>
+                            <?php if (GreenQLUIv2Helper::canStructure()) :
+                                ?><button type="button" class="primary"
+                                    data-toggle="create-db">Base erstellen</button>
+                            <?php endif; ?>
                         </section>
-                    <?php elseif ($table === ""): ?>
+                    <?php elseif ($table === "") : ?>
                         <section class="empty-state">
-                            <h2>Keine Tabelle sichtbar</h2>
-                            <p>In dieser Base gibt es keine sichtbare Tabelle.</p>
-                            <?php if (GreenQLUIv2Helper::canStructure()): ?><button type="button" class="primary"
-                                    data-toggle="create-table">Tabelle erstellen</button><?php endif; ?>
+                            <?php if ($tables !== []) : ?>
+                                <h2>Tabelle auswählen</h2>
+                                <p>Wähle links in <strong><?= e($db) ?></strong> eine Tabelle, um ihre Datensätze zu bearbeiten.</p>
+                            <?php else : ?>
+                                <h2>Keine Tabelle sichtbar</h2>
+                                <p>In dieser Base gibt es keine sichtbare Tabelle.</p>
+                            <?php endif; ?>
+                            <?php if (GreenQLUIv2Helper::canStructure()) :
+                                ?><button type="button" class="primary"
+                                    data-toggle="create-table">Tabelle erstellen</button>
+                            <?php endif; ?>
                         </section>
-                    <?php else: ?>
+                    <?php else : ?>
                         <section class="panel table-panel">
                             <div class="panel-head">
                                 <div>
                                     <h2><?= e($table) ?></h2>
                                     <p class="muted"><?= count($rows) ?> Datensätze · <?= count($keys) ?> Felder</p>
                                 </div>
-                                <?php if (GreenQLUIv2Helper::canStructure()): ?>
+                                <div class="gql-table-actions">
+                                <?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                     <form method="post" onsubmit="return confirm('Tabelle wirklich löschen?')"><input type="hidden"
                                             name="csrf" value="<?= e(csrf()) ?>"><input type="hidden" name="action"
                                             value="delete_table"><input type="hidden" name="instance" value="<?= e($instance) ?>"><input
@@ -269,23 +236,27 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                                         value="ui"><input type="hidden" name="instance" value="<?= e($instance) ?>"><input
                                         type="hidden" name="db" value="<?= e($db) ?>"><input type="hidden" name="table"
                                         value="<?= e($table) ?>">
-                                    <input name="search" value="<?= e($search) ?>" placeholder="Suchen..."><button>Suchen</button>
+                                    <input name="search" value="<?= e($search) ?>" placeholder="Suchen …" aria-label="Datensätze durchsuchen"><button>Suchen</button>
                                 </form>
+                                </div>
                             </div>
-                            <?php if (GreenQLUIv2Helper::canWrite()): ?>
+                            <?php if (GreenQLUIv2Helper::canWrite()) : ?>
                                 <details class="insert-box">
                                     <summary>Datensatz hinzufügen</summary>
                                     <form method="post" class="data-form"><input type="hidden" name="csrf"
                                             value="<?= e(csrf()) ?>"><input type="hidden" name="action" value="insert_row"><input
                                             type="hidden" name="instance" value="<?= e($instance) ?>"><input type="hidden" name="db"
                                             value="<?= e($db) ?>"><input type="hidden" name="table"
-                                            value="<?= e($table) ?>"><?php foreach ($keys as $key): ?><?php if ($key === "id")
-                                                       continue; ?><label><?= e($key) ?><input
-                                                    name="row[<?= e($key) ?>]"></label><?php endforeach; ?><button
+                                            value="<?= e($table) ?>"><?php foreach ($keys as $key) :
+                                                ?><?php if ($key === "id") {
+                                                       continue;
+                                                } ?><label><?= e($key) ?><input
+                                                    name="row[<?= e($key) ?>]"></label><?php
+                                                   endforeach; ?><button
                                             class="primary">Speichern</button></form>
                                 </details>
                             <?php endif; ?>
-                            <?php if (GreenQLUIv2Helper::canStructure()): ?>
+                            <?php if (GreenQLUIv2Helper::canStructure()) : ?>
                                 <form method="post" class="add-column-form"><input type="hidden" name="csrf"
                                         value="<?= e(csrf()) ?>"><input type="hidden" name="action" value="add_column"><input
                                         type="hidden" name="instance" value="<?= e($instance) ?>"><input type="hidden" name="db"
@@ -298,21 +269,25 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                             <div class="table-wrap">
                                 <table>
                                     <thead>
-                                        <tr><?php foreach ($keys as $key): ?>
+                                        <tr><?php foreach ($keys as $key) : ?>
                                                 <th><?= e($key) ?></th>
-                                            <?php endforeach; ?>            <?php if (GreenQLUIv2Helper::canWrite()): ?>
+                                            <?php endforeach; ?>            <?php if (GreenQLUIv2Helper::canWrite()) : ?>
                                                 <th>Aktionen</th>
                                             <?php endif; ?>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($rows as $row): ?>                <?php if (!is_array($row))
-                                                                 continue; ?>
+                                        <?php foreach ($rows as $row) :
+                                            ?>                <?php if (!is_array($row)) {
+                                                                 continue;
+                                            } ?>
                                             <tr>
-                                                <?php foreach ($keys as $key): ?>                    <?php $value = $row[$key] ?? ""; ?>
+                                                <?php foreach ($keys as $key) :
+                                                    ?>                    <?php $value = $row[$key] ?? ""; ?>
                                                     <td>
                                                         <code><?= e(is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : $value) ?></code>
-                                                    </td><?php endforeach; ?><?php if (GreenQLUIv2Helper::canWrite()): ?>
+                                                    </td>
+                                                <?php endforeach; ?><?php if (GreenQLUIv2Helper::canWrite()) : ?>
                                                     <td class="row-actions"><button type="button" class="ghost xs edit-row"
                                                             data-row="<?= e(base64_encode(json_encode($row, JSON_UNESCAPED_UNICODE) ?: '{}')) ?>">Edit</button>
                                                         <form method="post" onsubmit="return confirm('Datensatz wirklich löschen?')"><input
@@ -323,15 +298,20 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                                                                 value="<?= e($table) ?>"><input type="hidden" name="id"
                                                                 value="<?= e($row["id"] ?? "") ?>"><button class="danger xs">Delete</button>
                                                         </form>
-                                                    </td><?php endif; ?>
-                                            </tr><?php endforeach; ?>
+                                                    </td>
+                                                <?php endif; ?>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        <?php if ($rows === []) : ?>
+                                            <tr><td class="gbdbui-table-empty" colspan="<?= count($keys) + (GreenQLUIv2Helper::canWrite() ? 1 : 0) ?>"><?= $search !== '' ? 'Keine Treffer für „' . e($search) . '“.' : 'Diese Tabelle enthält noch keine Datensätze.' ?></td></tr>
+                                        <?php endif; ?>
                                     </tbody>
                                 </table>
                             </div>
                         </section>
                     <?php endif; ?>
                 <?php endif; ?>
-            </main>
+            </div>
         </div>
 
         <dialog id="edit-dialog" class="edit-dialog">
@@ -350,7 +330,7 @@ require_once __DIR__ . "/greenql_v2.logic.php";
             </form>
         </dialog>
 
-        <script src="gbdb_framework/public/js/gbdbui_highlight.js?v=2026.9"></script>
+        <script src="<?= gbdbui_e(gbdbui_asset('js/gbdbui_highlight.js')) ?>"></script>
         <script>
             (function () {
                 document.querySelectorAll('[data-toggle]').forEach(btn => {
@@ -375,83 +355,6 @@ require_once __DIR__ . "/greenql_v2.logic.php";
                         });
                     });
                 });
-
-                const textarea = document.getElementById('gql-editor');
-                const high = document.getElementById('gql-highlight');
-                const currentIndent = line => (line.match(/^\s*/) || [''])[0];
-                const highlight = src => window.GBDBUIHighlight && window.GBDBUIHighlight.gql ? window.GBDBUIHighlight.gql(src) : String(src || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-                const autoIndent = e => {
-                    if (!textarea) return;
-
-                    if (e.key === 'Tab') {
-                        e.preventDefault();
-                        const start = textarea.selectionStart;
-                        const end = textarea.selectionEnd;
-
-                        if (start !== end && textarea.value.slice(start, end).includes('\n')) {
-                            const before = textarea.value.slice(0, start);
-                            const selected = textarea.value.slice(start, end);
-                            const after = textarea.value.slice(end);
-                            const indented = selected.split('\n').map(line => line === '' ? line : '    ' + line).join('\n');
-                            textarea.value = before + indented + after;
-                            textarea.selectionStart = start;
-                            textarea.selectionEnd = start + indented.length;
-                        } else {
-                            textarea.setRangeText('    ', start, end, 'end');
-                        }
-
-                        paint();
-
-                        return;
-                    }
-
-                    if (e.key === '}') {
-                        const pos = textarea.selectionStart;
-                        const before = textarea.value.slice(0, pos);
-                        const lineStart = before.lastIndexOf('\n') + 1;
-                        const line = before.slice(lineStart);
-
-                        if (/^\s*$/.test(line)) {
-                            e.preventDefault();
-                            const base = currentIndent(line).replace(/ {1,4}$/, '');
-                            textarea.setRangeText(base + '}', lineStart, pos, 'end');
-                            paint();
-                        }
-
-                        return;
-                    }
-
-                    if (e.key !== 'Enter') return;
-
-                    e.preventDefault();
-                    const pos = textarea.selectionStart;
-                    const before = textarea.value.slice(0, pos);
-                    const after = textarea.value.slice(textarea.selectionEnd);
-                    const line = before.split('\n').pop() || '';
-                    let indent = currentIndent(line);
-                    const opens = /(?:\{|\[)\s*$/.test(line);
-                    const closesNext = /^\s*(?:\}|\])/.test(after);
-
-                    if (opens) indent += '    ';
-
-                    if (closesNext) indent = indent.replace(/ {1,4}$/, '');
-
-                    textarea.setRangeText('\n' + indent, pos, textarea.selectionEnd, 'end');
-                    paint();
-                };
-                const paint = () => {
-                    if (!textarea || !high) return;
-                    high.innerHTML = highlight(textarea.value) + '\n';
-                    high.scrollTop = textarea.scrollTop;
-                    high.scrollLeft = textarea.scrollLeft;
-                };
-
-                if (textarea && high) {
-                    textarea.addEventListener('input', paint);
-                    textarea.addEventListener('keydown', autoIndent);
-                    textarea.addEventListener('scroll', paint);
-                    paint();
-                }
 
                 const editKeys =
                     <?= json_encode(array_values(array_filter($keys, fn($k) => $k !== 'id')), JSON_UNESCAPED_UNICODE) ?>;
@@ -484,6 +387,4 @@ require_once __DIR__ . "/greenql_v2.logic.php";
             })();
         </script>
     <?php endif; ?>
-</body>
-
-</html>
+<?php gbdbui_layout_end(); ?>

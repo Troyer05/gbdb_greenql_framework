@@ -1,0 +1,15 @@
+{
+    "format": 4,
+    "source": "gb_rb_udE7dxbyg44CMUWt4EUnd3wLPv9_x9vWGwzg2TWo.db",
+    "created_at": 1793127880,
+    "reason": "add_column",
+    "page_size": 8192,
+    "chunk_rows": 128,
+    "chunks": [],
+    "pages": 0,
+    "rows": 0,
+    "header_checksum": "34014aa6a303aa32e875d66220b069e8db4ee923c9bd2e7e174196db22b32aeb",
+    "data_checksum": "34014aa6a303aa32e875d66220b069e8db4ee923c9bd2e7e174196db22b32aeb",
+    "page_checksums": [],
+    "checksum": "2bd2263baff50ad2dc0a1a84402696f0caef23fe9a17885ec8f418cef5f4bbbb"
+}

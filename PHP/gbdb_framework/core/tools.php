@@ -1,4 +1,5 @@
 <?php
+
 /**
  * This is a collection of tools, i couldn't really put into own categorys/classes
  */
@@ -9,7 +10,7 @@ class Tools {
      * @param int $length
      * @return string
      */
-    public static function generatePassword(int $length): string {
+    public static function generatePassword(int $length) :string {
         if ($length <= 0) {
             return '';
         }
@@ -31,7 +32,7 @@ class Tools {
      * @param string $password
      * @return string
      */
-    public static function testPasswordStrength(string $password): string {
+    public static function testPasswordStrength(string $password) :string {
         if (strlen($password) < 8) {
             return 'It would be good if the password had 8 characters or more.';
         }
@@ -56,7 +57,7 @@ class Tools {
      * @param string $domain
      * @return bool|string
      */
-    public static function getDomainInfo(string $domain): mixed {
+    public static function getDomainInfo(string $domain) :mixed {
         $domain = trim(strtolower($domain));
 
         if (
@@ -84,7 +85,7 @@ class Tools {
      * generates an id
      * @return int
      */
-    public static function generateId(): int {
+    public static function generateId() :int {
         $tmpFile = self::getFrameworkTempFile('_id.txt');
 
         self::ensureDir(dirname($tmpFile));
@@ -118,7 +119,7 @@ class Tools {
      * @param int $fragments
      * @return array
      */
-    public static function generateToken(string $delimiter = "-", int $many = 1, int $fragments = 4): array {
+    public static function generateToken(string $delimiter = "-", int $many = 1, int $fragments = 4) :array {
         return self::generateTokenInternal($delimiter, $many, $fragments);
     }
 
@@ -127,7 +128,7 @@ class Tools {
      * @param string $ip
      * @return string
      */
-    public static function getIpCountry(string $ip): string {
+    public static function getIpCountry(string $ip) :string {
         if (!filter_var($ip, FILTER_VALIDATE_IP)) {
             return "Invalid IP.";
         }
@@ -154,7 +155,7 @@ class Tools {
      * @param string $ip
      * @return string
      */
-    public static function ping4(string $ip): string {
+    public static function ping4(string $ip) :string {
         if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             return $ip . " nicht erreichbar!";
         }
@@ -179,7 +180,7 @@ class Tools {
      * @param string $ip
      * @return string
      */
-    public static function ping6(string $ip): string {
+    public static function ping6(string $ip) :string {
         if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
             return $ip . " nicht erreichbar!";
         }
@@ -208,7 +209,7 @@ class Tools {
      * @param int $height
      * @return string
      */
-    public static function qr(string $value, int $width, int $height): string {
+    public static function qr(string $value, int $width, int $height) :string {
         $width  = max(1, $width);
         $height = max(1, $height);
 
@@ -226,7 +227,7 @@ class Tools {
      * @param int $height
      * @return string
      */
-    public static function bar(string $value, int $width, int $height = 175): string  {
+    public static function bar(string $value, int $width, int $height = 175) :string {
         $width  = max(1, $width);
         $height = max(1, $height);
 
@@ -236,7 +237,7 @@ class Tools {
         return '<iframe style="' . htmlspecialchars($style, ENT_QUOTES) . '" src="assets/tool_apis/barcode.api.php' . $params . '"></iframe>';
     }
 
-    private static function generateTokenInternal(string $delimiter, int $many, int $fragments): array {
+    private static function generateTokenInternal(string $delimiter, int $many, int $fragments) :array {
         $tmpFile = self::getFrameworkTempFile('_tokens.txt');
 
         self::ensureDir(dirname($tmpFile));
@@ -278,7 +279,7 @@ class Tools {
         return $tokens;
     }
 
-    private static function buildToken(string $delimiter, int $fragments): string {
+    private static function buildToken(string $delimiter, int $fragments) :string {
         $parts = [];
 
         for ($j = 0; $j < $fragments; $j++) {
@@ -288,17 +289,15 @@ class Tools {
         return implode($delimiter, $parts);
     }
 
-    private static function getFrameworkTempFile(string $filename): string {
+    private static function getFrameworkTempFile(string $filename) :string {
         $base = rtrim(Vars::json_path(), '/\\') . '/framework_temp/';
 
         return $base . $filename;
     }
 
-    private static function ensureDir(string $dir): void {
+    private static function ensureDir(string $dir) :void {
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0750, true);
         }
-
     }
-
 }

@@ -1,8 +1,7 @@
 <?php
 
 trait GreenQL_ExecutionTrait {
-
-    private static function outputExpression(string $command): ?string {
+    private static function outputExpression(string $command) :?string {
         if (!preg_match('/^OUTPUT(?:\s+|\s*\()(.+)$/is', $command, $m)) {
             return null;
         }
@@ -22,15 +21,19 @@ trait GreenQL_ExecutionTrait {
         return $expr;
     }
 
-    private static function parseIfCommand(string $command): ?array {
+    private static function parseIfCommand(string $command) :?array {
         $command = trim($command);
 
-        if (!preg_match('/^IF\s*\(/i', $command)) return null;
+        if (!preg_match('/^IF\s*\(/i', $command)) {
+            return null;
+        }
 
         $len = strlen($command);
         $pos = stripos($command, '(');
 
-        if ($pos === false) return null;
+        if ($pos === false) {
+            return null;
+        }
 
         $quote = '';
         $depth = 0;
@@ -45,7 +48,9 @@ trait GreenQL_ExecutionTrait {
                     continue;
                 }
 
-                if ($ch === $quote) $quote = '';
+                if ($ch === $quote) {
+                    $quote = '';
+                }
 
                 continue;
             }
@@ -55,7 +60,9 @@ trait GreenQL_ExecutionTrait {
                 continue;
             }
 
-            if ($ch === '(') $depth++;
+            if ($ch === '(') {
+                $depth++;
+            }
 
             if ($ch === ')') {
                 $depth--;
@@ -64,19 +71,21 @@ trait GreenQL_ExecutionTrait {
                     $condEnd = $i;
                     break;
                 }
-
             }
-
         }
 
-        if ($condEnd < 0) return null;
+        if ($condEnd < 0) {
+            return null;
+        }
 
         $condition = trim(substr($command, $pos + 1, $condEnd - $pos - 1));
         $rest = ltrim(substr($command, $condEnd + 1));
 
-        if ($rest === '' || $rest[0] !== '{') return null;
+        if ($rest === '' || $rest[0] !== '{') {
+            return null;
+        }
 
-        $readBlock = function (string $raw): array {
+        $readBlock = function (string $raw) :array {
             $len = strlen($raw);
             $quote = '';
             $depth = 0;
@@ -90,7 +99,9 @@ trait GreenQL_ExecutionTrait {
                         continue;
                     }
 
-                    if ($ch === $quote) $quote = '';
+                    if ($ch === $quote) {
+                        $quote = '';
+                    }
 
                     continue;
                 }
@@ -100,7 +111,9 @@ trait GreenQL_ExecutionTrait {
                     continue;
                 }
 
-                if ($ch === '{') $depth++;
+                if ($ch === '{') {
+                    $depth++;
+                }
 
                 if ($ch === '}') {
                     $depth--;
@@ -108,9 +121,7 @@ trait GreenQL_ExecutionTrait {
                     if ($depth === 0) {
                         return [substr($raw, 1, $i - 1), ltrim(substr($raw, $i + 1))];
                     }
-
                 }
-
             }
 
             return ['', $raw];
@@ -124,16 +135,15 @@ trait GreenQL_ExecutionTrait {
 
             if ($afterElse !== '' && $afterElse[0] === '{') {
                 [$elseBody] = $readBlock($afterElse);
-            } else if (preg_match('/^IF\s*\(/i', $afterElse)) {
+            } elseif (preg_match('/^IF\s*\(/i', $afterElse)) {
                 $elseBody = $afterElse;
             }
-
         }
 
         return [$condition, $ifBody, $elseBody];
     }
 
-    private static function parsePickCommandFlexible(string $command, array $ctx, array $vars, array $params): ?array {
+    private static function parsePickCommandFlexible(string $command, array $ctx, array $vars, array $params) :?array {
         $command = trim($command);
         $explain = false;
 
@@ -172,7 +182,7 @@ trait GreenQL_ExecutionTrait {
 
         if (preg_match('/(?:^|\s)LIMIT\s+(\d+)(?=\s|$)/i', $rest, $lm)) {
             $limit = (int)$lm[1];
-        } else if (preg_match('/(?:^|\s)MAX\s*\(\s*(\d+)\s*\)(?=\s|$)/i', $rest, $mm)) {
+        } elseif (preg_match('/(?:^|\s)MAX\s*\(\s*(\d+)\s*\)(?=\s|$)/i', $rest, $mm)) {
             $limit = (int)$mm[1];
         }
 
@@ -198,7 +208,7 @@ trait GreenQL_ExecutionTrait {
         ];
     }
 
-    private static function runBlock(string $script, array &$ctx, array &$vars, array $params = []): array {
+    private static function runBlock(string $script, array &$ctx, array &$vars, array $params = []) :array {
         $results = [];
 
         foreach (self::splitCommands($script) as $blockCommand) {
@@ -243,7 +253,6 @@ trait GreenQL_ExecutionTrait {
                     'ctx' => $ctx
                 ];
             }
-
         }
 
         return [
@@ -264,7 +273,7 @@ trait GreenQL_ExecutionTrait {
      *
      * @return array result.
      */
-    public static function command(string $command, array &$ctx = [], array &$vars = [], array $params = []): array {
+    public static function command(string $command, array &$ctx = [], array &$vars = [], array $params = []) :array {
         $command = trim($command);
 
         self::syncInstance($ctx);
@@ -417,7 +426,9 @@ trait GreenQL_ExecutionTrait {
 
             $res = self::runBlock((string)file_get_contents($file), $ctx, $vars, $params);
 
-            if (!empty($res['ok'])) $res['message'] = 'Datei inkludiert: ' . basename($file);
+            if (!empty($res['ok'])) {
+                $res['message'] = 'Datei inkludiert: ' . basename($file);
+            }
 
             return $res;
         }
@@ -489,7 +500,9 @@ trait GreenQL_ExecutionTrait {
                     $classValue = self::evalRuntimeExpression((string)$pm[3], $ctx, $vars, $params);
                     $classCast = self::castVarValue($classValue, (string)($pm[1] ?? ''));
 
-                    if (!($classCast['ok'] ?? false)) return ['ok' => false, 'message' => 'Typfehler bei Klassenvariable ' . (string)$pm[2] . ': ' . (string)($classCast['message'] ?? ''), 'ctx' => $ctx];
+                    if (!($classCast['ok'] ?? false)) {
+                        return ['ok' => false, 'message' => 'Typfehler bei Klassenvariable ' . (string)$pm[2] . ': ' . (string)($classCast['message'] ?? ''), 'ctx' => $ctx];
+                    }
                     $classVars[self::cleanVarName((string)$pm[2])] = $classCast['value'] ?? null;
                     continue;
                 }
@@ -498,14 +511,15 @@ trait GreenQL_ExecutionTrait {
                     $args = self::parseFunctionParams((string)$fm[2]);
                     $methods[self::cleanName((string)$fm[1])] = ['args' => $args, 'body' => trim((string)$fm[3])];
                 }
-
             }
 
             if ($name === '') {
                 return ['ok' => false, 'message' => 'Klassenname ungültig.', 'ctx' => $ctx];
             }
 
-            if (!isset($ctx['classes']) || !is_array($ctx['classes'])) $ctx['classes'] = [];
+            if (!isset($ctx['classes']) || !is_array($ctx['classes'])) {
+                $ctx['classes'] = [];
+            }
 
             $ctx['classes'][$name] = ['vars' => $classVars, 'methods' => $methods];
 
@@ -523,9 +537,7 @@ trait GreenQL_ExecutionTrait {
                         $methodName = (string)$candidate;
                         break;
                     }
-
                 }
-
             }
 
             if (!is_array($class) || !is_array($class['methods'][$methodName] ?? null)) {
@@ -544,7 +556,9 @@ trait GreenQL_ExecutionTrait {
 
             $bind = self::bindFunctionArguments(is_array($method['args'] ?? null) ? $method['args'] : [], $argTokens, $ctx, $vars, $localVars, $params);
 
-            if (!($bind['ok'] ?? false)) return ['ok' => false, 'message' => (string)($bind['message'] ?? 'Methodenparameter ungültig.'), 'ctx' => $ctx];
+            if (!($bind['ok'] ?? false)) {
+                return ['ok' => false, 'message' => (string)($bind['message'] ?? 'Methodenparameter ungültig.'), 'ctx' => $ctx];
+            }
 
             $body = (string)($method['body'] ?? '');
             $body = preg_replace('/\bthis\.([a-zA-Z][a-zA-Z0-9_]*)\s*\(/', 'CALL ' . $className . '/$1(', $body);
@@ -558,19 +572,19 @@ trait GreenQL_ExecutionTrait {
                 if ($guard > 1000) {
                     return ['ok' => false, 'message' => 'this_f.restart() Sicherheitslimit erreicht.', 'ctx' => $ctx];
                 }
-
             } while (!empty($res['restart']));
 
             foreach (array_keys(is_array($class['vars'] ?? null) ? $class['vars'] : []) as $prop) {
                 if (array_key_exists('this__' . $prop, $localVars)) {
                     $ctx['classes'][$className]['vars'][$prop] = $localVars['this__' . $prop];
-                } else if (array_key_exists($prop, $localVars)) {
+                } elseif (array_key_exists($prop, $localVars)) {
                     $ctx['classes'][$className]['vars'][$prop] = $localVars[$prop];
                 }
-
             }
 
-            if (!empty($res['ok'])) $res['message'] = 'Methode ausgeführt: ' . $className . '/' . $methodName;
+            if (!empty($res['ok'])) {
+                $res['message'] = 'Methode ausgeführt: ' . $className . '/' . $methodName;
+            }
 
             return $res;
         }
@@ -680,10 +694,10 @@ trait GreenQL_ExecutionTrait {
                 if (preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)\s*\+\+$/', $step, $sm)) {
                     $n = self::cleanName((string)$sm[1]);
                     $vars[$n] = (int)($vars[$n] ?? 0) + 1;
-                } else if (preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)\s*--$/', $step, $sm)) {
+                } elseif (preg_match('/^([a-zA-Z_][a-zA-Z0-9_]*)\s*--$/', $step, $sm)) {
                     $n = self::cleanName((string)$sm[1]);
                     $vars[$n] = (int)($vars[$n] ?? 0) - 1;
-                } else if (preg_match('/^([$]?[a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)$/s', $step, $sm)) {
+                } elseif (preg_match('/^([$]?[a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)$/s', $step, $sm)) {
                     $vars[self::cleanName((string)$sm[1])] = self::evaluateExpression((string)$sm[2], $vars, $params);
                 }
 
@@ -696,7 +710,6 @@ trait GreenQL_ExecutionTrait {
                         'ctx' => $ctx
                     ];
                 }
-
             }
 
             return [
@@ -833,7 +846,9 @@ trait GreenQL_ExecutionTrait {
 
             $bind = self::bindFunctionArguments($fnArgs, $argTokens, $ctx, $vars, $localVars, $params);
 
-            if (!($bind['ok'] ?? false)) return ['ok' => false, 'message' => (string)($bind['message'] ?? 'Funktionsparameter ungültig.'), 'ctx' => $ctx];
+            if (!($bind['ok'] ?? false)) {
+                return ['ok' => false, 'message' => (string)($bind['message'] ?? 'Funktionsparameter ungültig.'), 'ctx' => $ctx];
+            }
 
             $results = [];
             $commands = self::splitCommands((string)($fn['body'] ?? ''));
@@ -862,7 +877,6 @@ trait GreenQL_ExecutionTrait {
                         'refresh' => true
                     ];
                 }
-
             }
 
             return [
@@ -928,7 +942,9 @@ trait GreenQL_ExecutionTrait {
         if (preg_match('/^QUERY\s+OPTIONS\s+(.+)$/is', $command, $m)) {
             $options = json_decode(trim((string)$m[1]), true);
 
-            if (!is_array($options)) return ["ok" => false, "message" => "QUERY OPTIONS erwartet JSON.", "ctx" => $ctx];
+            if (!is_array($options)) {
+                return ["ok" => false, "message" => "QUERY OPTIONS erwartet JSON.", "ctx" => $ctx];
+            }
             $active = method_exists($driver, 'queryOptions') ? $driver::queryOptions($options) : [];
 
             return ["ok" => !empty($active), "message" => "Query-Optionen aktualisiert.", "result" => $active, "ctx" => $ctx];
@@ -949,7 +965,9 @@ trait GreenQL_ExecutionTrait {
             if (isset($m[2]) && trim((string)$m[2]) !== '') {
                 $tmp = json_decode(trim((string)$m[2]), true);
 
-                if (is_array($tmp)) $bind = $tmp;
+                if (is_array($tmp)) {
+                    $bind = $tmp;
+                }
             }
 
             $res = method_exists($driver, 'executePreparedQuery') ? $driver::executePreparedQuery($name, $bind, $ctx) : ["ok" => false, "message" => "Prepared Queries nicht verfügbar."];
@@ -966,7 +984,9 @@ trait GreenQL_ExecutionTrait {
             $rightKey = self::resolveNameToken((string)$m[6], $vars);
             $limit = isset($m[7]) && $m[7] !== '' ? (int)$m[7] : 1000;
 
-            if ($db === '' || $leftTable === '' || $rightTable === '') return ["ok" => false, "message" => "Base oder Join-Tabellen fehlen.", "ctx" => $ctx];
+            if ($db === '' || $leftTable === '' || $rightTable === '') {
+                return ["ok" => false, "message" => "Base oder Join-Tabellen fehlen.", "ctx" => $ctx];
+            }
 
             $result = method_exists($driver, 'join') ? $driver::join($db, $leftTable, $rightTable, $leftKey, $rightKey, $type, ['limit' => $limit]) : ["ok" => false, "message" => "Join nicht verfügbar.", "keys" => [], "rows" => []];
 
@@ -974,7 +994,7 @@ trait GreenQL_ExecutionTrait {
         }
 
         if (preg_match('/^(?:MIGRATE\s+TO\s+V2|MIGRATE_TO_V2)$/i', $command)) {
-            $report = class_exists("GBDB") ? GBDB::migrate_to_v2() : ["ok" => false, "errors" => ["GBDB nicht geladen."]];
+            $report = class_exists("GBDB") ? GBDB::migrate() : ["ok" => false, "errors" => ["GBDB nicht geladen."]];
 
             return [
                 "ok" => (bool)($report["ok"] ?? false),
@@ -1346,26 +1366,32 @@ trait GreenQL_ExecutionTrait {
             $typesEnabled = $typeMode === "with" || ((bool)($parsedTable["typed"] ?? false) && $typeMode !== "without");
             $db = self::resolveNameToken(self::optionalDbMatch($m, 4, $ctx), $vars);
 
-            if ($db === "") return ["ok" => false, "message" => "Keine Base aktiv.", "ctx" => $ctx];
+            if ($db === "") {
+                return ["ok" => false, "message" => "Keine Base aktiv.", "ctx" => $ctx];
+            }
 
-            if ($table === "" || empty($cols)) return ["ok" => false, "message" => "Tabelle oder Felder ungültig.", "ctx" => $ctx];
+            if ($table === "" || empty($cols)) {
+                return ["ok" => false, "message" => "Tabelle oder Felder ungültig.", "ctx" => $ctx];
+            }
 
             $exists = in_array($table, $driver::listTables($db), true);
             $ok = $exists || $driver::createTable($db, $table, $cols);
 
-            if (!$ok) return ["ok" => false, "message" => "Tabelle konnte nicht erstellt werden.", "ctx" => $ctx];
+            if (!$ok) {
+                return ["ok" => false, "message" => "Tabelle konnte nicht erstellt werden.", "ctx" => $ctx];
+            }
 
             if ($exists) {
                 foreach ($cols as $col) {
                     if ($col !== "id" && !in_array($col, self::getTableKeys($db, $table), true)) {
                         $driver::addColumn($db, $table, $col, $schemaCols[$col]["default"] ?? "");
                     }
-
                 }
-
             }
 
-            if (method_exists($driver, 'enableSchemaTypes')) $driver::enableSchemaTypes($db, $table, $typesEnabled);
+            if (method_exists($driver, 'enableSchemaTypes')) {
+                $driver::enableSchemaTypes($db, $table, $typesEnabled);
+            }
 
             if ($typesEnabled && method_exists($driver, 'setColumnType')) {
                 foreach ($schemaCols as $col => $def) {
@@ -1376,15 +1402,22 @@ trait GreenQL_ExecutionTrait {
 
                     $driver::setColumnType($db, $table, (string)$col, $type, $opts);
 
-                    if (array_key_exists('default', $def) && method_exists($driver, 'setColumnDefault')) $driver::setColumnDefault($db, $table, (string)$col, $def['default']);
+                    if (array_key_exists('default', $def) && method_exists($driver, 'setColumnDefault')) {
+                        $driver::setColumnDefault($db, $table, (string)$col, $def['default']);
+                    }
 
-                    if (!empty($def['required']) && method_exists($driver, 'setSchemaConstraint')) $driver::setSchemaConstraint($db, $table, (string)$col, 'required', true);
+                    if (!empty($def['required']) && method_exists($driver, 'setSchemaConstraint')) {
+                        $driver::setSchemaConstraint($db, $table, (string)$col, 'required', true);
+                    }
 
-                    if (!empty($def['unique']) && method_exists($driver, 'setSchemaConstraint')) $driver::setSchemaConstraint($db, $table, (string)$col, 'unique', true);
+                    if (!empty($def['unique']) && method_exists($driver, 'setSchemaConstraint')) {
+                        $driver::setSchemaConstraint($db, $table, (string)$col, 'unique', true);
+                    }
 
-                    if (!empty($def['auto_increment']) && method_exists($driver, 'setSchemaConstraint')) $driver::setSchemaConstraint($db, $table, (string)$col, 'auto_increment', true);
+                    if (!empty($def['auto_increment']) && method_exists($driver, 'setSchemaConstraint')) {
+                        $driver::setSchemaConstraint($db, $table, (string)$col, 'auto_increment', true);
+                    }
                 }
-
             }
 
             $ctx["db"] = $db;
@@ -1402,28 +1435,42 @@ trait GreenQL_ExecutionTrait {
                 $column = (string)$colDef['name'];
                 $default = $colDef['options']['default'] ?? self::defaultForGreenQLType((string)$colDef['type']);
 
-                if ($db === "" || $table === "" || $column === "" || $column === "id") return ["ok" => false, "message" => "Base, Tabelle oder Spalte fehlt.", "ctx" => $ctx];
+                if ($db === "" || $table === "" || $column === "" || $column === "id") {
+                    return ["ok" => false, "message" => "Base, Tabelle oder Spalte fehlt.", "ctx" => $ctx];
+                }
 
                 $existsBefore = in_array($column, self::getTableKeys($db, $table), true);
                 $ok = $driver::addColumn($db, $table, $column, $default);
 
-                if (!$ok) return ["ok" => false, "message" => "Spalte konnte nicht hinzugefügt werden.", "ctx" => $ctx];
+                if (!$ok) {
+                    return ["ok" => false, "message" => "Spalte konnte nicht hinzugefügt werden.", "ctx" => $ctx];
+                }
 
-                if (method_exists($driver, 'enableSchemaTypes')) $driver::enableSchemaTypes($db, $table, true);
+                if (method_exists($driver, 'enableSchemaTypes')) {
+                    $driver::enableSchemaTypes($db, $table, true);
+                }
 
-                if (method_exists($driver, 'setColumnType')) $driver::setColumnType($db, $table, $column, (string)$colDef['type'], $colDef['options'] ?? []);
+                if (method_exists($driver, 'setColumnType')) {
+                    $driver::setColumnType($db, $table, $column, (string)$colDef['type'], $colDef['options'] ?? []);
+                }
 
-                if (!empty($colDef['options']['required']) && method_exists($driver, 'setSchemaConstraint')) $driver::setSchemaConstraint($db, $table, $column, 'required', true);
+                if (!empty($colDef['options']['required']) && method_exists($driver, 'setSchemaConstraint')) {
+                    $driver::setSchemaConstraint($db, $table, $column, 'required', true);
+                }
 
-                if (!empty($colDef['options']['unique']) && method_exists($driver, 'setSchemaConstraint')) $driver::setSchemaConstraint($db, $table, $column, 'unique', true);
+                if (!empty($colDef['options']['unique']) && method_exists($driver, 'setSchemaConstraint')) {
+                    $driver::setSchemaConstraint($db, $table, $column, 'unique', true);
+                }
 
-                if (!empty($colDef['options']['auto_increment']) && method_exists($driver, 'setSchemaConstraint')) $driver::setSchemaConstraint($db, $table, $column, 'auto_increment', true);
+                if (!empty($colDef['options']['auto_increment']) && method_exists($driver, 'setSchemaConstraint')) {
+                    $driver::setSchemaConstraint($db, $table, $column, 'auto_increment', true);
+                }
 
-                $ctx["db"] = $db; $ctx["table"] = $table;
+                $ctx["db"] = $db;
+                $ctx["table"] = $table;
 
                 return ["ok" => true, "message" => $existsBefore ? "Spalte bereits vorhanden: " . $column : "Typed-Spalte hinzugefügt: " . $column . " (" . (string)$colDef['type'] . ")", "ctx" => $ctx, "refresh" => true];
             }
-
         }
 
         if (preg_match('/^EDIT\s+TABLE\s+([a-zA-Z0-9_\-]+)\s+ADD(?!\s+(?:CONSTRAINT|FOREIGN\s+KEY))(?:\s+COLUMN)?\s+([a-zA-Z0-9_\-]+)(?:\s+(?:DEFAULT\s+)?(.+?))?(?:\s+IN\s+([a-zA-Z0-9_\-]+))?$/i', $command, $m)) {
@@ -1982,9 +2029,7 @@ trait GreenQL_ExecutionTrait {
                             'constraint' => (string)$type
                         ];
                     }
-
                 }
-
             }
 
             return [
@@ -2017,7 +2062,6 @@ trait GreenQL_ExecutionTrait {
                 } else {
                     $rows[] = ['index' => (string)$idx, 'type' => 'single', 'columns' => (string)$idx, 'unique' => 'no'];
                 }
-
             }
 
             return [
@@ -2032,12 +2076,16 @@ trait GreenQL_ExecutionTrait {
         if (preg_match('/^(?:(PRIMARY|UNIQUE|COMPOSITE|SORTED|RANGE|PREFIX|FULLTEXT)\s+)?(?:INDEX|CREATE\s+INDEX\s+ON)\s+([a-zA-Z0-9_\-]+)\s+(.+?)(?:\s+IN\s+([a-zA-Z0-9_\-]+))?$/i', $command, $m)) {
             $type = strtolower((string)($m[1] ?? 'single'));
 
-            if ($type === '') $type = 'single';
+            if ($type === '') {
+                $type = 'single';
+            }
 
             $table = self::resolveNameToken((string)$m[2], $vars);
             $columns = self::parseList((string)$m[3], $vars);
 
-            if (empty($columns)) $columns = [self::resolveNameToken((string)$m[3], $vars)];
+            if (empty($columns)) {
+                $columns = [self::resolveNameToken((string)$m[3], $vars)];
+            }
 
             $db = self::resolveNameToken(self::optionalDbMatch($m, 4, $ctx), $vars);
 
@@ -2105,7 +2153,9 @@ trait GreenQL_ExecutionTrait {
             $table = self::resolveNameToken((string)$m[1], $vars);
             $db = self::resolveNameToken(self::optionalDbMatch($m, 2, $ctx), $vars);
 
-            if ($db === '' || $table === '') return ['ok' => false, 'message' => 'Base oder Tabelle fehlt.', 'ctx' => $ctx];
+            if ($db === '' || $table === '') {
+                return ['ok' => false, 'message' => 'Base oder Tabelle fehlt.', 'ctx' => $ctx];
+            }
 
             $result = method_exists($driver, 'repairIndexes') ? $driver::repairIndexes($db, $table) : ['ok' => false];
 
@@ -2123,9 +2173,13 @@ trait GreenQL_ExecutionTrait {
             $health = $driver::health($db, $table);
             $rows = [];
 
-            foreach (($health['errors'] ?? []) as $err) $rows[] = ['type' => 'error', 'value' => $err];
+            foreach (($health['errors'] ?? []) as $err) {
+                $rows[] = ['type' => 'error', 'value' => $err];
+            }
 
-            foreach (($health['warnings'] ?? []) as $warn) $rows[] = ['type' => 'warning', 'value' => $warn];
+            foreach (($health['warnings'] ?? []) as $warn) {
+                $rows[] = ['type' => 'warning', 'value' => $warn];
+            }
 
             return [
                 'ok' => (bool)($health['ok'] ?? false),
@@ -2293,9 +2347,13 @@ trait GreenQL_ExecutionTrait {
             $result = method_exists($driver, 'autoIndex') ? $driver::autoIndex($db, $table, $columns) : ['ok' => false, 'created' => [], 'failed' => []];
             $rows = [];
 
-            foreach (($result['created'] ?? []) as $column) $rows[] = ['column' => (string)$column, 'status' => 'created'];
+            foreach (($result['created'] ?? []) as $column) {
+                $rows[] = ['column' => (string)$column, 'status' => 'created'];
+            }
 
-            foreach (($result['failed'] ?? []) as $column) $rows[] = ['column' => (string)$column, 'status' => 'failed'];
+            foreach (($result['failed'] ?? []) as $column) {
+                $rows[] = ['column' => (string)$column, 'status' => 'failed'];
+            }
 
             return [
                 'ok' => (bool)($result['ok'] ?? false),
@@ -2321,7 +2379,6 @@ trait GreenQL_ExecutionTrait {
                 } else {
                     $table = self::resolveNameToken($ref, $vars);
                 }
-
             }
 
             if ($ref === '') {
@@ -2339,7 +2396,6 @@ trait GreenQL_ExecutionTrait {
                             'data_size' => (int)($monitor['data_size'] ?? 0)
                         ];
                     }
-
                 }
 
                 return ['ok' => true, 'message' => 'Monitoring-Übersicht gelesen.', 'keys' => ['base', 'table', 'rows', 'append_ops', 'data_size'], 'rows' => $rows, 'ctx' => $ctx];
@@ -2433,8 +2489,10 @@ trait GreenQL_ExecutionTrait {
             return ['ok' => (bool)($result['ok'] ?? false), 'message' => 'Cursor geladen. Next: ' . (string)($result['cursor'] ?? ''), 'keys' => $keys, 'rows' => $rows, 'result' => $result, 'ctx' => $ctx];
         }
 
-        if (preg_match('/^FULLTEXT\s+([a-zA-Z0-9_\-.]+)\s+SEARCH\s+(.+?)(?:\s+COLUMNS\s+(.+?))?(?:\s+LIMIT\s+(\d+))?$/i', $command, $m)
-            || preg_match('/^FULLTEXT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_\-.]+)(?:\s+IN\s+([a-zA-Z0-9_\-]+))?(?:\s+COLUMNS\s+(.+?))?(?:\s+LIMIT\s+(\d+))?$/i', $command, $mOld)) {
+        if (
+            preg_match('/^FULLTEXT\s+([a-zA-Z0-9_\-.]+)\s+SEARCH\s+(.+?)(?:\s+COLUMNS\s+(.+?))?(?:\s+LIMIT\s+(\d+))?$/i', $command, $m)
+            || preg_match('/^FULLTEXT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_\-.]+)(?:\s+IN\s+([a-zA-Z0-9_\-]+))?(?:\s+COLUMNS\s+(.+?))?(?:\s+LIMIT\s+(\d+))?$/i', $command, $mOld)
+        ) {
             if (isset($mOld)) {
                 $query = self::evaluateValue(trim((string)$mOld[1]), $vars, $params);
                 $ref = trim((string)$mOld[2]);
@@ -2600,7 +2658,9 @@ trait GreenQL_ExecutionTrait {
             $table = self::resolveNameToken((string)$m[2], $vars);
             $db = self::resolveNameToken(self::optionalDbMatch($m, 3, $ctx), $vars);
 
-            if ($db === '' || $table === '' || $column === '') return ['ok' => false, 'message' => 'Base, Tabelle oder Spalte fehlt.', 'ctx' => $ctx];
+            if ($db === '' || $table === '' || $column === '') {
+                return ['ok' => false, 'message' => 'Base, Tabelle oder Spalte fehlt.', 'ctx' => $ctx];
+            }
 
             $result = self::distinctRows($db, $table, $column);
 
@@ -2615,9 +2675,13 @@ trait GreenQL_ExecutionTrait {
             $group = isset($m[5]) && $m[5] !== '' ? self::resolveNameToken((string)$m[5], $vars) : null;
             $having = isset($m[6]) && trim((string)$m[6]) !== '' ? self::parseWhere(strtolower($fn) . ' ' . (string)$m[6], $vars, $params) : null;
 
-            if ($having !== null) $having['field'] = strtolower($fn);
+            if ($having !== null) {
+                $having['field'] = strtolower($fn);
+            }
 
-            if ($db === '' || $table === '') return ['ok' => false, 'message' => 'Base oder Tabelle fehlt.', 'ctx' => $ctx];
+            if ($db === '' || $table === '') {
+                return ['ok' => false, 'message' => 'Base oder Tabelle fehlt.', 'ctx' => $ctx];
+            }
 
             $result = self::aggregateRows($db, $table, $fn, $column, $group, $having);
 
@@ -2644,7 +2708,9 @@ trait GreenQL_ExecutionTrait {
                     $plan = method_exists($driver, 'queryPlan') ? $driver::queryPlan($db, $table, (string)($pick['where']['field'] ?? ''), $pick['where']['value'] ?? '', $pick['sort_field'], $pick['limit'], $pick['offset']) : [];
                     $row = [];
 
-                    foreach ($plan as $key => $value) $row[$key] = is_scalar($value) || $value === null ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
+                    foreach ($plan as $key => $value) {
+                        $row[$key] = is_scalar($value) || $value === null ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
+                    }
 
                     return ['ok' => true, 'message' => 'Query Plan für ' . $table . '.', 'keys' => array_keys($row), 'rows' => [$row], 'result' => $plan, 'ctx' => $ctx];
                 }
@@ -2664,7 +2730,6 @@ trait GreenQL_ExecutionTrait {
                     'result' => ['query_id' => $result['query_id'] ?? '', 'plan' => $result['plan'] ?? []]
                 ];
             }
-
         }
 
         if (preg_match('/^EXPLAIN\s+PICK\s+(.+?)\s+FROM\s+([a-zA-Z0-9_\-]+)(?:\s+IN\s+([a-zA-Z0-9_\-]+))?(?:\s+WHERE\s+(.+?))?(?:\s+SORT\s+([a-zA-Z0-9_\-]+)\s+(ASC|DESC))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$/is', $command, $m)) {
@@ -2677,7 +2742,9 @@ trait GreenQL_ExecutionTrait {
             $plan = method_exists($driver, 'queryPlan') ? $driver::queryPlan($db, $table, (string)($where['field'] ?? ''), $where['value'] ?? '', $sort, $limit, $offset) : [];
             $row = [];
 
-            foreach ($plan as $key => $value) $row[$key] = is_scalar($value) || $value === null ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
+            foreach ($plan as $key => $value) {
+                $row[$key] = is_scalar($value) || $value === null ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
+            }
 
             return ["ok" => true, "message" => "Query Plan für " . $table . ".", "keys" => array_keys($row), "rows" => [$row], "result" => $plan, "ctx" => $ctx];
         }
@@ -2827,7 +2894,6 @@ trait GreenQL_ExecutionTrait {
                     $ok = false;
                     break;
                 }
-
             }
 
             if (!$ok) {
@@ -2910,7 +2976,6 @@ trait GreenQL_ExecutionTrait {
                     $ok = false;
                     break;
                 }
-
             }
 
             if (!$ok) {
@@ -2945,32 +3010,38 @@ trait GreenQL_ExecutionTrait {
         ];
     }
 
-    private static function unknownCommandMessage(string $command, array $ctx = []): string {
+    private static function unknownCommandMessage(string $command, array $ctx = []) :string {
         $head = strtoupper(strtok(trim($command), " \t\r\n") ?: '');
         $hint = 'Syntax prüfen.';
 
         if ($head === 'PICK' || (strtoupper(substr(trim($command), 0, 12)) === 'EXPLAIN PICK')) {
             $hint = 'PICK-Syntax: PICK spalte1, spalte2 FROM tabelle [IN base] [WHERE feld = wert] [SORT feld ASC|DESC] [LIMIT n] [OFFSET n]. IN darf auch am Ende stehen.';
-        } else if ($head === 'SEED') {
+        } elseif ($head === 'SEED') {
             $hint = 'SEED-Syntax: SEED tabelle WITH feld=wert, feld2=wert2 [IN base]. Funktionen wie uni_random() und hash_sha256(...) werden als Werte ausgewertet.';
-        } else if ($head === 'RESHAPE') {
+        } elseif ($head === 'RESHAPE') {
             $hint = 'RESHAPE-Syntax: RESHAPE tabelle WITH feld=wert WHERE feld = wert [IN base].';
-        } else if ($head === 'IF') {
+        } elseif ($head === 'IF') {
             $hint = 'IF-Syntax: IF (bedingung) { befehle; } optional ELSE { ... }. Klammern/Quotes prüfen.';
         }
 
         $where = [];
 
-        if (!empty($ctx['instance'])) $where[] = 'instance=' . self::cleanName((string)$ctx['instance']);
+        if (!empty($ctx['instance'])) {
+            $where[] = 'instance=' . self::cleanName((string)$ctx['instance']);
+        }
 
-        if (!empty($ctx['db'])) $where[] = 'base=' . self::cleanName((string)$ctx['db']);
+        if (!empty($ctx['db'])) {
+            $where[] = 'base=' . self::cleanName((string)$ctx['db']);
+        }
 
-        if (!empty($ctx['table'])) $where[] = 'table=' . self::cleanName((string)$ctx['table']);
+        if (!empty($ctx['table'])) {
+            $where[] = 'table=' . self::cleanName((string)$ctx['table']);
+        }
 
         return 'Befehl nicht erkannt: ' . $command . ' | Hinweis: ' . $hint . (!empty($where) ? ' | Kontext: ' . implode(', ', $where) : '');
     }
 
-    private static function collectResultArtifacts(array $result, string $command, array &$outputs, array &$results, array &$lastKeys, array &$lastRows): void {
+    private static function collectResultArtifacts(array $result, string $command, array &$outputs, array &$results, array &$lastKeys, array &$lastRows) :void {
         if (isset($result["keys"], $result["rows"])) {
             $isOutput = (string)($result["message"] ?? "") === "OUTPUT" || (count((array)$result["keys"]) === 1 && ((array)$result["keys"])[0] === "output");
 
@@ -2985,7 +3056,6 @@ trait GreenQL_ExecutionTrait {
                         "value" => $row["output"] ?? ""
                     ];
                 }
-
             } else {
                 $lastKeys = $result["keys"];
                 $lastRows = $result["rows"];
@@ -3008,9 +3078,7 @@ trait GreenQL_ExecutionTrait {
                 $nestedCommand = (string)($nested["command"] ?? $command);
                 self::collectResultArtifacts($nested, $nestedCommand, $outputs, $results, $lastKeys, $lastRows);
             }
-
         }
-
     }
 
     /**
@@ -3021,7 +3089,7 @@ trait GreenQL_ExecutionTrait {
      * @return array Rückgabewert.
      */
 
-    private static function collectResultStreams(array $result, string $command, array &$results, array &$outputs, array &$lastKeys, array &$lastRows): void {
+    private static function collectResultStreams(array $result, string $command, array &$results, array &$outputs, array &$lastKeys, array &$lastRows) :void {
         if (isset($result["keys"], $result["rows"])) {
             $isOutput = (string)($result["message"] ?? "") === "OUTPUT" || (count((array)$result["keys"]) === 1 && ((array)$result["keys"])[0] === "output");
 
@@ -3036,7 +3104,6 @@ trait GreenQL_ExecutionTrait {
                         "value" => $row["output"] ?? ""
                     ];
                 }
-
             } else {
                 $lastKeys = (array)$result["keys"];
                 $lastRows = (array)$result["rows"];
@@ -3055,11 +3122,8 @@ trait GreenQL_ExecutionTrait {
                 if (is_array($child)) {
                     self::collectResultStreams($child, (string)($child["command"] ?? $command), $results, $outputs, $lastKeys, $lastRows);
                 }
-
             }
-
         }
-
     }
 
     /**
@@ -3071,7 +3135,7 @@ trait GreenQL_ExecutionTrait {
      *
      * @return array result.
      */
-    public static function run(string $script, array $ctx = [], array $params = []): array {
+    public static function run(string $script, array $ctx = [], array $params = []) :array {
         self::syncInstance($ctx);
 
         $commands = self::splitCommands(trim($script));
@@ -3134,7 +3198,6 @@ trait GreenQL_ExecutionTrait {
                 $okAll = false;
                 break;
             }
-
         }
 
         if (!$okAll) {
@@ -3147,7 +3210,6 @@ trait GreenQL_ExecutionTrait {
                     "text" => "Aktive Transaktion wegen Fehler verworfen."
                 ];
             }
-
         }
 
         return [
@@ -3167,5 +3229,4 @@ trait GreenQL_ExecutionTrait {
             "refresh" => $refresh
         ];
     }
-
 }

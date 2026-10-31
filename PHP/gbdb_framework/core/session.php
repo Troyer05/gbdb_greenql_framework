@@ -1,12 +1,11 @@
 <?php
 
 class Session {
-
     /**
      * start session if not started already and sets cookie to safe-cookies
      * @return void
      */
-    public static function handler(): void {
+    public static function handler() :void {
 
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
@@ -15,7 +14,7 @@ class Session {
         session_set_cookie_params([
             "lifetime" => 360 * 24 * 60 * 60, // 360 days
             "path" => "/",
-            "secure" => isset($_SERVER["HTTPS"]),
+            "secure" => !empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off",
             "httponly" => true,
             "samesite" => "Lax"
         ]);
@@ -30,25 +29,24 @@ class Session {
         self::autoRegenerate();
     }
 
-    private static function autoRegenerate(): void {
-        $interval = 60 * 30; // alle 30 Minuten regenerieren
+    private static function autoRegenerate() :void {
+        $interval = 60 * 30;
+        // alle 30 Minuten regenerieren
 
         if (time() - ($_SESSION["_last_regen"] ?? 0) > $interval) {
             session_regenerate_id(true);
             $_SESSION["_last_regen"] = time();
         }
-
     }
 
     /**
      * initializes cookies defined in env
      * @return void
      */
-    public static function init(): void {
+    public static function init() :void {
         foreach (Vars::init_session() as $entry) {
             $_SESSION[$entry["session_name"]] = $entry["session_value"];
         }
-
     }
 
     /**
@@ -56,7 +54,7 @@ class Session {
      * @param string $name
      * @return mixed
      */
-    public static function get(string $name): mixed {
+    public static function get(string $name) :mixed {
         return $_SESSION[$name] ?? null;
     }
 
@@ -66,7 +64,7 @@ class Session {
      * @param mixed $value
      * @return void
      */
-    public static function set(string $name, mixed $value): void {
+    public static function set(string $name, mixed $value) :void {
         $_SESSION[$name] = $value;
     }
 
@@ -75,7 +73,7 @@ class Session {
      * @param string $name
      * @return bool
      */
-    public static function exists(string $name): bool {
+    public static function exists(string $name) :bool {
         return array_key_exists($name, $_SESSION);
     }
 
@@ -84,7 +82,7 @@ class Session {
      * @param string $name
      * @return void
      */
-    public static function delete(string $name): void {
+    public static function delete(string $name) :void {
         unset($_SESSION[$name]);
     }
 
@@ -92,9 +90,8 @@ class Session {
      * terminate session
      * @return void
      */
-    public static function destroy(): void {
+    public static function destroy() :void {
         session_unset();
         session_destroy();
     }
-
 }
