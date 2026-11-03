@@ -1,91 +1,51 @@
-# 01 — Framework Overview
+# 01 – Überblick und Begriffe
 
-GBDB / SecondServerModul is a PHP framework centered around a file-based database engine and a scripting/query language called GreenQL. It is designed for small to medium web applications, admin tools, API backends, embedded-device dashboards and multi-instance product deployments where a classic SQL server would be unnecessary or too heavy.
+GBDB verbindet lokale Datenhaltung und PHP-Anwendungswerkzeuge. Eine Installation funktioniert ohne externen Datenbankserver. SQL-Fallback, GDP und entfernte Schnittstellen werden gezielt hinzugeschaltet.
 
-The framework combines these subsystems:
+## Die Bausteine
 
-- **GBDB database engine**: stores instances, bases and tables as protected files under `GBDB_GQL/.DB/`.
-- **GreenQL**: a script/query language for schema creation, CRUD, control flow, functions, classes, remote calls, transactions, indexes and maintenance commands.
-- **GBDB UI / GreenQL UI**: browser-based admin and scripting interface with its own internal user store.
-- **Public API**: key-based external API with rights such as `gbdb-read`, `gbdb-write`, `gbdb-gql`, `gbdb-admin`, `gbdb-structure` and module-specific rights.
-- **SecondServer / SRV / SrvP**: remote backend layer for forwarding database, auth and job instructions to another server.
-- **Auth**: user registration, login, JWT cookie handling, email verification and 2FA flows.
-- **Core helpers**: HTTP, validation, sessions, cookies, encryption, JSON/file tools, routing, SQL bridge and formatting helpers.
-- **Plugins**: wrappers and maintenance layers for mRoot, MuseumQR, ShareSuite and EventQR.
+| Baustein | Aufgabe | Einstieg |
+| --- | --- | --- |
+| `GBDB` | Öffentliche Datenbankschnittstelle mit einheitlichem Speicherzugriff | `runtime/facade.php` |
+| `GBDBEngine` | Interne dateibasierte Engine aus mehreren Traits | `GBDB_GQL/db_engine/gbdb.php` |
+| `GBDBRuntime` | Sperren, aktives Speicherbackend, Spiegelung und Anfragecache | `runtime/runtime.php` |
+| `GreenQL` | Abfragen und mehrteilige Skripte | `GBDB_GQL/greenql/greenql.php` |
+| `Auth` | Benutzer und Anmeldung der eigenen Anwendung | `runtime/auth_facade.php` |
+| GBDB Control Center | Verwaltung mit eigenen Konten und Rechten | `PHP/gbdb_ui.php` |
+| Public API | Externe JSON-Aufrufe mit API-Schlüsseln | `PHP/public_api.php` |
+| SecondServer | Aufträge und Anmeldeaufrufe an ein anderes Backend | `PHP/backend.php` |
+| GDP/1 | Replikation zwischen einem Hub und mehreren Replikaten | `PHP/gdp.php` |
+| Framework-Updater | Signierte Framework-Releases prüfen und installieren | `updater/` |
 
-## When should a developer use GBDB?
+Pfade ohne `PHP/` beziehen sich in dieser Tabelle auf `PHP/gbdb_framework/`.
 
-Use GBDB when you want:
+## Datenmodell
 
-- simple PHP deployment without requiring MySQL/MariaDB/PostgreSQL;
-- tenant-aware local data storage;
-- encrypted or obfuscated file-backed tables;
-- an admin UI for direct data management;
-- a script language for migrations and automation;
-- a public API that can be extended module-by-module;
-- a remote server bridge between installations.
+| Begriff | Bedeutung |
+| --- | --- |
+| Instanz | Getrennter logischer Datenbereich, etwa für Mandanten oder Anwendungen |
+| Base / Datenbank | Sammlung von Tabellen innerhalb einer Instanz |
+| Tabelle | Schema und Datensätze innerhalb einer Datenbank |
+| Datensatz | Assoziatives Array mit Feldern; die Engine verwaltet eine numerische `id` |
+| Physischer Speicher | Dateien unter `STORAGE.path`, standardmäßig `GBDB_GQL/.DB` relativ zum Framework |
 
-Do not use GBDB as a drop-in replacement for a very high-write, multi-node SQL database. GBDB has strong maintenance and locking utilities, but file-backed storage is best when the write volume is predictable and the deployment is controlled.
+Eine Instanz ist eine logische Trennung. Die Anwendung muss weiterhin prüfen, welcher angemeldete Benutzer auf welche Instanz zugreifen darf. Die Admin-UI und die Public API haben zusätzliche eigene Zugriffskontrollen.
 
-## Mental model
+## Welche Schnittstelle passt?
 
-A normal application request looks like this:
+| Aufgabe | Schnittstelle |
+| --- | --- |
+| Daten aus eigenem PHP-Code lesen oder ändern | `GBDB::…` |
+| Schema, Migrationen oder Verwaltungsabläufe skripten | `GBDB::query()` und `GBDB::runScript()` |
+| Browser, Geräte oder externe Systeme anbinden | Public API, vorzugsweise fachlich begrenzte eigene Module |
+| Remote-Anmeldung oder einen Auftrag auf einem anderen Server auslösen | `SecondServer::…` |
+| Daten zwischen unabhängigen GBDB-Installationen replizieren | GDP |
+| Lokalen Speicherausfall innerhalb einer Installation abfangen | SQL-Fallback |
 
-```php
-<?php
+SQL-Fallback und GDP erfüllen unterschiedliche Aufgaben. Der Fallback hält das GBDB-Dateiformat in SQL vor. GDP überträgt fachliche Änderungen zwischen Knoten und erzwingt dabei Schreibregeln.
 
-require_once __DIR__ . "/gbdb_framework/autoloader.php";
+## Rahmen des Projekts
 
-GBDB::setInstance("main");
-GBDB::createDatabase("app");
-GBDB::createTable("app", "users", ["uid", "name", "email", "active"]);
+Die Engine enthält zahlreiche Verwaltungsfunktionen, darunter Indizes, Schemata, Transaktionen, Sicherungen und vorbereitete Enterprise-Adapter. Ihr Reifegrad ist unterschiedlich. Die [Statusübersicht](18-feature-status.md) übernimmt die Einschränkungen aus dem Code und trennt vorhandene Funktionen von bloßen Platzhaltern.
 
-GBDB::insertData("app", "users", [
-    "uid" => Tools::generateId(),
-    "name" => "Max",
-    "email" => "max@example.com",
-    "active" => "1"
-]);
-
-$users = GBDB::getData("app", "users");
-```
-
-A GreenQL version of the same workflow:
-
-```gql
-USE INSTANCE main;
-GROW BASE app;
-GROW TABLE users WITH uid, name, email, active IN app;
-SEED users WITH {"uid":"u1", "name":"Max", "email":"max@example.com", "active":"1"} IN app;
-PICK * FROM users IN app WHERE active = "1" LIMIT 50;
-```
-
-A Public API request version:
-
-```json
-{
-  "key": "YOUR_API_KEY",
-  "do": "gbdb.insert",
-  "instance": "main",
-  "base": "app",
-  "table": "users",
-  "data": {
-    "uid": "u1",
-    "name": "Max",
-    "email": "max@example.com",
-    "active": "1"
-  }
-}
-```
-
-## How to choose the right layer
-
-| Situation | Recommended layer |
-|---|---|
-| Internal PHP code needs CRUD | `GBDB::...` methods. |
-| You need migrations, scripts or admin-console operations | GreenQL. |
-| A browser/mobile/embedded device calls the app | Public API. |
-| One server must forward work to another server | `SecondServer` / SrvP. |
-| You need login, JWT, 2FA or user store | `Auth`. |
-| You need a simple route-based app | `Route`. |
-| You need SQL fallback or migration bridge | `SQL` / `DatabaseBridge`. |
+Eine bestimmte maximale Datenmenge, feste Antwortzeit oder ausfallsichere Cluster-Skalierung ist damit nicht zugesichert. Besonders `page()`, `cursor()` und `streamRows()` laden derzeit intern die Tabelle; ihre Namen garantieren keinen begrenzten Speicherbedarf.

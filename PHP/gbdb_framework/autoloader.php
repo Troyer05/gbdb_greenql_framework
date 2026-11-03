@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/runtime/config.php';
 require_once __DIR__ . '/.config/.framework.env.php';
+require_once __DIR__ . '/updater/gate.php';
+
+// Framework-Updater: Wartungsmodus und Abschluss einer Installation vor allem anderen.
+GBDBUpdateGate::boot();
+
 require_once __DIR__ . '/runtime/sql_store.php';
 require_once __DIR__ . '/runtime/runtime.php';
 require_once __DIR__ . '/runtime/filesystem.php';
@@ -84,3 +89,5 @@ require_once $BASE . '/Distributed/loader.php';
 GDP::bootEmbedded();
 
 gbdb_loadLocal($BASE . "/plugins", ["musterCode.php"]);
+
+GBDBUpdateGate::afterBoot();

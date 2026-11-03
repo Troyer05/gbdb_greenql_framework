@@ -30,9 +30,76 @@ function gbdbui_asset(string $asset) :string {
     $asset = explode('?', $asset, 2)[0];
     $file = dirname(__DIR__) . '/' . $asset;
     // Inhaltsversion statt nur Framework-Version: ein Update liefert sofort neue Dateien aus.
-    $version = Vars::framework_version() . (is_file($file) ? '-' . base_convert((string) filemtime($file), 10, 36) . '-' . base_convert((string) filesize($file), 10, 36) : '');
+    $version = gbdbui_framework_version() . (is_file($file) ? '-' . base_convert((string) filemtime($file), 10, 36) . '-' . base_convert((string) filesize($file), 10, 36) : '');
 
     return gbdbui_url('', ['gbdb_asset' => $asset, 'v' => $version]);
+}
+
+/** Installierte Framework-Version (aus version.json, nicht aus der Konfiguration). */
+function gbdbui_framework_version() :string {
+    try {
+        return 'v' . GBDBUpdateVersion::current();
+    } catch (Throwable) {
+        return class_exists('Vars') ? Vars::framework_version() : '';
+    }
+}
+
+/**
+ * Hinweis auf ein verfügbares Framework-Update für Admins, auf jeder Seite der Oberfläche.
+ * Liest nur den gespeicherten Status; die Suche selbst läuft im Hintergrund.
+ */
+function gbdbui_update_banner(string $active) :void {
+    if (!class_exists('GreenQLUIv2Helper') || !GreenQLUIv2Helper::isAdmin()) {
+        return;
+    }
+
+    try {
+        $status = GBDBFrameworkUpdater::status();
+        $job = GBDBUpdateInstaller::job();
+    } catch (Throwable) {
+        return;
+    }
+
+    $csrf = gbdbui_e(GreenQLUIv2Helper::csrf());
+
+    if ($status['due']) {
+        echo '<span hidden data-gbdb-update-tick data-url="' . gbdbui_e(gbdbui_url('updates')) . '" data-csrf="' . $csrf . '"></span>';
+    }
+
+    if ($active === 'updates') {
+        return;
+    }
+
+    if (GBDBUpdateInstaller::isActive($job)) {
+        echo '<div class="notice notice-info gbdbui-update-banner" role="status"><div><strong>' . gbdbui_icon('refresh', 16) . ' Framework-Update auf v' . gbdbui_e($job['version'] ?? '') . ' läuft</strong><p>'
+            . (($job['status'] ?? '') === 'needs_confirmation' ? 'Eine Entscheidung ist erforderlich.' : 'Der Vorgang ist noch nicht abgeschlossen.') . '</p></div>'
+            . '<div class="gbdbui-update-actions"><a class="btn btn-primary btn-sm" href="' . gbdbui_e(gbdbui_url('updates')) . '">Zum Update</a></div></div>';
+
+        return;
+    }
+
+    if (!empty($status['notify'])) {
+        $version = gbdbui_e($status['available']['version']);
+        echo '<div class="notice notice-info gbdbui-update-banner" role="status"><div><strong>' . gbdbui_icon('download', 16) . ' Ein neues GBDB FrameWork Update ist verfügbar!</strong>'
+            . '<p>Installierte Version: <code>v' . gbdbui_e($status['installed']) . '</code> · Verfügbare Version: <code>v' . $version . '</code> · signiert und geprüft</p></div>'
+            . '<div class="gbdbui-update-actions">'
+            . '<form method="post" action="' . gbdbui_e(gbdbui_url('updates')) . '" data-confirm="GBDB auf v' . $version . ' aktualisieren? Vorher wird automatisch gesichert; bei Fehlern wird zurückgerollt.">'
+            . '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="update_action" value="install"><input type="hidden" name="version" value="' . $version . '">'
+            . '<button class="btn btn-primary btn-sm">Update installieren</button></form>'
+            . '<form method="post" action="' . gbdbui_e(gbdbui_url('updates')) . '"><input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="update_action" value="skip">'
+            . '<input type="hidden" name="version" value="' . $version . '"><input type="hidden" name="return" value="' . gbdbui_e($active) . '"><button class="btn btn-secondary btn-sm">Dieses Update überspringen</button></form>'
+            . '</div></div>';
+
+        return;
+    }
+
+    $security = ['INVALID_SIGNATURE', 'UNTRUSTED_KEY', 'REVOKED_KEY', 'INVALID_CHECKSUM', 'ROLLBACK_DETECTED', 'INVALID_METADATA', 'CLOCK_INVALID', 'EXPIRED_METADATA'];
+
+    if (in_array($status['code'] ?? '', $security, true) || ($status['warnings'] ?? []) !== []) {
+        echo '<div class="notice notice-error gbdbui-update-banner" role="alert"><div><strong>' . gbdbui_icon('shield', 16) . ' Sicherheitshinweis zu Framework-Updates</strong><p>'
+            . gbdbui_e((string) (($status['warnings'][0] ?? '') ?: ($status['message'] ?? ''))) . '</p></div>'
+            . '<div class="gbdbui-update-actions"><a class="btn btn-secondary btn-sm" href="' . gbdbui_e(gbdbui_url('updates')) . '">Details</a></div></div>';
+    }
 }
 
 /**
@@ -66,6 +133,7 @@ function gbdbui_navigation() :array {
         ],
         'System' => [
             ['env', 'settings', 'Framework-Konfiguration'],
+            ['updates', 'download', 'Framework-Updates'],
             ['plugins', 'panel', 'Plugins'],
             ['php_exec', 'edit', 'PHP Exec'],
             ['reinstall', 'trash', 'Re-Install'],
@@ -152,6 +220,17 @@ function gbdbui_notifications() :array {
     }
 
     if (class_exists('GreenQLUIv2Helper') && GreenQLUIv2Helper::isAdmin()) {
+        try {
+            $update = GBDBFrameworkUpdater::status();
+
+            if (!empty($update['notify'])) {
+                $items[] = ['icon' => 'download', 'tone' => 'blue', 'title' => 'Framework-Update verfügbar', 'text' => 'v' . $update['installed'] . ' → v' . $update['available']['version'] . ' (signiert und geprüft)', 'tool' => 'updates'];
+            } elseif (($update['warnings'] ?? []) !== [] || ($update['state'] ?? '') === 'error') {
+                $items[] = ['icon' => 'shield', 'tone' => 'orange', 'title' => 'Framework-Updates prüfen', 'text' => (string) (($update['warnings'][0] ?? '') ?: ($update['message'] ?? '')), 'tool' => 'updates'];
+            }
+        } catch (Throwable) {
+        }
+
         $migration = GreenQLUIv2Helper::permissionMigrationNotice();
 
         if ($migration !== null) {
@@ -255,7 +334,7 @@ function gbdbui_layout_start(string $active, string $title, string $subtitle = '
         <div class="sidebar-bottom">
             <div class="support-box">
                 <span class="support-icon"><?= gbdbui_icon('book', 20) ?></span>
-                <span><strong>GBDB <?= gbdbui_e(class_exists('Vars') ? Vars::framework_version() : '') ?></strong><small>Umgebung <?= gbdbui_e($environment) ?></small></span>
+                <span><strong>GBDB <?= gbdbui_e(gbdbui_framework_version()) ?></strong><small>Umgebung <?= gbdbui_e($environment) ?></small></span>
             </div>
 <?php if ($username !== '') : ?>
             <div class="sidebar-user"><span class="avatar avatar-violet"><?= gbdbui_e($initials) ?></span><span class="sidebar-user-name"><strong><?= gbdbui_e($username) ?></strong><small><?= gbdbui_e(ucfirst((string) ($user['role'] ?? ''))) ?> · GBDB UI</small></span>
@@ -296,6 +375,7 @@ function gbdbui_layout_start(string $active, string $title, string $subtitle = '
             <div class="page-heading"><div class="page-heading-text"><div class="eyebrow"><span class="eyebrow-dot"></span>GBDB WORKSPACE<?= isset($options['eyebrow']) ? ' · ' . gbdbui_e(strtoupper((string) $options['eyebrow'])) : '' ?> <span class="demo-badge"><?= gbdbui_e($environment) ?></span></div><h1><?= gbdbui_e($title) ?></h1><?php if ($subtitle !== '') : ?><p><?= gbdbui_e($subtitle) ?></p><?php endif; ?></div><?php if (($options['actions'] ?? '') !== '') : ?><div class="page-actions"><?= $options['actions'] ?></div><?php endif; ?></div>
 <?php
     gbdbui_render_flashes();
+    gbdbui_update_banner($active);
 }
 
 /**

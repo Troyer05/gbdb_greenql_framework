@@ -1,5 +1,79 @@
 # Prüfbericht
 
+## 03.11.2026 – Dokumentation gegen den gelieferten Code geprüft
+
+Gegenstand: beide Quellordner der hochgeladenen ZIP, Framework-Version `10.0.1` und separat beigelegter Release-Manager mit interner Versionszeichenfolge `1.0.0`. Die Aktualisierung verändert Dokumentation und ergänzt Werkzeuge zur Erzeugung der Methodenreferenz sowie zur Prüfung von Markdown, Beispielen und Links. Framework-/Release-Manager-Anwendungscode, lokale Konfiguration, Daten und Lizenztext bleiben unverändert.
+
+Prüfumgebung: **PHP 8.3.6 CLI**, lokaler PHP-Testserver, OpenSSL, sodium, zlib, Tokenizer, mbstring, cURL und PDO/SQLite; **Node 24.22.1**. Ausführbare Beispiele liefen auf einer getrennten Kopie mit eigenen Datenpfaden. Es wurde keine echte Veröffentlichung ausgelöst und kein externer Produktdienst aufgerufen.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Syntax der 157 bisherigen PHP-Dateien und des neuen Dokumentationsprüfers, insgesamt 158 Dateien beider Quellordner; Daten-/Schlüsseldateien ausgenommen | Ohne Syntaxfehler |
+| Alle 32 PHP-Codeblöcke der Dokumentation | Syntax gültig; zwei Konfigurationsausschnitte im passenden Klassenkontext geprüft |
+| Alle 11 JSON-Codeblöcke | Gültiges JSON |
+| Markdown-Codeblöcke, lokale Dateiverweise und Quellzeilenverweise | Geprüft, keine offenen Codeblöcke oder fehlenden Zielpfade |
+| Referenzgenerator mit `--check` | 11 Referenzdateien aktuell, 2090 öffentliche Methoden/Funktionen in 152 Klassen/Gruppen |
+| Unabhängiger Abgleich über PHP-Reflection | 1331 öffentliche Methoden der zentralen Klassen mit ihrer tatsächlichen Deklarationsstelle in der Referenz vorhanden |
+| README-Beispiel und Wiederherstellung des Instanzkontexts | 2 Prüfungen bestanden |
+| Datenbankbeispiele: CRUD, Rückgabeform, Sammelimport, Verarbeitung, Seite, Cursor und Suche | 8 Prüfungen bestanden |
+| Ausführbare GreenQL-Blöcke des Sprachkapitels | 11 Blöcke erfolgreich; Zuweisungen bei `SEED`/`RESHAPE` auf tatsächlich unterstützte Syntax korrigiert |
+| Eigenes Public-API-Modul | 8 Prüfungen bestanden: Rechte, Erfolg, Pflichtfeld, Typ, Länge und unbekannte Aktion |
+| Auth-API ohne Mailversand | 3 Prüfungen bestanden: Registrierung, Benutzerlesen und Anmeldung |
+| Dokumentierte manuelle Speicheraktionen mit PDO/SQLite | 6 Prüfungen bestanden: Spiegel bereit, Wechsel nach SQL, Änderung, Abgleich, kontrollierte Rückkehr und erhaltene Daten |
+| `PHP/tests/updater_test.php` | **58 von 58 bestanden** |
+| `PHP/tests/gdp_test.php` | **80 von 80 bestanden**, letzter vollständiger Lauf 15,3 Sekunden |
+| Gemeinsame Prüfklassen von Framework und Release-Manager | Vier Dateien bytegleich; `tools/sync-shared.php --check` erfolgreich |
+| `vsc/src/extension.js` mit `node --check` | Syntax gültig |
+| Vergleich mit der Eingangs-ZIP | Anwendungscode, Konfiguration, Daten und Lizenz unverändert; in der enthaltenen Release-Manager-ZIP und im VSIX jeweils nur die README geändert |
+
+Der GDP-Größenlimit-Test erzeugt eine 9-MiB-Anfrage. Ein erster Lauf mit dem niedrigeren PHP-Standardlimit brach an diesem Szenario ab. Der vollständige erfolgreiche Lauf verwendete im lokalen Testserver `post_max_size = 32M` und Fehlerausgabe auf stderr, sodass die Anfrage die GDP-eigene Größenprüfung erreichen konnte. Dafür wurde keine Projektdatei geändert.
+
+### Fortsetzung am 03.11.2026 – HTTP-Vertrag und eingebettete Anleitung
+
+Die zusätzliche [HTTP-Referenz](../docs/20-http-api-reference.md) nennt alle 29 im Code registrierten GBDB-Aktionen mit Pflichtfeldern, optionalen Werten, Rechten und Ergebnisformen. Der Abgleich der Aktionsliste verwendet die tatsächliche Registry des Moduls.
+
+Auf einer neuen getrennten Kopie wurden **41 lokale HTTP-Anfragen mit 75 bestandenen Prüfungen** ausgeführt. Jede der 29 Aktionen war mindestens einmal enthalten. Geprüft wurden insbesondere die drei neuen JSON-Beispiele, Lese-/Schreib-/Strukturrechte, fehlende und leere Schlüssel, Pflichtfeld- und Datenfehler, interne Instanzsperre, unbekannte Aktionen, HTTP-Methoden und Speicherwechsel nach SQL sowie zurück nach GBDB mit PDO/SQLite. Das Serverprotokoll enthielt keine PHP-Warnungen oder Fatal Errors. Der Lauf veröffentlichte nichts auf einem externen Dienst.
+
+Die README im mitgelieferten `greenql-language-2.1.2.vsix` nannte noch Version 2.0.0 und den falschen Installationsdateinamen. Sie ist jetzt mit der deutschen README des Quellordners identisch. Der Vergleich der entpackten Einträge bestätigt, dass ausschließlich `extension/README.md` verändert wurde; alle JavaScript-, Manifest-, Grammatik- und Theme-Dateien sind unverändert.
+
+`php docs/tools/check-documentation.php` prüft reproduzierbar die **40 Markdown-Dateien des eigenständigen Framework-Repositorys**, 2384 lokale Verweise, 32 PHP- und 11 JSON-Beispiele. Der Lauf ist erfolgreich und führt die Beispiele nicht aus. PHP-Syntaxprüfung und der unveränderte Referenzgenerator sind ebenfalls erfolgreich. Die separat danebenliegende Release-Manager-Anleitung wird außerhalb dieses Repository-Prüfers behandelt.
+
+### Was diese Prüfung nicht abdeckt
+
+Kein neuer vollständiger Browser-/Layouttest, kein produktiver Apache-/Nginx-/FPM-Betrieb, keine reale HTTPS-Veröffentlichung und keine Prüfung der Erreichbarkeit der voreingestellten Server. Der SQLite-Lauf prüft die dokumentierten manuellen Speicheraktionen, nicht MySQL/MariaDB, alle automatischen Ausfallszenarien oder die Kombination aus SQL-Fallback, GDP und Update-Migration.
+
+GreenQL-Datei-/Pattern-Beispiele mit ausdrücklich vorausgesetzten eigenen Dateien wurden nicht als vorhandene Installationsdateien ausgegeben oder ausgeführt. Die MuseumQR-Gegenstelle, E-Mail-Zustellung und das VSIX im tatsächlichen VS-Code-Client wurden nicht getestet. PHP-Sichtbarkeit und ein Eintrag in der Referenz sind keine allgemeine Funktions- oder Produktionsfreigabe.
+
+Die separat beigelegte `gbdb_release_manager.zip` enthält bereits im Eingangspaket einen teilweise anderen Anwendungscode als der Quellordner. Dieser Code wurde erhalten und der Unterschied in beiden Anleitungen kenntlich gemacht. Eine neu geschriebene README macht dieses alte Verteilungspaket nicht zu einem neu gebauten Release.
+
+## Historische Prüfberichte
+
+Die folgenden Abschnitte stammen aus dem gelieferten Dokument. Ihre Testergebnisse und Umgebungen beziehen sich auf die jeweils genannten früheren Läufe; sie wurden durch die Dokumentationsüberarbeitung nicht pauschal neu bestätigt. Bezeichnungen wie `PHP_TEST`, externe Testpfade und frühere Dateizahlen sind historisch. Die genannten Browser-, Rechte-, Stil- und End-to-End-Hilfsskripte sind teilweise nicht im aktuellen Paket enthalten.
+
+---
+
+## Stand 02.11.2026 – Framework-Update-System
+
+Laufzeit: PHP 8.4.27 (CLI und eingebauter Webserver). Release-Manager und Framework liefen als getrennte Server; das Update-Verzeichnis wurde wie Apache mit `mod_autoindex` ausgeliefert.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Unit-Tests `php tests/updater_test.php` (Signaturen, Kette, Rotation, Recovery, Rollback-Schutz, Ablauf, Widerruf, zurückgezogene Releases, Schlüsselbeginn, Einzel-Hashes, ZIP-Schutz inkl. Datei/Ordner-Konflikt, Listing, Konfigurationsabgleich inkl. FrameworkUpdater, Patch-Day) | 58 von 58 |
+| End-to-End (`testumgebung/gbdb-updater/e2e.php`, echte HTTP-Anfragen) | 124 von 124 |
+| GDP-Integrationstests (Regression wegen geändertem Autoloader) | 80 von 80 |
+| PHP-Syntax aller neuen und geänderten Dateien | ohne Fehler |
+| Server-Logs nach dem E2E-Lauf | keine Warnungen; einziger Fatal Error ist der gewollte im Ladefehler-Szenario |
+
+**End-to-End abgedeckt:** Einrichtung des Release-Managers mit Schlüsselerzeugung, Recovery-Schlüssel herunterladen und vom Server löschen, Upload einer Repository-ZIP mit Bereinigung (Schlüssel, Datenbestand, Fremddateien, Zugangsdaten), doppelter Inhalt abgewiesen, Erstinstallation aus dem Release, Update mit neuer, geänderter und entfernter Datei, Konfigurationsabgleich und Migration, Erhalt von Fremdcode und lokal geänderten Dateien, Konfliktrückfrage mit Abbruch und Bestätigung, manipulierte ZIP (`INVALID_CHECKSUM`), Verify-API nicht erreichbar (`VERIFIED_API_UNAVAILABLE` mit Bestätigung), zurückgespielter Katalog (`ROLLBACK_DETECTED`), nicht freigegebene ZIP im Verzeichnis, gescheiterte Migration mit Code- und Datenrollback, fataler Fehler im neuen Code mit Rollback, Widerruf des Release-Schlüssels, Root-Wechsel, Notfall-Wiederherstellung per Recovery-Schlüssel, zurückgezogenes Release, Überspringen, Wiederherstellungspunkt, automatisches Update zum Patch-Day mit Abschluss durch eine beliebige Folgeanfrage.
+
+**Nach dem Review ergänzt:** Einrichtung nur mit Token, Geheimnis im Core blockiert, `FrameworkUpdater`-Schreibweise behält `BUILTIN`, lokale Daten bleiben draußen, Verweis auf ausgeschlossene Datei verlangt Bestätigung, vorhandene Versionsdatei blockiert, beschädigte Release-Datenbank stoppt alles, Journal räumt abgebrochene Veröffentlichung auf, unveröffentlichter Root-Wechsel wird verworfen, abgelaufener Katalog wird über das Lebenszeichen der Installation erneuert.
+
+**Nach dem zweiten Review ergänzt:** harte Abbrüche (Prozessende ohne Aufräumen) nach Veröffentlichung der neuen `trust.json`, nach dem Katalog vor der Datenbank und mitten im Neusignieren – jeweils vom nächsten Aufruf korrekt abgeschlossen; Interface statt Gate-Klasse, fehlende statische Pflichtmethode, nicht mitgeliefertes und mitgeliefertes `vendor/`, kurzes Passwort in Variablenzuweisung.
+
+**Nicht geprüft:** echtes Apache mit `.htaccess` (lokal `AllowOverride None`), HTTPS mit echtem Zertifikat, PHP-FPM-Hintergrundlauf (`fastcgi_finish_request`), Firefox/Safari. Die Oberfläche wurde über HTTP geprüft (Statuscodes, Inhalte, Formulare), nicht per Sichtprüfung im Browser.
+
+---
+
 ## Stand 26.10.2026 (Nachtrag 2) – Rechte verschärft
 
 | Prüfung | Ergebnis |

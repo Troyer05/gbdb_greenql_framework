@@ -1,0 +1,44 @@
+{
+    "type": "gbdb-release-rules",
+    "spec": 1,
+    "note": "Paketdefinition für den Release-Manager. Nur hier deklarierte Dateien werden veröffentlicht; alles andere (lokale Ergänzungen, Daten, Konfigurationen) bleibt draußen. Pfade relativ zu gbdb_framework, * = ohne Unterordner, ** = beliebig tief.",
+    "core": [
+        "autoloader.php",
+        "functions.php",
+        ".htaccess",
+        ".config/.htaccess",
+        "core/*.php",
+        "runtime/*.php",
+        "Distributed/*.php",
+        "Distributed/.htaccess",
+        "Distributed/bin/*.php",
+        "GBDB_GQL/db_engine/*.php",
+        "GBDB_GQL/greenql/*.php",
+        "GBDB_GQL/.DB/.htaccess",
+        "SRV/*.php",
+        "SRV/srv_modules/*.php",
+        "plugins/*.php",
+        "json/patterns/*.json",
+        "public/**",
+        "updater/**"
+    ],
+    "config": [
+        ".config/.framework.env.php",
+        "json/mRoot/*.json",
+        "GBDB_GQL/.DB/.scripts/*.gql"
+    ],
+    "entry_files": [
+        "gbdb_ui.php",
+        "backend.php",
+        "public_api.php",
+        "gdp.php"
+    ],
+    "extensions": ["php", "js", "css", "json", "html", "htaccess", "webp", "png", "jpg", "jpeg", "gif", "svg", "ico", "woff", "woff2", "ttf", "md", "txt", "gql"],
+    "required_classes": {
+        "GBDB_GQL/db_engine/gbdb.php": ["GBDBEngine"],
+        "runtime/facade.php": ["GBDB"],
+        "GBDB_GQL/greenql/greenql.php": ["GreenQL"],
+        "runtime/config.php": ["GBDBConfig"],
+        ".config/.framework.env.php": ["Vars"]
+    }
+}

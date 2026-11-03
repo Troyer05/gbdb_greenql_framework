@@ -1,190 +1,137 @@
-# 04 — GBDB Database Engine
+# 04 – Die GBDB-Datenbank
 
-The `GBDB` class is assembled from many traits in `GBDB_GQL/db_engine/`. It provides the actual file-backed database engine.
+Anwendungscode verwendet die öffentliche Klasse **`GBDB`** aus `runtime/facade.php`. Sie führt Engine-Aufrufe innerhalb der Speicherlaufzeit aus. Die interne Klasse `GBDBEngine` und ihre Traits sollten Anwendungen nicht direkt aufrufen.
 
-## Naming
-
-| Term | Meaning |
-|---|---|
-| Instance | A tenant or isolated workspace. |
-| Base / Database | A database inside an instance. |
-| Table | A row collection inside a base. |
-| Row | Associative data record. |
-| Schema | Table column definition and optional constraints. |
-
-## Basic workflow
+## Instanzen und Schema
 
 ```php
 <?php
 
-require_once __DIR__ . "/gbdb_framework/autoloader.php";
+require_once __DIR__ . '/gbdb_framework/autoloader.php';
 
-GBDB::createInstance("main");
-GBDB::setInstance("main");
+GBDB::createInstance('beispiel');
 
-GBDB::createDatabase("shop");
-GBDB::createTable("shop", "products", ["sku", "name", "price", "active"]);
+GBDB::withInstance('beispiel', static function () :void {
+    GBDB::createDatabase('shop');
+    GBDB::createTable('shop', 'produkte', ['sku', 'name', 'preis', 'aktiv']);
+});
+```
 
-$id = GBDB::insertData("shop", "products", [
-    "sku" => "SKU-001",
-    "name" => "Coffee Mug",
-    "price" => "9.90",
-    "active" => "1"
+Das Beispiel liegt neben `gbdb_framework`. Instanzen trennen logische Datenbereiche; Datenbanken gruppieren Tabellen. `createTable()` erhält eine Spaltenliste. Eine numerische `id` wird von der Engine verwaltet und muss nicht als eigene Spalte definiert werden.
+
+| Methode | Verwendung |
+| --- | --- |
+| `createInstance($name)` | Instanz anlegen |
+| `existsInstance($name)` | Vorhandensein prüfen |
+| `setInstance($name)` / `getInstance()` | Aktiven Kontext setzen oder lesen |
+| `withInstance($name, $callback)` | Temporär wechseln und vorherigen Kontext wiederherstellen |
+| `listInstances($includeSystem = false)` | Instanzen auflisten |
+| `listDBs()` / `listTables($database)` | Datenbanken oder Tabellen auflisten |
+| `getKeys($database, $table)` | Spalten lesen |
+| `addColumn($database, $table, $column, $default)` | Spalte ergänzen |
+
+Löschmethoden wie `deleteInstance()`, `deleteDatabase()` und `deleteTable()` verändern den Bestand dauerhaft. Ihre genauen Parameter stehen in der [Methodenreferenz](99-api-reference/gbdb-engine-methods.md).
+
+## Schreiben, Lesen, Ändern und Löschen
+
+Die folgenden Aufrufe setzen die aktive Instanz `beispiel` und die oben angelegte Tabelle voraus:
+
+```php
+GBDB::setInstance('beispiel');
+
+$id = GBDB::insertData('shop', 'produkte', [
+    'sku' => 'P-001',
+    'name' => 'Tasse',
+    'preis' => '9.90',
+    'aktiv' => '1'
 ]);
 
-$rows = GBDB::getData("shop", "products", true, "active", "1");
+$alle = GBDB::getData('shop', 'produkte');
+$aktive = GBDB::getData('shop', 'produkte', true, 'aktiv', '1');
+
+$geaendert = GBDB::editData('shop', 'produkte', 'id', $id, ['preis' => '10.90']);
+$vorhanden = GBDB::elementExists('shop', 'produkte', 'id', $id);
 ```
 
-## Instances
+| Aufruf | Rückgabe / Besonderheit |
+| --- | --- |
+| `insertData()` | Numerische Datensatz-ID; Fehlerpfade und Exceptions beachten |
+| `getData()` | `mixed`; je nach Filter und Trefferzahl Liste oder einzelner Datensatz |
+| `editData()` / `deleteData()` | Boolesches Ergebnis; die angegebenen Filter bestimmen die betroffenen Zeilen |
+| `elementExists()` | Boolesche Existenzprüfung |
+| `nextID()` | Nächste ID ermitteln; eine vorher gelesene ID ist keine separate Reservierung |
 
-Use instances for tenants, customer installations, environments or product workspaces.
-
-Typical methods:
-
-- `GBDB::createInstance($name)`
-- `GBDB::setInstance($name)`
-- `GBDB::getInstance()`
-- `GBDB::listInstances()`
-- `GBDB::deleteInstance($name, $force)`
-- `GBDB::existsInstance($name)` where available in your version
-
-Use an instance when data must be isolated. Do not simulate tenants only with a `tenant_id` column unless shared-table analytics are more important than isolation.
-
-## Bases and tables
-
-Typical methods:
-
-- `GBDB::createDatabase($database)`
-- `GBDB::deleteDatabase($database)`
-- `GBDB::listDBs()`
-- `GBDB::createTable($database, $table, $columns)`
-- `GBDB::deleteTable($database, $table)`
-- `GBDB::listTables($database)`
-- `GBDB::getKeys($database, $table)`
-- `GBDB::addColumn($database, $table, $column, $default)`
-
-Use one base per domain area, for example `auth`, `shop`, `content` or `device`. Use tables for entities.
-
-## CRUD
-
-Common methods:
-
-- `GBDB::insertData($database, $table, $data)`
-- `GBDB::getData($database, $table, $filter = false, $where = '', $is = '')`
-- `GBDB::editData($database, $table, $where, $is, $data)`
-- `GBDB::deleteData($database, $table, $where, $is)`
-- `GBDB::nextID($database, $table)`
-- `GBDB::elementExists($database, $table, $where, $is)`
-
-Prefer explicit filters instead of fetching all rows when the table may grow.
-
-## Pagination and cursors
-
-Use pagination when a UI table or API response should not load all rows:
+Die genaue Form von `getData()` vor dem Iterieren prüfen. Wer immer eine Liste erwartet, kann das Ergebnis normalisieren:
 
 ```php
-$page = GBDB::page("shop", "products", 1, 25);
-$cursor = GBDB::cursor("shop", "products", 100, null);
+$treffer = GBDB::getData('shop', 'produkte', true, 'sku', 'P-001');
+$liste = !is_array($treffer) || $treffer === []
+    ? []
+    : (array_key_exists('id', $treffer) ? [$treffer] : array_values($treffer));
 ```
 
-Use `page()` for human UI pages. Use `cursor()` for APIs, exports or batch processing.
+`GBDB::get()` unterstützt zusätzlich eine ältere Kurzform mit Filterspalte als drittem Parameter. Für neue Beispiele ist die explizite `getData()`-Form leichter nachvollziehbar. PHP-Methodennamen unterscheiden keine Groß- und Kleinschreibung.
 
-## Bulk insert and streaming
-
-Use `bulkInsert()` when inserting many rows at once. Use `streamRows()` when processing large tables without building a huge array in memory.
+## Seiten und Cursor
 
 ```php
-GBDB::bulkInsert("shop", "products", $rows, true);
+$seite = GBDB::page('shop', 'produkte', 1, 25);
+$ersterBlock = GBDB::cursor('shop', 'produkte', 100, null);
 
-GBDB::streamRows("shop", "products", function (array $row) {
-    // process row
+if ($ersterBlock['cursor'] !== null) {
+    $naechsterBlock = GBDB::cursor('shop', 'produkte', 100, $ersterBlock['cursor']);
+}
+```
+
+`page()` liefert `ok`, `page`, `per_page`, `total`, `pages` und `rows`. `cursor()` liefert `ok`, `rows`, `cursor`, `offset` und `limit`. Der zurückgegebene Cursor ist ein Base64-kodierter Offset; er wird unverändert weitergereicht. Eine feste Datenansicht über mehrere Anfragen ist damit nicht zugesichert.
+
+**Speichergrenze:** Beide Methoden lesen derzeit zunächst die gesamte Tabelle über `getData()`. Sie verkleinern die Antwort, nicht automatisch den internen Speicherbedarf.
+
+## Sammeloperationen und zeilenweise Verarbeitung
+
+```php
+$bericht = GBDB::bulkInsert('shop', 'produkte', [
+    ['sku' => 'P-002', 'name' => 'Teller', 'preis' => '7.50', 'aktiv' => '1'],
+    ['sku' => 'P-003', 'name' => 'Schale', 'preis' => '6.90', 'aktiv' => '1']
+], true);
+
+$verarbeitet = GBDB::streamRows('shop', 'produkte', static function (array $zeile, int $index) :void {
+    // Die jeweilige Zeile verarbeiten.
 }, 500);
 ```
 
-## Fulltext search
+`bulkInsert()` liefert einen Bericht mit `ok`, `ids` und `errors`. `streamRows()` ruft einen Callback je Zeile auf, lädt derzeit aber ebenfalls vorab die Tabelle und teilt sie dann in Blöcke. Es ist kein durchgehend speicherkonstanter Dateistream.
 
-The engine exposes `fulltext_search()`, `fulltextSearch()` and `fulltext()` aliases. Use them for simple text lookup across selected columns.
+## Suche, Indizes und Schemata
 
 ```php
-$hits = GBDB::fulltext("content", "articles", "museum audio", ["title", "body"], 20);
+$treffer = GBDB::fulltext('shop', 'produkte', 'Tasse', ['name', 'sku'], 20);
 ```
 
-## Indexes
+Für Suche mit Spalten und Limit `fulltext()` oder `fulltext_search()` verwenden. Die ebenfalls vorhandene Methode `fullTextSearch()` hat in der öffentlichen Fassade nur drei Parameter.
 
-Index support appears in `gbdb_index.trait.php` and related command support in GreenQL.
-
-Use indexes when:
-
-- a table has many rows;
-- reads repeatedly filter on the same column;
-- sorting or range queries become slow;
-- you need uniqueness/lookup acceleration.
-
-GreenQL examples:
+GreenQL kann beispielsweise Indizes und Regeln anlegen:
 
 ```gql
-INDEX users email IN app;
-UNIQUE INDEX users uid IN app;
-FULLTEXT INDEX articles title, body IN content;
-SHOW INDEXES FROM users IN app;
-REINDEX users IN app;
+USE INSTANCE beispiel;
+INDEX produkte sku IN shop;
+UNIQUE INDEX produkte sku IN shop;
+SHOW INDEXES FROM produkte IN shop;
+ALTER TABLE produkte ADD CONSTRAINT REQUIRED name IN shop;
 ```
 
-## Constraints and relations
+Typisierte Schemata, Constraints und aktive Indexnutzung sind laut interner Statusmatrix teilweise experimentell. Auf Datenintegrität angewiesene Anwendungen müssen diese Regeln zusätzlich in ihrer Fachlogik prüfen. Eine angelegte Indexdefinition ist keine Zusicherung, dass jede Abfrage den Index verwendet.
 
-The engine supports relation and constraint helpers through traits such as `gbdb_relations_ids_streaming_partition.trait.php`.
+## Transaktionen
 
-GreenQL examples:
+Vorhanden sind `begin()`, `commit()`, `rollback()`, `savepoint()` und `rollbackTo()` sowie entsprechende GreenQL-Befehle. Die Laufzeit und Engine verwenden eigene Sperren, Snapshots und Wiederherstellungsmechanismen. Das ersetzt keine allgemeine ACID-Zusage für mehrere Dateien, mehrere HTTP-Anfragen oder mehrere GDP-Knoten.
 
-```gql
-ALTER TABLE users ADD CONSTRAINT UNIQUE email IN app;
-ALTER TABLE posts ADD FOREIGN KEY user_id REFERENCES users(uid) IN app ON DELETE CASCADE;
-SHOW RELATIONS FROM posts IN app;
-CHECK RELATIONS IN app;
-```
+Transaktionsabläufe bei Fehlern ausdrücklich abbrechen und für das eigene Schema prüfen. Die [Statusübersicht](18-feature-status.md) nennt die noch experimentelle Freigabe der Engine-Transaktionen. Im SQL-Fallback führt die Speicherlaufzeit einen schreibenden Abschnitt zusätzlich in einer SQL-Transaktion aus.
 
-Use constraints for data integrity, especially in public API modules where external clients may send invalid data.
+## Wartung und Migration
 
-## Transactions
+`dbHealth()`, `tableStats()`, `repairReport()`, `repairIndex()`, `repairWal()` und `autoMaintenance()` unterstützen die Diagnose und Wartung. Manche Prüffunktionen können Metadaten anlegen oder aktualisieren; vor Reparaturen sichern.
 
-The framework includes transaction helpers and GreenQL transaction commands.
+`GBDB::update()` und `GBDB::migrate()` übernehmen Datenstrukturen aus einem älteren Speicher. Sie sind **Datenmigrationen**, keine Installation eines Framework-Releases. Dafür ist der [Framework-Updater](../PHP/FRAMEWORK_UPDATER.md) zuständig.
 
-```gql
-BEGIN TRANSACTION;
-SEED users WITH {"uid":"u1", "name":"Max"} IN app;
-COMMIT TRANSACTION;
-```
-
-Use transactions when multiple writes must succeed or fail together. For simple single-row updates, normal CRUD is usually enough.
-
-## Maintenance and operations
-
-The engine contains advanced maintenance methods:
-
-- `dbHealth()`
-- `tableStats()`
-- `repairReport()`
-- `repairIndex()`
-- `repairWal()`
-- `autoMaintenance()`
-- `autoBackup()`
-- `verifyTableChecksum()`
-- `verifyForeignKeys()`
-- `cleanupJournals()`
-- `cleanupVersions()`
-
-Run maintenance before/after migrations, after unexpected shutdowns, and on a schedule for production systems.
-
-## Migration/update helpers
-
-`GBDB::update()` and `GBDB::migrate()` copy missing tree parts and merge schema information from an older DB source into the current storage. Create a backup before using these methods.
-
-## Best practices
-
-- Always select the instance explicitly.
-- Never manually edit physical storage files in normal operation.
-- Use schema creation scripts for repeatable setup.
-- Use indexes for repeated filters.
-- Use pagination/cursors for UI/API lists.
-- Run backup before update, migration, repair or major schema changes.
-- Keep system/internal bases hidden from application-level UIs.
+GDP setzt auf denselben CRUD-Schreibwegen auf. Für replizierte Instanzen gelten zusätzlich Policies und Strukturwächter; siehe [GDP](../PHP/GDP.md).

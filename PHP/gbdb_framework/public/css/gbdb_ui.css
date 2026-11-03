@@ -1766,3 +1766,72 @@ html[data-theme="dark"] .gbdbui-body .main-content .enterprise-icon {
         margin-bottom: 10px;
     }
 }
+
+/* Framework-Updates ------------------------------------------------------- */
+.gbdbui-body .main-content > .gbdbui-update-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+}
+
+.gbdbui-update-banner p {
+    margin: 4px 0 0;
+}
+
+.gbdbui-update-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.gbdbui-update-banner .gbdbui-update-actions {
+    margin-top: 0;
+}
+
+.gbdbui-update-phases {
+    list-style: none;
+    margin: 4px 0 16px;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.gbdbui-update-phases li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+}
+
+.gbdbui-update-phases li.done {
+    color: #15803d;
+}
+
+html[data-theme="dark"] .gbdbui-update-phases li.done {
+    color: #4ade80;
+}
+
+.gbdbui-update-phases li.current {
+    color: inherit;
+    font-weight: 600;
+}
+
+.gbdbui-update-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gbdbui-update-files {
+    max-height: 240px;
+    overflow: auto;
+    margin: 8px 0;
+    padding-left: 18px;
+}
+
+.gbdbui-update-job .gbdb-kv {
+    margin-top: 12px;
+}

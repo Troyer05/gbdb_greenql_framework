@@ -1,0 +1,9 @@
+{
+    "type": "gbdb-trust-anchor",
+    "spec": 1,
+    "root_threshold": 1,
+    "root_keys": [],
+    "recovery_threshold": 0,
+    "recovery_keys": [],
+    "trust_version": 0
+}

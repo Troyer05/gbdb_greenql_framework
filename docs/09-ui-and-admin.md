@@ -1,59 +1,68 @@
-# 09 — UI and Admin Tools
+# 09 – Oberfläche und Verwaltung
 
-The framework contains a browser-based GBDB/GreenQL UI under `gbdb_framework/public/`.
+Der Einstieg ist `gbdb_ui.php`. Die eigentliche Oberfläche liegt unter `gbdb_framework/public/` und verwendet das Intranet-Design mit Sidebar, Suche, Hell-/Dunkelansicht und Systemhinweisen. Die vorhandenen Menünamen können von der gewählten UI-Sprache abhängen.
 
-## Main pages
+## Seiten und Werkzeuge
 
-| File | Purpose |
-|---|---|
-| `index.php` | Main public UI entry/router. |
-| `includes/table.php` | Table/data navigation. |
-| `includes/greenql_v2.page.php` | GreenQL editor page. |
-| `includes/gql_scripts.page.php` | Script management/execution. |
-| `includes/users.page.php` | UI user management. |
-| `includes/public_api.page.php` | API key/module/log management. |
-| `includes/backup.page.php` | Backup tools. |
-| `includes/import_export.page.php` | Import/export tools. |
-| `includes/monitoring.page.php` | Health/monitoring dashboard. |
-| `includes/optimize.page.php` | Optimization tools. |
-| `includes/migration.page.php` | Migration tools. |
-| `includes/enterprise.page.php` | Enterprise/advanced operations. |
-| `includes/env.page.php` | Environment/config display/edit helpers. |
-| `includes/plugins.page.php` | Plugin tools. |
-| `includes/reinstall.page.php` | Reinstall/reset workflows. |
-| `includes/php_exec.page.php` | PHP execution tool; production-sensitive. |
+Aufruf etwa `gbdb_ui.php?tool=storage`. Die Auswahl wird serverseitig auf eine feste Liste begrenzt.
 
-## UI helper
+| `tool` | Aufgabe |
+| --- | --- |
+| `dashboard` | Übersicht |
+| `greenql_v2` | Datenansicht und GreenQL Studio |
+| `gql_scripts` | Skripte verwalten und ausführen |
+| `users` | UI-Konten verwalten |
+| `public_api` | API-Schlüssel, Module und Protokolle |
+| `storage` | Aktives Speicherbackend, Spiegel und Umschaltung |
+| `distributed` | GDP-Verwaltung |
+| `updates` | Signierte Framework-Updates |
+| `backup` | Sicherungen |
+| `import_export` | Datenübernahme und Ausgabe |
+| `monitoring` | Zustand und Diagnose |
+| `optimize` | Wartung und Optimierung |
+| `migration` | Datenmigration |
+| `cryption` | Verschlüsselungswerkzeuge |
+| `enterprise` | Erweiterte Engine- und Enterprise-Funktionen |
+| `env` | Zentrale Framework-Konfiguration |
+| `plugins` | Plugin-Verwaltung |
+| `reinstall` | Neuinstallation beziehungsweise Reset |
+| `php_exec` | PHP-Code ausführen |
 
-`GreenQLUIv2Helper` is the central helper for UI auth, permissions, internal stores, public API key management, script execution and filtering.
+`public/includes/table.php` und `public/includes/index.php` sind gesperrte Alt-Einstiege. Datenverwaltung läuft über den regulären Router und das Studio.
 
-Important method groups:
+## Rollen und Zusatzrechte
 
-- Boot/session/CSRF: `boot()`, `csrf()`, `checkCsrf()`.
-- UI users: `hasUsers()`, `createUser()`, `login()`, `logout()`, `users()`, `updateUser()`, `deleteUser()`, `resetPassword()`.
-- Permissions: `isAdmin()`, `canWrite()`, `canStructure()`, `hasPermission()`, `canUseTool()`.
-- Access control: `canAccessInstance()`, `canAccessDb()`, `instances()`, `databases()`, `tables()`.
-- Public API management: `publicApiKeys()`, `createPublicApiKey()`, `updatePublicApiKey()`, `deletePublicApiKey()`, `publicApiLogs()`, `publicApiModules()`.
-- Scripts: `parseParams()`, `scriptAllowed()`, `readScriptPath()`, `runScript()`.
+| Rolle | Grundrechte |
+| --- | --- |
+| `admin` | Vollzugriff |
+| `maintainer` | `read`, `write`, `structure`, `maintenance`, `jobs`, `backup` |
+| `editor` | `read`, `write` |
+| `viewer` | `read` |
 
-## System data visibility
+`permissions` ergänzt die Rolle: leer bedeutet keine Zusatzrechte, `*` sämtliche Zusatzrechte, eine Liste nur die genannten Zusatzrechte. Rollenrechte werden durch eine engere Zusatzliste nicht entzogen.
 
-The UI should hide system/internal databases and tables from normal navigation. Developers extending the UI should filter system names and avoid exposing auth/API key tables to normal users.
+`tools` erlaubt zusätzlich bestimmte Werkzeuge; das Feld ist keine allgemeine Liste von Verboten. Eine explizite Werkzeugfreigabe kann Seitenzugriff gewähren. Schreib-, Struktur- und Seitenaktionen prüfen weitere Rechte; eine sichtbare Seite ist deshalb nicht automatisch eine Freigabe jeder Operation. Instanz- und Datenbanklisten begrenzen den sichtbaren Datenbereich.
 
-## Permission strategy
+Nur Admins verwalten Admin-Konten oder vergeben die Rolle `admin`. Benutzerlisten der Anwendung über `Auth` sind davon unabhängig.
 
-| Role/use | Permissions |
-|---|---|
-| Super admin | All tools, all instances, all bases. |
-| Data editor | Read/write selected bases, no structure tools. |
-| Developer | GreenQL/scripts, structure tools, selected instances. |
-| Viewer | Read-only table access. |
-| API manager | Public API page only. |
+## Geschützte Werkzeuge
 
-## Production notes
+| Werkzeug | Freigabe |
+| --- | --- |
+| `storage`, `public_api`, `distributed`, `updates` | Nur Admins |
+| `php_exec` | Admin und `UI.allow_php_exec = true` |
+| `plugins` | Admin und `UI.allow_plugin_upload = true` |
+| `reinstall` | Admin und `UI.allow_reinstall = true` |
+| `env` | Admin immer; andere Konten nur mit `UI.allow_config_edit` und passendem Recht beziehungsweise Werkzeugzugriff |
 
-- Disable or protect `php_exec.page.php` in production.
-- Keep backup/migration/reinstall pages admin-only.
-- CSRF-protect all write forms.
-- Do not show system instances to non-admin users.
-- Keep public API logs collapsible/limited because logs can grow quickly.
+Die vier Freigabeschalter lassen sich nicht über den Konfigurationseditor umstellen. Sie müssen direkt in `.framework.env.php` geändert werden. So kann eine erlaubte JSON-Konfigurationsänderung nicht selbst die PHP-Ausführung freischalten.
+
+## Migration älterer Konten
+
+Ältere Nicht-Admin-Konten mit leerem Rechtefeld hatten implizit Vollzugriff. Die einmalige Umstellung macht diesen Zugriff durch `permissions = *` ausdrücklich und vermerkt die betroffenen Konten. Admins sollten die Liste prüfen und Rechte gezielt begrenzen. Neue Konten mit leerem Feld erhalten nur ihre Rollenrechte.
+
+## Entwicklung eigener UI-Seiten
+
+`GreenQLUIv2Helper` bündelt Anmeldung, CSRF-Prüfung, Rechte und Datenzugriff. `gbdbui_layout_start()` und `gbdbui_layout_end()` aus `_shared.php` stellen das Layout bereit. Neue Werkzeuge benötigen Einträge in Router und Berechtigungslogik; eine neue PHP-Datei allein reicht nicht.
+
+Formulare und direkte Aktionen serverseitig prüfen. Systeminstanzen und reservierte Namen nicht als normale Fachbereiche anbieten. Statische Dateien über den vorhandenen Asset-Einstieg ausliefern, ohne den ganzen Framework-Ordner öffentlich freizugeben.

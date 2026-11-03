@@ -1,83 +1,73 @@
-# 03 — Architecture
+# 03 – Architektur und Ladefolge
 
-## Core layers
+## Verzeichnisübersicht
 
-```text
-Web request / PHP script
-        │
-        ├── autoloader.php
-        │       ├── Vars config
-        │       ├── GBDB engine traits
-        │       ├── GreenQL runtime
-        │       ├── core helper classes
-        │       ├── SRV / SecondServer classes
-        │       └── plugins
-        │
-        ├── direct GBDB calls
-        ├── GreenQL scripts
-        ├── PublicAPI module dispatch
-        └── SRV backend dispatch
+| Pfad | Aufgabe |
+| --- | --- |
+| `PHP/gbdb_framework/autoloader.php` | Zentrale Einbindung des Frameworks |
+| `PHP/gbdb_framework/.config/.framework.env.php` | Vars-Konfiguration |
+| `PHP/gbdb_framework/.config/.runtime/` | Lokale Geheimnisse und Laufzeitzustand |
+| `PHP/gbdb_framework/runtime/` | Speichersteuerung, Dateiabstraktion und öffentliche Fassaden |
+| `PHP/gbdb_framework/GBDB_GQL/db_engine/` | Interne Engine und Traits |
+| `PHP/gbdb_framework/GBDB_GQL/greenql/` | GreenQL-Parser und Ausführung |
+| `PHP/gbdb_framework/GBDB_GQL/.DB/` | Standard-Datenordner; durch `STORAGE.path` ersetzbar |
+| `PHP/gbdb_framework/Distributed/` | GDP-Protokoll und Synchronisation |
+| `PHP/gbdb_framework/core/` | Hilfsklassen und interne Auth-Engine |
+| `PHP/gbdb_framework/public/` | UI-Router, Seiten, API-Dispatcher und statische Dateien |
+| `PHP/gbdb_framework/SRV/` | SecondServer-Backend und Auftragsmodule |
+| `PHP/gbdb_framework/plugins/` | Produktbezogene Klassen |
+| `PHP/gbdb_framework/updater/` | Framework-Updater und Migrationsvorlagen |
+| `PHP/gbdb_framework/version.json` | Installierte Framework-Version |
+| `PHP/tests/` | GDP- und Updater-Tests |
+| `docs/` | Handbuch und Methodenreferenz |
+| `vsc/` | GreenQL-Erweiterung für VS Code |
+
+## Autoloader
+
+Die wesentliche Reihenfolge in `autoloader.php`:
+
+1. `GBDBConfig`, Vars und das Updater-Gate laden. Das Gate prüft Wartungsmodus und ausstehende Update-Abschlüsse vor dem übrigen Framework.
+2. SQL-Speicher, Laufzeit, Dateiabstraktion und Ratenbegrenzung laden.
+3. Interne `GBDBEngine` und GreenQL mit ihren Traits laden.
+4. PHP-Dateien aus `core/` stabil nach Dateinamen laden.
+5. Öffentliche Klassen `GBDB` und `Auth` aus `runtime/` laden.
+6. GDP laden und den eingebetteten Betrieb registrieren.
+7. Plugins laden und das Updater-Gate nach dem Laden abschließen.
+
+Dateien mit unterstützten Deaktivierungsmarkierungen werden vom lokalen Ordnerlader ausgelassen. Eine pauschale automatische Einbindung aller beliebigen Unterverzeichnisse findet nicht statt. `functions.php` wird nicht durch `autoloader.php` eingebunden und ist eine separate Hilfsdatei.
+
+## Speicherweg
+
+```mermaid
+flowchart TD
+    A["PHP-Anwendung, API oder GreenQL"] --> B["GBDB-Fassade"]
+    B --> C["Laufzeit: Sperre und aktives Backend"]
+    C --> D["GBDB-Dateispeicher"]
+    C --> E["Optionaler SQL-Dateispeicher"]
+    D --> F["Daten, Schema, Indizes und GDP-Journal"]
+    E --> F
 ```
 
-## Storage model
+`Vars::data_root()` liefert den logischen Einstieg `gbdbdata://store`. `GBDBConfig::dataPath()` liefert den physischen Dateipfad. Die Engine verwendet den logischen Weg, damit SQL-Fallback und Sperren mitwirken. Direkte Dateizugriffe auf den physischen Bestand umgehen diese Laufzeit.
 
-GBDB stores data under `GBDB_GQL/.DB/`. The exact physical file names may be tokenized/hashed and may use the configured data extension. The logical model remains stable:
+SQL speichert dabei GBDB-Dateiinhalte und Metadaten in Tabellen, nicht jede Anwendungstabelle als eigene relationale SQL-Tabelle. Pro Installation gibt es einen maßgeblichen Speicherstand. Eine Rückkehr von SQL zum Dateispeicher erfolgt kontrolliert nach Abgleich.
 
-```text
-instance
-└── base/database
-    └── table
-        ├── rows
-        ├── metadata
-        ├── append/wal-style data
-        ├── indexes
-        ├── locks
-        └── schema records
-```
+## Schnittstellenabläufe
 
-The framework includes locking, append logs, metadata, schema tracking, indexes, checksums, recovery and maintenance helpers. Developers should not edit the physical `.DB` files manually unless recovering from a severe failure and after creating a backup.
+**Public API:** Einstieg → Autoloader → POST- und Größenprüfung → Modulauflösung → Schlüsselprüfung → Aktionsrechte → Instanz-Sandbox → Modulaufruf → JSON-Antwort mit HTTP-Status.
 
-## Autoloading
+**SecondServer:** Client fordert ein temporäres Token an → Client sendet statischen Schlüssel und Token mit einer Anweisung → SRV prüft beide → festgelegte Funktion oder Auftragsmodul → JSON-Antwort. Aufträge sind dadurch nicht automatisch asynchron.
 
-`gbdb_framework/autoloader.php` is the normal boot file. It brings the framework classes into scope and enables code such as:
+**GDP:** Normale Engine-Schreiboperation → Policy-Prüfung und Intent → lokale Änderung → Journal → Push/Pull mit Hub. Nicht zur Replikation freigegebene Instanzen bleiben lokal.
+
+## Instanzkontext
+
+Instanzwahl ist pro PHP-Prozess statischer Zustand. Für zeitweilige Wechsel verwenden:
 
 ```php
-GBDB::setInstance("main");
-GreenQL::run("SHOW INSTANCES;");
-Auth::init();
+$daten = GBDB::withInstance('kunde_a', static function () :array {
+    return GBDB::getData('shop', 'produkte');
+});
 ```
 
-## Request lifecycle: Public API
-
-1. `public_api.php` includes the framework.
-2. `PublicAPI::init()` reads the JSON request body.
-3. It parses `do`, for example `gbdb.get`.
-4. It authenticates the provided API key against the internal key store.
-5. It loads internal and custom modules.
-6. It verifies required rights.
-7. It dispatches to the module's `handle()` method.
-8. It returns a JSON envelope.
-
-## Request lifecycle: SecondServer backend
-
-1. A client calls `SecondServer::...` methods.
-2. The client requests a short-lived token using the static secret.
-3. The client sends an instruction to `backend.php` / `SRV/backend_api.php`.
-4. The backend validates auth and dispatches to `SrvFunctions` or job modules.
-5. The backend responds with a status/data envelope.
-
-## Instance safety
-
-Because GBDB is tenant-aware, always be explicit about the active instance in application code:
-
-```php
-GBDB::setInstance("customer_a");
-// do work
-GBDB::setInstance("default");
-```
-
-For callbacks or helpers, restore the previous instance after temporary switching. This prevents one tenant's request from accidentally reading another tenant's storage.
-
-## System/internal data
-
-The UI and Public API have system stores that should not be shown as normal customer/application data. The UI helper intentionally hides reserved/system names from standard navigation. When writing custom tools, respect `GreenQLUIv2Helper::reservedInstance()` and `reservedName()` patterns.
+Bei fremdbestimmten Instanznamen zusätzlich Anwendungsrechte prüfen. Die Sandbox externer Schnittstellen blockiert interne Instanzen, ersetzt jedoch keine fachliche Mandantenberechtigung. `trustedInstance()` ist für Framework-internen Zugriff bestimmt und darf nicht zur Umgehung solcher Prüfungen verwendet werden.

@@ -1,90 +1,85 @@
-# 06 — Authentication
+# 06 – Anmeldung und Benutzer
 
-The framework has two authentication concepts:
+GBDB unterscheidet **Anwendungsbenutzer** über `Auth` und **Verwaltungskonten** der GBDB-Oberfläche über `GreenQLUIv2Helper`. Ihre Speicher, Rollen und Anmeldeabläufe sind getrennt.
 
-1. **Application Auth** through `core/auth.php` (`Auth` class).
-2. **GBDB UI Auth** through `GreenQLUIv2Helper` for the admin interface.
+## Anwendungsanmeldung
 
-## Application Auth
+Die öffentliche Klasse `Auth` liegt in `runtime/auth_facade.php` und nutzt die interne `GBDBAuthEngine` aus `core/auth.php`. Sie bindet zusammengehörige Speicheroperationen in die Laufzeit ein.
 
-`Auth` is intended for application users. It uses the configured auth instance and creates/uses tables for users, JWT tokens, email verification, password reset, 2FA and metadata.
-
-Typical workflow:
+Die Struktur lässt sich ohne Anmeldeprüfung vorbereiten:
 
 ```php
-<?php
-
-require_once __DIR__ . "/gbdb_framework/autoloader.php";
-
-Auth::init();
-
-$created = Auth::newUser([
-    "username" => "max",
-    "email" => "max@example.com",
-    "password" => "secret",
-    "active" => "1",
-    "role" => "user"
-]);
-
-$login = Auth::login("max", "secret");
-$user = Auth::me();
+$struktur = Auth::createStructure();
 ```
 
-## Important Auth methods
+Registrierung, zum Beispiel in einem bereits validierten Formularhandler:
 
-| Method | Use |
-|---|---|
-| `Auth::init()` | Ensure auth storage exists. |
-| `Auth::hashPass($password)` | Hash password consistently with the framework. |
-| `Auth::newUser($data)` | Create a user. |
-| `Auth::login($user, $password)` | Login with username/email and password. |
-| `Auth::logout()` | Remove/expire current JWT. |
-| `Auth::me()` | Get the currently logged-in user. |
-| `Auth::check()` | Check whether the current request is authenticated. |
-| `Auth::user($uid)` | Get one user. |
-| `Auth::get()` | Get users/listing depending on implementation. |
-| `Auth::editUser($uid, $data)` | Update a user. |
-| `Auth::delete($uid)` | Delete/deactivate a user. |
-| `Auth::verifyEmail($token)` | Complete email verification. |
-| `Auth::verify2FaCode($code)` | Complete 2FA step. |
-
-## JWT and cookies
-
-The Auth class stores a JWT-like token in a cookie, usually named `jwt`. Token records are also stored in the GBDB auth tables with expiration timestamps. The cookie/session behavior is controlled by `Vars::init_cookies()`, `Vars::init_session()` and auth expiration settings.
-
-## 2FA and email verification
-
-The framework includes mail templates:
-
-```text
-gbdb_framework/public/includes/mail_templates/verify_mail.html
-gbdb_framework/public/includes/mail_templates/tfa_mail.html
+```php
+$ergebnis = Auth::user_registration(
+    username: $benutzername,
+    email: $email,
+    passwordAsPlain: $passwort,
+    verifyMail: true
+);
 ```
 
-Use 2FA for admin users and sensitive apps. For public/simple apps, email verification plus strong passwords may be enough.
+Hier kommen die Variablen aus der eigenen Eingabeprüfung. Für E-Mail-Bestätigung und 2FA muss die Mailanbindung funktionieren. Die Konfiguration enthält dafür unter anderem `AUTH` und `MAIL.api_url`.
 
-## UI Auth
+Anmeldung:
 
-`GreenQLUIv2Helper` manages users for the GBDB UI. It stores users in a system instance and includes roles, language, allowed instances/bases and permission checks.
+```php
+$anmeldung = Auth::login($benutzernameOderEmail, $passwort);
 
-Important concepts:
+if (($anmeldung['ok'] ?? false) !== true) {
+    // Die Anwendungsoberfläche zeigt eine passende Fehlermeldung.
+}
+```
 
-| Concept | Meaning |
-|---|---|
-| `admin` | Full UI/system access. |
-| write permission | Can mutate data. |
-| structure permission | Can create/drop schema objects. |
-| tool permission | Can use specific admin tools/pages. |
-| instance/base allow lists | Restrict a user to selected workspaces. |
+Anmeldung und andere Auth-Aktionen können Cookies setzen oder weiterleiten. Sie müssen daher vor der Ausgabe von HTML erfolgen. Für eine 2FA-Anmeldung auch den im Ergebnis genannten Folgeschritt auswerten; ein begonnener Ablauf ist noch keine abgeschlossene Sitzung.
 
-Do not mix application users and GBDB UI users unless you intentionally build a bridge. The UI auth store is a framework/admin concern.
+## Wichtige Methoden
 
-## Security recommendations
+| Methode | Aufgabe |
+| --- | --- |
+| `Auth::createStructure()` | Auth-Speicher vorbereiten |
+| `Auth::user_registration(…)` | Anwendungskonto anlegen |
+| `Auth::login($usernameOrEmail, $passwordPlainText)` | Anmeldung beginnen beziehungsweise abschließen |
+| `Auth::init()` | Aktuelle Sitzung prüfen und bereinigte Benutzerdaten liefern; kann bei fehlender Sitzung beenden oder weiterleiten |
+| `Auth::logout($error = '', $jwt = '')` | Sitzung beenden |
+| `Auth::get_user($uid)` | Anwendungskonto lesen |
+| `Auth::getUsers($limit)` | Konten lesen |
+| `Auth::get_jwt_user($jwt)` | Benutzer zu einem Sitzungstoken ermitteln |
+| `Auth::edit_user(…)` | Kontodaten mit der vollständigen Parametersignatur ändern |
+| `Auth::delete_user($uid)` | Konto löschen |
+| `Auth::verify_email($token)` | E-Mail-Bestätigung verarbeiten |
+| `Auth::resendVerification($usernameOrEmail)` | Bestätigung erneut anstoßen |
+| `Auth::verify_2fa_code($code)` | 2FA-Schritt prüfen |
+| `Auth::hashPass($password)` | Passwort über die geerbte Hash-Funktion verarbeiten |
 
-- Use strong passwords for UI admins.
-- Enable 2FA for admin accounts when available.
-- Keep JWT expiration reasonable.
-- Regenerate/expire tokens on password reset.
-- Never expose auth tables through the public API without strict rights.
-- Do not store plaintext passwords.
-- Protect mail verification and password reset tokens with expiration.
+Die vollständigen Signaturen stehen in der [Hilfsklassenreferenz](99-api-reference/core-helper-methods.md). Frühere Beispiele mit `newUser()`, `me()`, `check()`, `editUser()` oder `verifyEmail()` bilden die aktuelle lokale `Auth`-API nicht ab. Einige ähnlich benannte Methoden gehören zum SecondServer-Client.
+
+## Sitzungstoken und Ablaufzeiten
+
+Die Implementierung nennt Cookie und Token-Tabelle `jwt`. Daraus folgt keine standardisierte dreiteilige JWT-Darstellung für externe Bibliotheken: Token als undurchsichtigen Sitzungswert behandeln und über die Framework-Methoden prüfen.
+
+Benutzer, Sitzungstoken, E-Mail-Bestätigungen und 2FA liegen in der konfigurierten Auth-Instanz. `AUTH.jwt_expires_in_minutes`, `mail_verify_token_expires_in_minutes` und `2fa_code_expires_in_minutes` steuern die zugehörigen Laufzeiten. Öffentliche Anmeldeseiten müssen im vorgesehenen Ausnahmenmodell berücksichtigt werden, bevor `Auth::init()` als Schutz aufgerufen wird.
+
+Die Mailvorlagen liegen unter:
+
+- `gbdb_framework/public/includes/mail_templates/verify_mail.html`
+- `gbdb_framework/public/includes/mail_templates/tfa_mail.html`
+
+## UI-Konten
+
+Die Verwaltung speichert ihre Konten in einer internen Systeminstanz. Die erste Anlage benötigt den [Setup-Token](02-installation-and-bootstrapping.md); danach verwalten berechtigte Konten Benutzer über die Oberfläche.
+
+| Rolle | Grundrechte |
+| --- | --- |
+| `admin` | Vollzugriff einschließlich geschützter Verwaltungswerkzeuge |
+| `maintainer` | Lesen, Schreiben, Struktur, Wartung, Aufträge und Sicherungen |
+| `editor` | Lesen und Schreiben |
+| `viewer` | Lesen |
+
+Zusatzrechte und Werkzeuglisten ergänzen das Rollenmodell. Leere Zusatzrechte bedeuten bei neuen Konten nur die Rollenrechte. Die einmalige Migration älterer Konten mit vorher implizitem Vollzugriff ist in der [UI-Anleitung](09-ui-and-admin.md) beschrieben.
+
+UI-2FA ist aus der 2FA-Funktion der Anwendungsanmeldung nicht automatisch ableitbar. Die vorhandene UI-Anmeldung prüft Benutzername und Passwort; weitere Schutzmaßnahmen müssen für diese Oberfläche gesondert eingerichtet werden.

@@ -1,89 +1,63 @@
-# 14 — Troubleshooting
+# 14 – Fehlerbehebung
 
-## `Fatal error: Cannot use 'true' as class name`
+## Ersteinrichtung meldet einen ungültigen Token
 
-This happens when a module/helper class name was generated from a boolean-like value or invalid token. PHP reserves `true`, `false` and `null`. Ensure every module class name starts with a valid prefix such as `PublicAPI_Example` and never uses raw action/right names as class names.
+`UI.setup_token` in `.config/.framework.env.php` ist im Quellpaket leer. Eigenen zufälligen Wert mit mindestens 24 Zeichen eintragen und denselben Wert im Formular verwenden. Der erste Admin braucht mindestens 12 Zeichen Passwort; beide Passwortfelder müssen übereinstimmen. Bei bereits vorhandenen UI-Konten ist keine erneute erste Admin-Anlage möglich.
 
-## Tables are cut off in the UI
+## Eine dokumentierte Methode fehlt
 
-Common causes:
+Den aktuellen [Methodenindex](99-api-reference/all-public-methods.md) verwenden. Lokale `Auth`-Methoden heißen beispielsweise `user_registration()` und `get_user()`. `GreenQL::runScript()` gibt es nicht; Skriptdateien über `GBDB::runScript()` aufrufen. `mRoot`, `ShareSuiteAPI` und `EqrAPI` haben hier noch keine Methoden.
 
-- table container has fixed height/overflow issues;
-- logs take too much vertical space;
-- responsive CSS does not allow horizontal scroll;
-- long cell content is not wrapped/truncated.
+Eine Trait-Deklaration ist kein eigenständiger statisch aufzurufender Dienst. Für Datenzugriff die öffentliche `GBDB`-Klasse verwenden.
 
-Fix strategy:
+## PHP kann nicht in den Datenordner schreiben
 
-- wrap tables in an overflow container;
-- make logs collapsible;
-- limit log height;
-- add `min-width` for wide tables and `overflow-x:auto` on the parent.
+`GBDBConfig::dataPath()` und `GBDBConfig::runtimePath()` prüfen. Der PHP-Prozess muss Elternordner durchlaufen sowie benötigte Dateien und Sperren anlegen können. Bei Containern den tatsächlich eingebundenen Mount und dessen Rechte prüfen. Ein Dateipfad außerhalb des Webroots wird durch seine Lage nicht automatisch beschreibbar.
 
-## API returns unauthorized
+Auch das PHP-Temp-Verzeichnis wird für installationsbezogene Sperren gebraucht. Bei aktivem SQL-Backend zusätzlich Erreichbarkeit und maßgeblichen Speicherstatus prüfen, bevor Dateien kopiert oder Rechte geändert werden.
 
-Check:
+## Vorhandene Daten sind nach dem Upload unlesbar
 
-1. Is `key` present in the JSON body?
-2. Is the key active?
-3. Is it expired?
-4. Does it have the required right for the action?
-5. Is the `do` value exactly `module.action`?
-6. Is the module loaded and named correctly?
+Datenpfad und zugehörigen Verschlüsselungsschlüssel vergleichen. Ein neu erzeugtes `.config/.runtime/crypt_key.php` kann den bisherigen Schlüssel nicht ersetzen. Keinen neuen Schlüssel über den alten Bestand schreiben. Daten und ursprünglichen Laufzeitordner aus einer zusammengehörigen Sicherung wiederherstellen.
 
-## GreenQL command fails unexpectedly
+## Daten fehlen nach dem Einfügen
 
-Check:
+Aktive Instanz, Datenbank, Tabelle, Schema und Filter prüfen. `insertData()` kann bei Fehlern **`-1`** liefern; eine positive ID erwarten. `getData()` mit Filter kann einen einzelnen Datensatz statt einer Zeilenliste liefern. Bei GDP außerdem Schreibpolicy und blockierten Synchronisationszustand prüfen.
 
-- active instance: run `SHOW INSTANCES;` and `USE INSTANCE ...;`
-- active base: specify `IN base` explicitly;
-- command semicolons;
-- JSON object syntax in `WITH` payloads;
-- variable names begin with `_` or `$`;
-- table/base names only use safe identifier characters.
+## Public API liefert 401, 403 oder 404
 
-## Rows do not appear after insert
+| Status | Prüfen |
+| --- | --- |
+| 401 | Schlüssel im Body oder Bearer-Header vorhanden und korrekt? |
+| 403 | Schlüssel aktiv, nicht abgelaufen und mit dem konkreten Aktionsrecht versehen? Interne Instanz angefordert? |
+| 404 | `do` korrekt als `modul.aktion`? Modulklasse geladen? Aktion im Aktionsarray vorhanden? |
+| 405 | Tatsächlich HTTP POST verwendet? |
+| 413 / 429 | Anfragegröße beziehungsweise Ratenbegrenzung überschritten? |
 
-Check:
+Für eigene Module müssen `name()`, `requiresRights()` und `handle()` vorhanden sein. `PublicAPI_ModuleHelper::requireParams()` liefert ein Fehlerarray zurück, das die Aktion selbst weitergeben muss.
 
-- correct instance selected;
-- correct base/table names;
-- schema columns match inserted keys;
-- filters are not excluding the row;
-- caches are not stale;
-- insert result/error payload.
+## Skripttext wird als fehlende Datei behandelt
 
-## Cannot write to database files
+`GBDB::query()` und `gbdb.query` erhalten Text. `GBDB::runScript()` und `gbdb.run_script` erhalten einen Dateinamen innerhalb der erlaubten Skriptwurzeln. Bei GreenQL-Befehlen Semikolon, Instanz, `IN base`, `WITH feld=wert`-Zuweisungen und Variablennamen prüfen.
 
-Check file permissions for `GBDB_GQL/.DB/`. The web server user must be able to create, modify and lock files.
+## SQL-Fallback lässt sich nicht abschalten
 
-## Public API custom module is not found
+Wenn `mode = sql` ist, den Fallback wieder verfügbar machen und kontrolliert mit `GBDB::switchBackend('gbdb')` zurückschalten. Nicht nur `FAILOVER.enabled = false` setzen: Der Code blockiert das, solange SQL maßgeblich ist. DEV verwendet ohne eigene Überschreibung dieselben Fallback-Zugangsdaten wie PROD.
 
-Check:
+## SecondServer meldet Konfigurations- oder Anmeldefehler
 
-- file is in `public/includes/public_api/public_api_modules/`;
-- class name starts with `PublicAPI_`;
-- `name()` returns the module prefix used in `do`;
-- `handle()` supports the requested action;
-- syntax errors are not stopping module loading.
+`SRVP.ip` muss eine vollständige HTTP-/HTTPS-URL sein. Client und Backend brauchen denselben `static_key` mit mindestens 32 Zeichen. `ssl` ersetzt kein URL-Schema. Das Tokenverfahren und die eigentliche Anweisung müssen beide erfolgreich sein. PHP-Serverprotokoll und Antwortformat prüfen.
 
-## SecondServer call fails
+## Updater meldet `NO_TRUST_ANCHOR`
 
-Check:
+Im Repository ist kein `updater/trust_anchor.json` enthalten. Einen überprüften Anker des separat betriebenen Release-Managers oder ein offizielles Release verwenden. Keine unbekannten öffentlichen Schlüssel übernehmen, nur um den Fehler zu beseitigen.
 
-- `Vars::srvp_ip()` points to the correct backend;
-- `Vars::srvp_ssl()` matches HTTP/HTTPS reality;
-- static keys match on both sides;
-- backend entry path is reachable;
-- token request succeeds before instruction request;
-- server logs for rejected auth.
+Weitere Zustände wie `INVALID_CHECKSUM`, `REVOKED_KEY`, `EXPIRED_METADATA` oder `VERIFIED_API_UNAVAILABLE` haben unterschiedliche Ursachen. Die [Updater-Anleitung](../PHP/FRAMEWORK_UPDATER.md) erklärt, welche Fehler blockieren und wann eine manuelle Entscheidung zulässig ist.
 
-## Recovery after crash/interrupted write
+## GDP blockiert Änderungen oder verlangt einen Snapshot
 
-1. Stop writes if possible.
-2. Create a copy of the whole `.DB` directory.
-3. Run health/check commands.
-4. Run repair report.
-5. Repair indexes/WAL/relations as needed.
-6. Verify storage/checksums.
-7. Resume writes only after checks pass.
+Policy, Eigentümer, Lease, Schema-Version und Journal prüfen. Eine Verbindungsunterbrechung erlaubt nicht automatisch zentrale Schreiboperationen. Konflikte werden nicht still zusammengeführt. Die vorgesehenen Recovery-Aktionen unter **Distributed (GDP)** verwenden; `.gdp` und Tresorschlüssel nicht löschen. Siehe [GDP](../PHP/GDP.md).
+
+## Versionsnummern unterscheiden sich
+
+Die Framework-Version kommt aus `gbdb_framework/version.json`; `APP.version` ist die lokale Anwendungsversion und bleibt bei Updates erhalten. Die VS-Code-Erweiterung hat eine eigene Version in `vsc/package.json`. Die Werte müssen daher nicht identisch sein.

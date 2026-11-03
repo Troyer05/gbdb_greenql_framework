@@ -227,11 +227,22 @@
         }));
     }
 
+    function setupUpdateTick() {
+        // Fällige Framework-Update-Suche im Hintergrund anstoßen (ohne Cronjob, ohne Wartezeit beim Seitenaufbau).
+        const tick = document.querySelector('[data-gbdb-update-tick]');
+
+        if (tick) {
+            const body = new URLSearchParams({ update_action: 'tick', ajax: '1', csrf: tick.dataset.csrf });
+            fetch(tick.dataset.url, { method: 'POST', body, credentials: 'same-origin', keepalive: true }).catch(() => {});
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         setupTheme();
         setupSidebar();
         setupNotifications();
         setupCommand();
         setupConfirmations();
+        setupUpdateTick();
     });
 }());

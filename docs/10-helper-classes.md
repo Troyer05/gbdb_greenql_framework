@@ -1,115 +1,66 @@
-# 10 — Core Helper Classes
+# 10 – Hilfsklassen
 
-The `core/` directory contains utility classes used by GBDB, UI, Public API and applications.
+Die Klassen unter `core/` werden vom Autoloader geladen. Vollständige Signaturen stehen in der [Referenz](99-api-reference/core-helper-methods.md). Bei produktbezogenen Netzwerkaufrufen ist zusätzlich die jeweilige externe API maßgeblich; hier ist der mitgelieferte Wrapper beschrieben.
 
-## `Http`
+| Klasse | Verwendung | Besonderheit |
+| --- | --- | --- |
+| `Http` | HTTP GET/POST, JSON-Antworten, Weiterleitungen und Mailanbindung | GET/POST liefern Text oder `false`; JSON selbst auswerten |
+| `Validate` | Pflichtfelder, E-Mail, Zahlen, Längen und Muster | `required()` liefert `bool`, keine Liste fehlender Felder |
+| `FileTool` | Text-/JSON-Dateien, Verzeichnisse, Kopien und Sicherungen | Pfade und Rechte im Anwendungscode begrenzen |
+| `Json` | JSON kodieren, dekodieren und Elemente bearbeiten | `decode()` verwendet standardmäßig keine assoziativen Arrays |
+| `Cookie`, `Session` | Anfrageübergreifender Zustand | Vor der Ausgabe verwenden, soweit Header gesetzt werden |
+| `Cache` | GBDB-bezogener Tabellen-/Abfragecache | Keine allgemeine Schlüssel-Wert-API mit beliebiger TTL annehmen |
+| `Crypt` | Framework-Verschlüsselung | Vorhandenen Schlüssel und Format erhalten |
+| `Format` | Zeichenketten und Bezeichner aufbereiten | Bereinigung ersetzt keine fachliche Validierung oder Autorisierung |
+| `Route` | Kleiner HTTP-Router mit Middleware | Für Apps mit überschaubarer Routenstruktur |
+| `SQL` | Direkter PDO-Zugriff über `SQL`-Konfiguration | Getrennt vom GBDB-Dateispiegel in SQL |
+| `DatabaseBridge` | Umschaltung zwischen vorhandenen GBDB-/SQL-Zweigen | Laut Statusmatrix Beta; nicht als vollständige SQL-Kompatibilität betrachten |
+| `Tools` | IDs, Token, Passwörter, Netzwerk- und QR-Helfer | `generateId()` liefert eine Zahl; keine globale UUID-Zusage |
+| `Converter` | Konvertierungsfunktionen | Vor Veränderungen eine Sicherung anlegen |
+| `ReCaptcha` | Prüfung eines reCAPTCHA-Ergebnisses | Konfigurierte Schlüssel und Netzwerkzugriff erforderlich |
+| `Ref`, `Time`, `GetForm` | Referenzen, Zeitdarstellung und Formularhilfen | Exakte Schreibweise und Parameter in der Referenz nachlesen |
+| `GBDBQueryBuilder` | Aufbau von GBDB-Abfragen | Komfort-API laut Statusmatrix noch nicht final |
+| `GBDBStorage` | Ergänzende Speicherhelfer | Für reguläre Anwendungsdaten die öffentliche `GBDB`-Fassade verwenden |
 
-Use for server-side HTTP requests.
-
-Typical situations:
-
-- call external APIs;
-- fetch update manifests;
-- send SecondServer requests;
-- post JSON to another service.
-
-## `Validate`
-
-Use for simple form/API validation.
-
-Examples:
+## Validierung
 
 ```php
-if (!Validate::email($email)) {
-    // reject invalid email
+if (!Validate::required($_POST, ['benutzername', 'email'])
+    || !Validate::email((string) ($_POST['email'] ?? ''))) {
+    Http::jsonResponse(['fehler' => 'Eingaben unvollständig oder ungültig'], 400);
 }
-
-$missing = Validate::required($_POST, ["username", "email"]);
 ```
 
-## `FileTool` / `FS`
+Das Beispiel setzt passende skalare Formulareingaben voraus. Bei unstrukturiertem JSON zuerst die Datentypen prüfen und erst danach konvertieren.
 
-Use for file-system helpers: reading/writing files, checking paths, copying, deleting, directory operations. Prefer these helpers over ad-hoc file logic when working inside the framework.
-
-## `Json`
-
-Use for JSON encode/decode helpers, especially when respecting framework pretty-print settings.
-
-## `Cookie` and `Session`
-
-Use for request/session state. `Auth` already uses these internally. For application state, keep sensitive data server-side where possible.
-
-## `Cache`
-
-Use for short-lived cached values. GBDB also has runtime/file cache helpers for query results and metadata.
-
-## `Crypt`
-
-Use for encryption/decryption helpers. Do not invent a separate crypto format unless required.
-
-## `Format`
-
-Use for cleaning strings, identifiers and output-friendly formatting. In GBDB/GreenQL contexts, prefer framework clean-name helpers to avoid invalid file/table names.
-
-## `Route`
-
-Small routing helper for simple apps:
+## HTTP und JSON
 
 ```php
-Route::get("/", function () {
-    echo "home";
+$antwort = Http::get('https://example.com/api');
+
+if ($antwort !== false) {
+    $daten = Json::decode($antwort, true);
+}
+```
+
+Die Adresse ist ein Platzhalter, kein Framework-Testdienst. Netzwerkfehler, Statuscodes und unerwartete Antwortformate müssen für die jeweilige Integration behandelt werden.
+
+## Routing
+
+```php
+Route::get('/', static function () :void {
+    echo 'Startseite';
 });
 
-Route::post("/save", function () {
-    echo "saved";
+Route::post('/speichern', static function () :array {
+    return ['ok' => true];
 });
 
 Route::dispatch();
 ```
 
-Use `Route` for small framework-native apps. For a large MVC application, you may still build your own router.
+Anmeldung, CSRF-Prüfung und fachliche Berechtigungen für schreibende Routen ergänzen. Der Router erzeugt dadurch keinen vollständigen Anwendungs-Installer.
 
-## `SQL` and `DatabaseBridge`
+## Zwischenspeicher
 
-Use when you need a SQL backend or migration bridge. GBDB remains the primary file-backed engine; SQL helpers are useful for hybrid deployments or legacy data.
-
-## `Tools`
-
-General utilities:
-
-- password generation/strength checks;
-- domain info;
-- IDs/tokens;
-- country lookup by IP;
-- ping helpers;
-- QR/barcode helpers.
-
-## `Converter`
-
-Use for data conversion utilities when present in your workflow.
-
-## `ReCaptcha`
-
-Use for validating reCAPTCHA on public forms.
-
-## `Ref`
-
-Use for current file/path/reference helpers.
-
-## `Time`
-
-Use for human-readable time differences such as `Time::timeAgo($timestamp)`.
-
-## Helper selection guide
-
-| Need | Use |
-|---|---|
-| Validate API/form input | `Validate` |
-| HTTP GET/POST | `Http` |
-| Generate token/ID/password | `Tools` |
-| Clean table/base/user input | `Format` / GreenQL clean helpers |
-| Store request state | `Session`, `Cookie` |
-| Encrypt/decrypt framework data | `Crypt` |
-| Route small pages | `Route` |
-| SQL fallback | `SQL`, `DatabaseBridge` |
-| JSON files/config | `Json`, `FileTool` |
+Für einen eigenen kurzlebigen Ergebniswert eignet sich beispielsweise `GBDB::queryResultCache($key, $callback, $ttl, $tags)`. Cache-Schlüssel und Tags müssen den Instanz-/Mandantenbezug enthalten. Nach Änderungen relevante Tags mit `cacheInvalidateTag()` invalidieren. Die `Cache`-Klasse hat einen anderen, GBDB-bezogenen Vertrag.

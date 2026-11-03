@@ -1237,7 +1237,7 @@ class GreenQLUIv2Helper {
         }
 
         // Code-Ausführung, Plugin-Upload und Re-Install bleiben auch bei gesetztem Schalter Admins vorbehalten.
-        if (isset(self::TOOL_SWITCHES[$tool]) || in_array($tool, ['storage', 'public_api', 'distributed'], true)) {
+        if (isset(self::TOOL_SWITCHES[$tool]) || in_array($tool, ['storage', 'public_api', 'distributed', 'updates'], true)) {
             return self::isAdmin();
         }
 

@@ -86,6 +86,47 @@ class Vars {
         "auth" => "AWE-mm_4",
     ];
 
+    // Framework-Updater (signierte Releases von mamueller.de). Die Prüfungen unter
+    // "verification" und "installation" sind Pflicht: false wird ignoriert.
+    // patch_day: Wochentag und Uhrzeit für automatische Updates, z. B. "Fridays, 21:30:00".
+    // work_dir: leer = ".gbdb_updater" neben gbdb_framework (Zustand, Backups, Protokolle).
+    private const FRAMEWORK_UPDATER = [
+        "check_for_updates" => true,
+        "update_server" => "https://mamueller.de/gbdb/updates/",
+        "verify_api" => "https://mamueller.de/gbdb/verify.php",
+        "force_ssl" => true,
+        "check_interval" => 21600,
+        "auto_updating" => [
+            "enabled" => false,
+            "patch_day" => "Fridays, 21:30:00",
+        ],
+        "verification" => [
+            "checksum_algorithm" => "sha256",
+            "signature_algorithm" => "ed25519",
+            "root_public_key" => "BUILTIN",
+            "verify_trust_chain" => true,
+            "verify_release_manifest" => true,
+            "verify_release_catalog" => true,
+            "verify_via_api" => true,
+            "prevent_rollback" => true,
+            "check_key_revocation" => true,
+            "reject_expired_metadata" => true,
+        ],
+        "installation" => [
+            "create_backup" => true,
+            "verify_checksum" => true,
+            "verify_signature" => true,
+            "preserve_user_data" => true,
+            "preserve_custom_files" => true,
+            "preserve_configuration" => true,
+            "check_compatibility" => true,
+            "rollback_on_failure" => true,
+        ],
+        "work_dir" => "",
+        "http_timeout" => 15,
+        "keep_backups" => 3,
+    ];
+
     private const SRVP = [
         "ip"         => "",
         "ssl"        => false,
@@ -549,7 +590,7 @@ class Vars {
     }
 
     public static function framework_version() :string {
-        return "v10.0.1-full";
+        return class_exists('GBDBUpdateVersion') ? 'v' . GBDBUpdateVersion::current() : 'v10.0.1-full';
     }
 
 }

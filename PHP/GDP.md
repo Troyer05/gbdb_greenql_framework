@@ -1,8 +1,10 @@
 # GDP/1 – GBDB Distributed Protocol
 
-Stand: 26.10.2026 · Umsetzung des Architekturpapiers „GBDB Framework – Gesamtkonzept“ (24.10.2026) im Paket `PHP_TEST`.
+Dokumentation geprüft am **03.11.2026** für den mitgelieferten Framework-Stand **10.0.1**. Kapitelnummern mit dem Zusatz „Konzept“ beziehen sich auf das ursprüngliche Architekturpapier; für die Benutzung ist es nicht erforderlich. Das Framework liegt in diesem Repository unter `PHP/`.
 
-GDP ist ein **optionaler** Bestandteil von GBDB. Ohne `GDP → enabled = true` in `.config/.framework.env.php` verhält sich jede GBDB-Installation exakt wie bisher. Auch mit aktiviertem GDP wird nur eine Instanz verwaltet, die ausdrücklich zur Replikation freigegeben wurde.
+[Handbuch](../docs/README.md) · [GDP-Methodenreferenz](../docs/99-api-reference/gdp-methods.md) · [Prüfbericht](TESTBERICHT.md)
+
+GDP ist ein **optionaler** Bestandteil von GBDB. Ohne `GDP → enabled = true` in `.config/.framework.env.php` verhält sich jede GBDB-Installation exakt wie bisher. Auch mit aktiviertem GDP werden nur ausdrücklich zur Replikation freigegebene Instanzen verwaltet.
 
 > Leitentscheidung aus dem Konzept: GDP gehört ins GBDB-Framework, kennt aber keine Geschäftslogik. Anwendungen schreiben weiter über `GBDB::insertData()`, `editData()` und `deleteData()`.
 
@@ -51,11 +53,12 @@ private const GDP = [
 ];
 ```
 
-*Knoten & Pairing* → Hub-URL (`https://hub.example.com/gdp.php`) und Code eintragen → *Synchronisation* → „Jetzt synchronisieren“. Der erste Sync lädt den Snapshot; danach werden nur noch Deltas übertragen.
+*Knoten & Pairing* → Hub-URL (`https://hub.example.com/gdp.php`) und Code eintragen → *Synchronisation* → „Jetzt synchronisieren“. Die Erstsynchronisation übernimmt einen Snapshot; danach werden Deltas übertragen. Die folgenden Konfigurationsblöcke zeigen nur die zu ändernden Einträge. Die übrigen Einträge des vorhandenen `GDP`-Arrays erhalten.
 
 Per Code:
 
 ```php
+GDP::enableInstanceReplication('ea-tickets', ['default_mode' => 'central_owner']);
 $code = GDP::createPairing(['ea-tickets']);                          // Hub
 GDP::pairWithHub('https://hub.example.com/gdp.php', $code['code']);  // Replica
 GDP::sync();                                                          // Replica
@@ -111,7 +114,7 @@ Alle GDP-Daten liegen unter `<Datenbestand>/.gdp/` und werden ausschließlich ü
   staging/<id>/<snap>/ Snapshot-Download (Replica)
 ```
 
-Damit gelten für Journal und Cursor dieselben Garantien wie für Nutzdaten: atomares Ersetzen per Temp-Datei und `rename`, `fsync`, ein exklusiver Lock je Installation, automatische Spiegelung in den SQL-Fallback. **Ein Wechsel auf SQL erzeugt keine zweite Journalhistorie** (Kapitel 21), weil das Journal Teil des gespiegelten Bestands ist. Ist `crypt_data` aktiv, werden Journalzeilen, Intents und Snapshot-Chunks wie Tabellen verschlüsselt.
+Journal und Cursor verwenden dieselben Speicherwege wie Nutzdaten: temporäre Dateien und `rename`, Synchronisierung auf den Datenträger soweit vom Laufzeitpfad unterstützt, installationsbezogene Sperren und bei eingerichtetem SQL-Fallback dessen Spiegelung. **Ein Wechsel auf SQL erzeugt keine zweite Journalhistorie** (Kapitel 21), weil das Journal Teil des gespiegelten Bestands ist. Ist `crypt_data` aktiv, werden Journalzeilen, Intents und Snapshot-Chunks wie Tabellen verschlüsselt.
 
 **Atomare Commit-Grenze** (Kapitel 09). Ein normaler Dateilock garantiert keinen atomaren Multi-Datei-Commit. GDP nutzt deshalb ein Intent-Protokoll:
 
@@ -121,7 +124,7 @@ Damit gelten für Journal und Cursor dieselben Garantien wie für Nutzdaten: ato
 4. Nachher-Zustand lesen und mit dem Vorher-Zustand vergleichen: daraus entstehen die Ereignisse („Journal = Realität“).
 5. Ereignisse anhängen, Quellsequenz vergeben, Intent löschen.
 
-Bricht PHP zwischen 2 und 5 ab, gleicht `GDPWriteInterceptor::recover()` beim nächsten Zugriff den Datenstand mit dem Intent ab. Es bleibt weder eine Änderung ohne Ereignis noch ein Ereignis ohne Änderung. Im SQL-Betrieb läuft zusätzlich jeder schreibende Runtime-Abschnitt in einer SQL-Transaktion, sodass Daten, Meta und Journal dort echt gemeinsam committen.
+Bricht PHP zwischen 2 und 5 ab, gleicht `GDPWriteInterceptor::recover()` beim nächsten Zugriff den Datenstand mit dem Intent ab. Dieses Wiederanlaufverfahren soll Datenänderung und Journal wieder zusammenführen; es ist keine pauschale Garantie für beliebige Datenträger-, Prozess- und Mehrknotenfehler. Den zugehörigen Testumfang beschreibt der Prüfbericht. Im SQL-Betrieb läuft zusätzlich jeder schreibende Runtime-Abschnitt in einer SQL-Transaktion, sodass Daten, Meta und Journal dort echt gemeinsam committen.
 
 Mehrere zusammengehörige Änderungen (mehrzeilige Updates, Relations-Kaskaden, `GBDB::begin()/commit()`) erhalten eine gemeinsame `transaction_group_id`. Gruppen werden beim Lesen nie auf zwei Antworten verteilt und beim Empfänger unter einem exklusiven Lock angewendet. Schlägt ein Engine-Commit fehl und spielt die Engine ihre Snapshots zurück, journalisiert GDP nur die tatsächlich verbliebenen Nettoänderungen.
 
@@ -172,7 +175,7 @@ Die Betriebspräferenz (`AUTO`, `FORCE_LOCAL`, `PREFER_CENTRAL`) beeinflusst nur
 
 ## 6. Snapshot-Bootstrap und Recovery
 
-Der Hub schreibt unter dem exklusiven Lock ein Abbild aller replizierten Tabellen bei Hubsequenz S (Kapitel 17), in Chunks mit SHA-256 und Manifest-Hash. Das Replikat lädt fehlende Chunks in `staging`, prüft jede Prüfsumme, aktiviert dann alle Tabellen über `replaceTableContents()` und holt danach alle Ereignisse ab S + 1. Ein abgebrochener Download wird mit derselben Snapshot-ID fortgesetzt; eine abgebrochene Aktivierung wird aus dem Staging wiederholt. Jeder neue Bootstrap erhält einen frischen Snapshot.
+Der Hub schreibt unter dem exklusiven Lock ein Abbild aller replizierten Tabellen bei Hubsequenz S (Kapitel 17), in Chunks mit SHA-256 und Manifest-Hash. Das Replikat lädt fehlende Chunks in `staging`, prüft jede Prüfsumme, aktiviert dann alle Tabellen über `replaceTableContents()` und holt danach alle Ereignisse ab S + 1. Ein abgebrochener Download wird mit derselben Snapshot-ID fortgesetzt; eine abgebrochene Aktivierung wird aus dem Staging wiederholt. Eine neue Initialisierung fordert einen passenden Snapshot an.
 
 **Bestandsdaten**: Enthält eine replizierte Tabelle lokal bereits Daten oder liegen noch nicht übertragene Operationen vor, bricht der Bootstrap mit `confirmation_required` ab. Erst mit ausdrücklicher Freigabe (`GDP::bootstrapReplica($id, true)` bzw. „Lokalen Stand ersetzen“) wird ersetzt – vorher entsteht automatisch eine Vollsicherung. Nach dem Ersetzen meldet das Replikat dem Hub, dass es die nie übertragenen eigenen Sequenzen überspringt (`source_reset`, nur vorwärts, nur für den eigenen Strom).
 
@@ -207,25 +210,28 @@ Blockaden lösen Administratoren in der Oberfläche („Erneut versuchen“, „
 
 ## 8. Öffentliche PHP-API und Fehlercodes
 
+Die öffentliche Fassade heißt `GDP`. Für genaue Parameter und Rückgabetypen die [aus dem Code erzeugte Referenz](../docs/99-api-reference/gdp-methods.md) verwenden.
+
+| Aufgabe | Methoden |
+| --- | --- |
+| Zustand und Diagnose | `init()`, `getStatus()`, `getHealth()`, `isOnline()`, `isSynchronized()`, `getDiagnostics()` |
+| Synchronisation und Schreibprüfung | `sync()`, `canWrite()`, `explainWrite()`, `getPendingOperations()` |
+| Replikationsfreigabe und Regeln | `enableInstanceReplication()`, `disableInstanceReplication()`, `setPolicy()`, `getPolicy()`, `validatePolicy()`, `removePolicy()` |
+| Journal und Checkpoints | `journal()`, `verifyJournal()`, `getCheckpoints()` |
+| Snapshot und Wiederanlauf | `createSnapshot()`, `bootstrapReplica()`, `resolveBlock()`, `unblockPeerStream()` |
+| Pairing und Knoten | `createPairing()`, `pairWithHub()`, `approveNode()`, `unregisterNode()`, `rotateCredential()` |
+| Eigentümer und Schema | `transferOwnership()`, `forceCompleteTransfers()`, `schemaMaintenance()` |
+| Betriebspräferenz | `forceLocalMode()`, `preferCentralMode()`, `returnToAutoMode()` |
+
+Beispiel einer Schemaänderung auf dem Hub, mit vorhandener replizierter Instanz und Tabelle:
+
 ```php
-GDP::init();                       GDP::getStatus();           GDP::getHealth();
-GDP::isOnline();                   GDP::isSynchronized($i);    GDP::getDiagnostics(true);
-GDP::sync($i = null);              GDP::canWrite($i, $db, $t); GDP::explainWrite($i, $db, $t);
-GDP::getNodes();                   GDP::getReplicas($i);       GDP::getPendingOperations($i);
-GDP::getCheckpoints($i);           GDP::journal($i, 'outbox', 1);  GDP::verifyJournal($i);
-GDP::enableInstanceReplication($i, ['default_mode' => 'central_owner']);
-GDP::disableInstanceReplication($i);
-GDP::setPolicy($i, $db, $t, ['mode' => GDPWriteMode::NODE_OWNER, 'owner_node_id' => 'node-…']);
-GDP::getPolicy($i, $db, $t);       GDP::validatePolicy($i, $db, $t, $options);  GDP::removePolicy(...);
-GDP::transferOwnership($i, $db, $t, $neu);   GDP::forceCompleteTransfers($i);
-GDP::createSnapshot($i);           GDP::bootstrapReplica($i, $ersetzen = false);
-GDP::resolveBlock($i, 'retry'|'resnapshot');  GDP::unblockPeerStream($i, $node);
-GDP::schemaMaintenance($i, $callable);
-GDP::createPairing([$i], 'replica');  GDP::pairWithHub($url, $code);  GDP::approveNode($n);
-GDP::unregisterNode($n);           GDP::rotateCredential();
-GDP::forceLocalMode();             GDP::preferCentralMode();   GDP::returnToAutoMode();
-GDP::auditLog();                   GDP::runBackgroundCycle($sekunden);
+GDP::schemaMaintenance('ea-tickets', static function () :bool {
+    return GBDB::addColumn('tickets', 'vorgaenge', 'prioritaet', 'normal');
+});
 ```
+
+Vorhandene Bestände und noch nicht übertragene Operationen vor einer ersetzenden Neuinitialisierung prüfen. `resolveBlock($instanceId, 'retry')` und `resolveBlock($instanceId, 'resnapshot')` sind unterschiedliche administrative Entscheidungen, keine zwei gleichzeitig zu übergebenden Werte.
 
 Jeder Fehler ist eine `GDPException` mit `errorCode()` (Enum `GDPErrorCode`), `retryClass()` (`retry`, `check`, `manual`) und `context()` ohne Geheimnisse: `CONNECTION_UNAVAILABLE`, `AUTHENTICATION_FAILED`, `AUTHORIZATION_DENIED`, `PAIRING_EXPIRED`, `POLICY_VIOLATION`, `LEASE_EXPIRED`, `SCHEMA_MISMATCH`, `SEQUENCE_GAP`, `VERSION_CONFLICT`, `DUPLICATE_PAYLOAD_MISMATCH`, `CHECKPOINT_MISMATCH`, `SNAPSHOT_REQUIRED`, `SNAPSHOT_CHECKSUM_FAILED`, `STORAGE_TRANSACTION_FAILED`, `STORAGE_STATE_UNCERTAIN`, `INTEGRITY_BLOCKED`, `RATE_LIMITED`, `PROTOCOL_ERROR`, `PAYLOAD_TOO_LARGE`, `NOT_CONFIGURED`.
 
@@ -235,7 +241,7 @@ Unter **Betrieb → Distributed (GDP)** (nur Admins): Übersicht (Knoten, Verbin
 
 ## 10. Tests
 
-`php tests/gdp_test.php` startet zwei getrennte Installationen (Hub und Replica) mit eigenen PHP-Webservern in einem temporären Ordner und prüft mit echten, signierten HTTP-Anfragen 80 Punkte, darunter die Szenarien 01–08, 10, 12–15 und 17–25 aus Kapitel 31. Ergebnis siehe `TESTBERICHT.md`.
+`php PHP/tests/gdp_test.php` im Repository-Stamm startet zwei getrennte Installationen (Hub und Replica) mit eigenen PHP-Webservern in einem temporären Ordner und prüft mit echten, signierten HTTP-Anfragen die mitgelieferten Szenarien. Aktuelles Ergebnis, Laufzeitumgebung und Grenzen: [Prüfbericht](TESTBERICHT.md). Für den Größenlimit-Test muss das PHP-POST-Limit oberhalb der erzeugten 9-MiB-Anfrage liegen, damit der Anwendungstest die GDP-Grenze selbst erreicht.
 
 ## 11. Architekturentscheidungen (Konzept Kapitel 34)
 
@@ -258,7 +264,9 @@ Unter **Betrieb → Distributed (GDP)** (nur Admins): Übersicht (Knoten, Verbin
 | UI-Integration | eigener Bereich in der GBDB-UI im Intranet-Design, Admin-Recht |
 | Trennung Dev/Test/Prod | je Umgebung eigene Installation mit eigener node_id; Pairing-Codes sind instanz- und knotengebunden |
 
-## 12. Abnahmestatus (Konzept Kapitel 35) und bekannte Grenzen
+## 12. Historischer Abnahmestatus und bekannte Grenzen
+
+Die folgende Tabelle übernimmt den Abnahmestand des ursprünglichen Berichts vom 26.10.2026. „Getestet“ und die damaligen Testzahlen beziehen sich auf diesen historischen Lauf. Aktuelle Prüfergebnisse stehen getrennt im [Prüfbericht](TESTBERICHT.md).
 
 | Kriterium | Status |
 | --- | --- |
@@ -270,14 +278,14 @@ Unter **Betrieb → Distributed (GDP)** (nur Admins): Übersicht (Knoten, Verbin
 | 6 Getrennte Zustände | erfüllt (Verbindung, Sync, Storage) |
 | 7/8 Offline-Policies im Backend, zentrale Writes offline gesperrt | erfüllt; getestet |
 | 9 Offline-Operationen gehen nicht verloren | erfüllt; getestet (Hub-Ausfall) |
-| 10 SQL-Failover ohne doppelte/verlorene Journalhistorie | durch Aufbau gewährleistet (Journal im gespiegelten Bestand); **lokal nicht ausgeführt**, weil auf dem Prüfsystem kein PDO-Treiber (SQLite/MySQL) installiert ist |
+| 10 SQL-Failover ohne doppelte/verlorene Journalhistorie | gemeinsamer Speicherweg vorgesehen (Journal im gespiegelten Bestand); im damaligen Lauf mangels PDO-Treiber **nicht ausgeführt** |
 | 11 Pairing, Rotation, Grants | erfüllt; getestet |
 | 12 Nicht autorisierte Knoten erhalten keine Daten | erfüllt; getestet |
 | 13 Inkonsistenzen werden erkannt und blockiert | erfüllt; getestet |
 | 14 Diagnose und Wiederherstellung dokumentiert | dieses Dokument und die Oberfläche |
 | 15/16 Embedded ohne Shell, Worker mit gleichem Kern | umgesetzt; der Worker wurde nicht als Dauerprozess getestet |
 | 17 Testsuite | 80 Prüfungen bestanden; Lastszenario 20 (1000 parallele Requests) und ein echter Prozessabbruch mitten im Schreiben (statt simuliertem Intent) wurden nicht ausgeführt |
-| 18 Upgrade/Backup/Rollback | GDP startet deaktiviert, legt beim Aktivieren nur `.gdp/` an; Rollback: `enabled = false` und `.gdp/` entfernen |
+| 18 Upgrade/Backup/Rollback | GDP startet deaktiviert. Zum Pausieren `enabled = false` setzen; Journal, Identität und Tresor erhalten. Ein Rollback oder Entkoppeln braucht einen geplanten Datenabgleich und eine Sicherung, kein pauschales Löschen von `.gdp/` |
 | 19 API dokumentiert und versioniert | Protokoll `GDP/1`, Kapitel 8 |
 | 20 Kein Schreibpfad ungetestet umgangen | alle Engine-Schreibwege laufen über den Interceptor; direkte Dateimanipulation außerhalb der API erkennt GDP nur, soweit sie zu Versionskonflikten oder Hash-Fehlern führt |
 

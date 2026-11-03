@@ -1,138 +1,114 @@
-# 13 — Recipes
+# 13 – Rezepte
 
-## Create a tenant and app schema
+Die PHP-Beispiele setzen den geladenen Autoloader voraus. Für Versuche eine getrennte Kopie verwenden. Änderungen an Schema und Daten sind echte Schreiboperationen.
+
+## Einen Datenbereich einrichten
+
+Im GreenQL Studio ausführen:
 
 ```gql
-GROW INSTANCE customer_a;
-USE INSTANCE customer_a;
-GROW BASE app;
-GROW TABLE users WITH uid, username, email, role, active, created_at IN app;
-GROW TABLE settings WITH key, value IN app;
-INDEX users uid IN app;
-UNIQUE INDEX users email IN app;
+GROW INSTANCE beispiel;
+USE INSTANCE beispiel;
+GROW BASE shop;
+GROW TABLE produkte WITH sku, name, preis, aktiv IN shop;
+SEED produkte WITH sku="P-001", name="Tasse", preis="9.90", aktiv="1" IN shop;
+PICK * FROM produkte IN shop;
 ```
 
-## Insert and fetch a row in PHP
+Danach aus PHP lesen:
 
 ```php
-GBDB::setInstance("customer_a");
-
-GBDB::insertData("app", "users", [
-    "uid" => Tools::generateId(),
-    "username" => "max",
-    "email" => "max@example.com",
-    "role" => "admin",
-    "active" => "1",
-    "created_at" => date("Y-m-d H:i:s")
-]);
-
-$user = GBDB::getData("app", "users", true, "email", "max@example.com");
+$produkte = GBDB::withInstance('beispiel', static function () :array {
+    return GBDB::getData('shop', 'produkte');
+});
 ```
 
-## Create a read-only API key workflow
+## Ein Produkt ändern und wieder lesen
 
-1. Open the GBDB UI.
-2. Go to Public API.
-3. Create a key with `gbdb-read` only.
-4. Test:
+```php
+$ergebnis = GBDB::withInstance('beispiel', static function () :mixed {
+    if (!GBDB::editData('shop', 'produkte', 'sku', 'P-001', ['preis' => '10.90'])) {
+        throw new RuntimeException('Produkt konnte nicht geändert werden.');
+    }
+
+    return GBDB::getData('shop', 'produkte', true, 'sku', 'P-001');
+});
+```
+
+Ein gefiltertes Ergebnis kann ein einzelner Datensatz sein. Es muss nicht die gleiche Form haben wie die vollständige Tabelle.
+
+## Leseschlüssel über die Oberfläche
+
+1. Als Admin die Seite **Public API** öffnen.
+2. Einen aktiven Schlüssel mit `gbdb-read` und passender Ablaufzeit anlegen.
+3. Eine POST-Anfrage senden:
 
 ```json
 {
-  "key": "API_KEY",
+  "key": "API_SCHLUESSEL",
   "do": "gbdb.page",
-  "instance": "customer_a",
-  "base": "app",
-  "table": "users",
+  "instance": "beispiel",
+  "base": "shop",
+  "table": "produkte",
   "page": 1,
   "per_page": 10
 }
 ```
 
-## Build a safe custom device endpoint
+Der Schlüssel ist im Standardmodul nicht auf `beispiel/shop/produkte` beschränkt. Für einen öffentlich genutzten Produktkatalog ein eigenes Modul schreiben, das die Instanz und Tabelle serverseitig festlegt. Ein vollständiges Modulbeispiel steht im [API-Kapitel](07-public-api.md).
 
-Instead of giving a device raw `gbdb-write`, create a custom module such as `device.heartbeat` that only writes the needed row.
-
-```php
-class PublicAPI_Device {
-    public static function name() {
-        return "device";
-    }
-
-    public static function requiresRights(string $action = "") {
-        return PublicAPI_ModuleHelper::rights([
-            "heartbeat" => "device-write"
-        ], $action);
-    }
-
-    public static function handle(string $action, array $body, array $keyData) {
-        return PublicAPI_ModuleHelper::handle(__CLASS__, [
-            "heartbeat" => "heartbeat"
-        ], $action, $body, $keyData);
-    }
-
-    public static function heartbeat(array $body, array $keyData) {
-        PublicAPI_ModuleHelper::requireParams($body, ["uid"]);
-
-        GBDB::setInstance("main");
-        GBDB::editData("devices", "state", "uid", PublicAPI_ModuleHelper::str($body, "uid"), [
-            "last" => time(),
-            "state" => PublicAPI_ModuleHelper::str($body, "state", "normal")
-        ]);
-
-        return ["ok" => true, "last" => time()];
-    }
-}
-```
-
-## Run a migration script safely
+## Eine Textsuche ausführen
 
 ```gql
-SET_LOGFILE("migration.log");
-LOG("migration start");
-
-USE INSTANCE main;
-BEGIN TRANSACTION;
-ALTER TABLE users ADD COLUMN last_login DEFAULT "" IN app;
-COMMIT TRANSACTION;
-
-LOG("migration done");
+USE INSTANCE beispiel;
+FULLTEXT "Tasse" FROM produkte IN shop COLUMNS name,sku LIMIT 20;
 ```
 
-## Add public search with fulltext
-
-```gql
-FULLTEXT pages SEARCH "audio guide" COLUMNS title,body LIMIT 20;
-```
-
-or through API:
+Oder über die Public API:
 
 ```json
 {
-  "key": "API_KEY",
+  "key": "API_SCHLUESSEL",
   "do": "gbdb.fulltext",
-  "instance": "main",
-  "base": "content",
-  "table": "pages",
-  "query": "audio guide",
-  "columns": ["title", "body"],
+  "instance": "beispiel",
+  "base": "shop",
+  "table": "produkte",
+  "query": "Tasse",
+  "columns": ["name", "sku"],
   "limit": 20
 }
 ```
 
-## Check if a table needs optimization
+## Schema per Skript ergänzen
 
 ```gql
-STATS users IN app;
-SUGGEST INDEXES users IN app;
-MONITOR users IN app;
+USE INSTANCE beispiel;
+ALTER TABLE produkte ADD COLUMN beschreibung DEFAULT "" IN shop;
+DESCRIBE produkte IN shop;
 ```
 
-## Remote login via SecondServer
+Das ist eine Schemaänderung. Bei replizierten Instanzen muss sie auf dem Hub im GDP-Wartungsablauf erfolgen, beispielsweise über `GDP::schemaMaintenance()`. Für Framework-Releases eine [Updater-Migration](../PHP/gbdb_framework/updater/migrations/README.md) schreiben und die Zielinstanz ausdrücklich wählen.
+
+## Speicherstatus anzeigen
 
 ```php
-$login = SecondServer::login("max", "secret");
+$status = GBDB::backendStatus();
+$modus = $status['mode'];
+$abgleichAusstehend = $status['sync_pending'];
+```
 
-if (($login["ok"] ?? false) === true) {
-    // use remote user/session data
+Eine Umschaltung ist ein administrativer Vorgang. Einrichtung, Bedeutung des maßgeblichen Datenstands und Rückkehr beschreibt das [Fallback-Kapitel](16-sql-failover.md).
+
+## SecondServer prüfen
+
+```php
+if (SecondServer::ping()) {
+    $treiber = SecondServer::driver();
 }
 ```
+
+URL und statischer Schlüssel müssen auf beiden Seiten konfiguriert sein. Einen Testauftrag mit `SecondServer::startJob('Test', ['name' => 'Max'])` starten. Der Auftrag wird im aktuellen Backend-Aufruf ausgeführt.
+
+## Zwei Knoten verbinden
+
+Auf dem Hub die gewünschte Instanz für Replikation freigeben und einen Einmalcode erstellen. Auf dem Replikat die vollständige Hub-URL und den Code in **Distributed (GDP)** eintragen und synchronisieren. Vorhandene lokale Tabellen werden nicht ohne Freigabe ersetzt. Detaillierter Ablauf: [GDP-Schnellstart](../PHP/GDP.md).

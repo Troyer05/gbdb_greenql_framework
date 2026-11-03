@@ -46,7 +46,7 @@ require_once $uiDir . '/greenql_v2_helper.php';
 GreenQLUIv2Helper::boot();
 
 $tool = (string) ($_GET['tool'] ?? $_POST['tool'] ?? 'dashboard');
-$allowed = ['dashboard', 'greenql_v2', 'php_exec', 'users', 'migration', 'cryption', 'optimize', 'env', 'plugins', 'gql_scripts', 'backup', 'import_export', 'reinstall', 'enterprise', 'monitoring', 'public_api', 'storage', 'distributed'];
+$allowed = ['dashboard', 'greenql_v2', 'php_exec', 'users', 'migration', 'cryption', 'optimize', 'env', 'plugins', 'gql_scripts', 'backup', 'import_export', 'reinstall', 'enterprise', 'monitoring', 'public_api', 'storage', 'distributed', 'updates'];
 
 if (!in_array($tool, $allowed, true)) {
     $tool = 'dashboard';
@@ -131,7 +131,7 @@ if (!$loggedIn) {
             <div class="login-stats"><div><strong>GBDB</strong><small>Engine</small></div><div><strong>SQL</strong><small>Fallback</small></div><div><strong>GDP/1</strong><small>Replikation</small></div></div>
         </div>
         <div class="login-grid-glow"></div>
-        <div class="login-illustration-foot">GBDB · CONTROL CENTER · <?= gbdbui_e(Vars::framework_version()) ?></div>
+        <div class="login-illustration-foot">GBDB · CONTROL CENTER · <?= gbdbui_e(gbdbui_framework_version()) ?></div>
     </div></div>
     <div class="login-panel">
         <div class="login-mobile-brand"><img class="gbdbui-logo-icon" src="<?= gbdbui_e(gbdbui_asset('img/gbdb_icon.webp')) ?>" alt="" width="34" height="34"><strong>GBDB</strong></div>

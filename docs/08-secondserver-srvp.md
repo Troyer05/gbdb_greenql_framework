@@ -1,83 +1,70 @@
-# 08 — SecondServer, SRV and SrvP
+# 08 – SecondServer, SRV und SrvP
 
-The SecondServer layer allows one installation to call another installation. It is useful for central services, remote auth, background jobs, device backends and distributed product deployments.
+SecondServer verbindet eine PHP-Anwendung mit einem entfernten GBDB-Backend. Der öffentliche Client heißt **`SecondServer`**. `SrvP` ist eine historische Bezeichnung des Bereichs, keine zusätzlich registrierte Clientklasse.
 
-## Components
+## Bestandteile
 
-| Component | File | Purpose |
-|---|---|---|
-| `SecondServer` class | `core/srvp.php` | Client wrapper used by local code. |
-| `Srv` class | `SRV/Srv.php` | Backend dispatcher/response helper. |
-| `SrvFunctions` | `SRV/SrvFunctions.php` | Backend actions. |
-| `backend_api.php` | `SRV/backend_api.php` | API bootstrap/dispatch. |
-| `srv_auth.php` | `SRV/srv_auth.php` | Auth checks for SRV. |
-| job modules | `SRV/srv_modules/` | Background/special jobs. |
-| `PHP/backend.php` | top-level | Public backend entry. |
+| Bestandteil | Pfad relativ zu `PHP/gbdb_framework/` |
+| --- | --- |
+| Client `SecondServer` | `core/srvp.php` |
+| Dispatcher `Srv` | `SRV/Srv.php` |
+| Serveraktionen `SrvFunctions` | `SRV/SrvFunctions.php` |
+| Auth-Adapter `SrvAuth` | `SRV/srv_auth.php` |
+| Serverstart | `SRV/backend_api.php`, erreichbar über `PHP/backend.php` |
+| Aufträge und Hilfsklasse `SRVJob` | `SRV/srv_modules/` |
 
-## Configuration
+## Konfiguration
 
-`Vars` controls remote settings:
+Im Bereich `SRVP` der zentralen Vars-Datei auf dem Client eine vollständige URL eintragen, beispielsweise `https://backend.example.com/backend.php`, und einen zufälligen gemeinsamen Schlüssel mit mindestens **32 Zeichen** setzen. Auf dem Backend denselben `static_key` verwenden. Ohne ausreichend langen Schlüssel antwortet das Backend mit 503.
+
+Wenn `SRVP.ip` nicht mit `.php` endet, hängt der Client `/backend.php` an. Das alte Feld `ssl` ersetzt keine vollständige HTTP-/HTTPS-URL; das Schema der URL bestimmt den Transport. HTTPS verwenden.
+
+## Ablauf und Antwort
+
+1. Der Client fordert mit `do = start_session(srvp.init)` und `static_auth` ein kurzlebiges Token an.
+2. Der Client sendet die gewünschte Anweisung mit `tmp_token` **und erneut mit `static_auth`**.
+3. Der Server prüft Zugangsdaten und Token, wendet die Instanz-Sandbox an und ruft die erlaubte Aktion auf.
+4. Die Antwort enthält `ok`, numerischen `status` und `data`; Clientfehler können stattdessen `ok`, `message` und `data` enthalten.
+
+Der statische Schlüssel wird also nicht nur bei der Tokenanforderung übertragen. Das temporäre Token ist kein Ersatz für TLS.
+
+Der Server begrenzt POST-Inhalte auf 4 MiB und verwendet eine Ratenbegrenzung. Interne Instanzen sind für externe Instanzwahl gesperrt. Innerhalb der erlaubten Schnittstelle hat ein statischer Schlüssel dennoch weitreichenden Zugriff.
+
+## Clientbeispiele
 
 ```php
-Vars::srvp_ip();
-Vars::srvp_ssl();
-Vars::srvp_static_key();
-Vars::srvp_api_log();
-Vars::srvp_log_path();
-Vars::srvp_sys_instance();
+$erreichbar = SecondServer::ping();
+$treiber = SecondServer::driver();
+$anmeldung = SecondServer::login($benutzername, $passwort);
+$benutzer = SecondServer::getUser($uid);
+$auftraege = SecondServer::listJobs();
+$auftrag = SecondServer::startJob('Test', ['name' => 'Max']);
 ```
 
-Use a strong static key in production and keep the backend endpoint protected.
+`ping()` liefert einen booleschen Wert; die meisten übrigen Methoden liefern Arrays. Das Beispiel verwendet die vorhandene Klasse `SRVJob_Test`. Der Auftragsname entspricht dem Klassensuffix; Dateiname und Auftragsname sind nicht automatisch identisch.
 
-## Client usage
+Weitere Clientmethoden unterstützen Registrierung, Abmeldung, E-Mail-Bestätigung und 2FA. Genaue Signaturen: [SecondServer-Referenz](99-api-reference/srv-methods.md).
+
+## Eigene Aufträge
+
+Eine PHP-Datei im Ordner `SRV/srv_modules/` kann eine Klasse mit Präfix `SRVJob_` und öffentlicher statischer Methode `__start_job()` bereitstellen:
 
 ```php
-$result = SecondServer::ping();
-$driver = SecondServer::driver();
+<?php
 
-$login = SecondServer::login("max", "secret");
-$user = SecondServer::getUser("uid123");
+class SRVJob_Status {
+    public static function __start_job() :array {
+        $geraet = SRVJob::getString('geraet', 'unbekannt');
 
-$job = SecondServer::startJob("test_job", ["x" => 1]);
-$jobs = SecondServer::listJobs();
+        return SRVJob::returnOk('Status gelesen', ['geraet' => $geraet]);
+    }
+}
 ```
 
-## Auth flow
+Der Dispatcher stellt die Parameter über `SRVJob` bereit. Aufruf: `SecondServer::startJob('Status', ['geraet' => 'kiosk-1'])`. Eingaben im Auftrag selbst fachlich prüfen.
 
-The client requests a short-lived token using the configured static key, then sends instructions with that token. This reduces the exposure of the long-lived static secret on every instruction call.
+Die Methode läuft im aktuellen Backend-Aufruf. `startJob()` startet dadurch keinen dauerhaften Hintergrundprozess und umgeht keine Webspace-Zeitlimits. Aufwendige Abläufe müssen entsprechend aufgeteilt oder über eine eigene geeignete Ausführung gesteuert werden.
 
-## Supported client concepts
+## Abgrenzung zu GDP
 
-The current `SecondServer` client exposes:
-
-- `ping()` and `driver()` diagnostics;
-- job methods such as `startJob()` and `listJobs()`;
-- remote user registration/login/logout;
-- email verification and 2FA verification;
-- user read/edit/delete workflows;
-- generic `userAuth()` action forwarding.
-
-## When to use SecondServer
-
-Use it when:
-
-- an installation must forward auth to a central server;
-- one admin UI manages remote data;
-- a device backend needs a stable central endpoint;
-- background jobs should run on a different machine;
-- local apps should not directly expose their own DB API.
-
-Do not use SecondServer for local calls that can be normal `GBDB::...` operations. Avoid unnecessary network hops.
-
-## Job modules
-
-Job modules live under `SRV/srv_modules/`. They should accept structured parameters, return a clear status/result array and log enough information to debug failures.
-
-## Security recommendations
-
-- Use HTTPS when possible.
-- Rotate the static key before production.
-- Keep token expiration short.
-- Log failed auth attempts.
-- Restrict backend access by firewall/IP where possible.
-- Never expose raw system operations to untrusted clients.
+SecondServer überträgt entfernte Anweisungen. GDP repliziert Änderungen zwischen eigenständigen Datenbeständen und regelt Schreibautorität, Offline-Betrieb und Konflikte. Eine SecondServer-Verbindung erzeugt keine automatische Replikation.
