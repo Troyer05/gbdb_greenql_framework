@@ -112,10 +112,47 @@ trait GBDB_MVCCTrait {
 
         $entry['checksum'] = GBDBStorage::journalChecksum($entry);
 
+        if (self::$rowVersionBuffer !== null) {
+            self::$rowVersionBuffer[] = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+
+            return;
+        }
+
         GBDBStorage::appendLine(
             self::mvccFile($database, $table),
             json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n"
         );
+    }
+
+    /** GL1-B: Puffer für writeRowVersionsBlock (null = sofort schreiben). */
+    private static ?array $rowVersionBuffer = null;
+
+    /**
+     * GL1-B: Zeilenversionen einer Mengenoperation mit einem Schreibvorgang (ein fsync). Einträge wie bei
+     * writeRowVersion(), je [rowId, action, before, after].
+     *
+     * @param list<array{0: int, 1: string, 2: array, 3: array}> $versions
+     */
+    private static function writeRowVersionsBlock(string $database, string $table, array $versions) :void {
+        if ($versions === []) {
+            return;
+        }
+
+        self::$rowVersionBuffer = [];
+
+        try {
+            foreach ($versions as [$rowId, $action, $before, $after]) {
+                self::writeRowVersion($database, $table, (int)$rowId, (string)$action, (array)$before, (array)$after);
+            }
+
+            $lines = implode("", self::$rowVersionBuffer);
+        } finally {
+            self::$rowVersionBuffer = null;
+        }
+
+        if ($lines !== "") {
+            GBDBStorage::appendLine(self::mvccFile($database, $table), $lines);
+        }
     }
 
     /**

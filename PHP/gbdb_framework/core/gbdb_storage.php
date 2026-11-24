@@ -5,6 +5,13 @@ class GBDBStorage {
     private const WAL_SUFFIX = ".wal";
     private const JOURNAL_ROTATE_BYTES = 1048576;
     private const INDEX_PREFIX = "__idx2__";
+    /**
+     * GL1: So viele Tombstones (gelöschte IDs) bleiben in free/free.json stehen. IDs werden nie wiederverwendet,
+     * die Liste dient nur der Nachvollziehbarkeit; ältere Einträge zählt tombstones_dropped. Vorher wuchs die
+     * Datei ohne Grenze (Nonce-Tabelle etwa 2 MB je Tag) und wurde bei jedem Löschen ganz neu geschrieben.
+     */
+    public const TOMBSTONE_KEEP = 1000;
+
     public const STORAGE_FORMAT = 4;
     public const PAGE_4K = 4096;
     public const PAGE_8K = 8192;
@@ -147,6 +154,34 @@ class GBDBStorage {
         $line = self::encodeLine($json) . "\n";
 
         return self::appendLine($appendFile . self::WAL_SUFFIX, $line);
+    }
+
+    /**
+     * GL1-B: Mehrere WAL-Einträge (je [op, state, tx]) mit einem Schreibvorgang (ein fsync). Jede Zeile ist ein
+     * eigener Eintrag wie bei wal(), recoverWal() liest sie unverändert.
+     * @param list<array{0: array, 1: string, 2: string}> $entries
+     */
+    public static function walBlock(string $appendFile, array $entries) :bool {
+        $lines = "";
+
+        foreach ($entries as [$op, $state, $tx]) {
+            $entry = [
+                "tx" => $tx,
+                "state" => $state,
+                "op" => $op,
+                "ts" => time()
+            ];
+            $entry["checksum"] = self::journalChecksum($entry);
+            $json = json_encode($entry, JSON_UNESCAPED_UNICODE);
+
+            if ($json === false) {
+                return false;
+            }
+
+            $lines .= self::encodeLine($json) . "\n";
+        }
+
+        return $lines === "" || self::appendLine($appendFile . self::WAL_SUFFIX, $lines);
     }
 
     /**
@@ -569,7 +604,7 @@ class GBDBStorage {
             "files" => $copied
         ];
 
-        self::atomicWrite($dir . "/manifest.json", json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+        self::atomicWrite($dir . "/manifest.json", json_encode($manifest, JSON_UNESCAPED_UNICODE) . "\n");
 
         return empty($copied) ? "" : $id;
     }
@@ -1326,11 +1361,16 @@ class GBDBStorage {
             }
         }
 
-        foreach (GBDBFilesystem::glob($dir . "/data/chunk_*.page") ?: [] as $oldPage) {
-            if (is_file($oldPage)) {
-                @unlink($oldPage);
-            }
-        }
+        $dropped = (int)($oldFree["tombstones_dropped"] ?? 0);
+        $oldTombstones = self::limitTombstones($oldTombstones, $dropped);
+
+        // GL1: Nur geänderte Seiten schreiben. Eine Seite mit gleichem Namen, gleicher Prüfsumme der Zeilen und
+        // gleichem Kopf bleibt liegen; übrig gebliebene Seiten am Ende werden gelöscht.
+        $oldManifest = self::readJsonFile($dir . "/manifest.json");
+        $oldPages = is_array($oldManifest["page_checksums"] ?? null) && (string)($oldManifest["header_checksum"] ?? "") === self::checksum([$header])
+            ? $oldManifest["page_checksums"]
+            : [];
+        $keptPages = [];
 
         $chunks = [];
         $pointers = [];
@@ -1339,7 +1379,7 @@ class GBDBStorage {
         $current = [];
         $currentSize = 0;
 
-        $flush = function () use (&$chunks, &$pointers, &$pageChecksums, &$chunkNo, &$current, &$currentSize, $dir, $dataFile, $header, $pageSize, $reason) {
+        $flush = function () use (&$chunks, &$pointers, &$pageChecksums, &$chunkNo, &$current, &$currentSize, &$keptPages, $oldPages, $dir, $dataFile, $header, $pageSize, $reason) {
             if (empty($current)) {
                 return;
             }
@@ -1382,13 +1422,21 @@ class GBDBStorage {
             ];
 
             $page["checksum"] = self::checksum($page["rows"]);
-            $payload = json_encode($page, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            $unchanged = isset($oldPages[$logical]) && hash_equals((string)$oldPages[$logical], (string)$page["checksum"]) && is_file($pageFile) && !self::plainPage($pageFile);
 
-            if ($payload === false) {
-                $payload = "{}";
+            if ($unchanged) {
+                $payload = (string)json_encode($page, JSON_UNESCAPED_UNICODE);
+            } else {
+                $payload = json_encode($page, JSON_UNESCAPED_UNICODE);
+
+                if ($payload === false) {
+                    $payload = "{}";
+                }
+
+                self::atomicWrite($pageFile, self::encodePage($payload) . "\n");
             }
 
-            self::atomicWrite($pageFile, $payload . "\n");
+            $keptPages[$logical] = true;
 
             $chunks[] = [
                 "file" => $logical,
@@ -1418,15 +1466,28 @@ class GBDBStorage {
 
         $flush();
 
+        foreach (GBDBFilesystem::glob($dir . "/data/chunk_*.page") ?: [] as $oldPage) {
+            if (!isset($keptPages[basename($oldPage)]) && is_file($oldPage)) {
+                @unlink($oldPage);
+            }
+        }
+
         $free = [
             "format" => self::STORAGE_FORMAT,
             "updated_at" => time(),
             "free_slots" => [],
             "tombstones" => $oldTombstones,
-            "reusable_slots" => count($oldTombstones)
+            "reusable_slots" => count($oldTombstones),
+            "tombstones_dropped" => $dropped
         ];
 
-        self::atomicWrite($dir . "/free/free.json", json_encode($free, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+        // GL1: free.json nur schreiben, wenn sich die Tombstones geändert haben (Zeitstempel allein nicht).
+        $oldComparable = array_diff_key($oldFree, ["updated_at" => true]);
+        $newComparable = array_diff_key($free, ["updated_at" => true]);
+
+        if ($oldComparable != $newComparable) {
+            self::atomicWrite($dir . "/free/free.json", json_encode($free, JSON_UNESCAPED_UNICODE) . "\n");
+        }
 
         $manifest = [
             "format" => self::STORAGE_FORMAT,
@@ -1445,7 +1506,7 @@ class GBDBStorage {
 
         $manifest["checksum"] = self::checksum($manifest);
 
-        self::atomicWrite($dir . "/manifest.json", json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+        self::atomicWrite($dir . "/manifest.json", json_encode($manifest, JSON_UNESCAPED_UNICODE) . "\n");
 
         $pointerPayload = [
             "format" => self::STORAGE_FORMAT,
@@ -1455,7 +1516,7 @@ class GBDBStorage {
 
         $pointerPayload["checksum"] = self::checksum($pointerPayload["pointers"]);
 
-        self::atomicWrite($dir . "/index/primary.ptr", json_encode($pointerPayload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+        self::atomicWrite($dir . "/index/primary.ptr", json_encode($pointerPayload, JSON_UNESCAPED_UNICODE) . "\n");
 
         $storageMeta = [
             "format" => self::STORAGE_FORMAT,
@@ -1474,7 +1535,7 @@ class GBDBStorage {
             "checksum" => $manifest["checksum"]
         ];
 
-        self::atomicWrite($dir . "/meta/storage.json", json_encode($storageMeta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+        self::atomicWrite($dir . "/meta/storage.json", json_encode($storageMeta, JSON_UNESCAPED_UNICODE) . "\n");
 
         self::appendStorageJournal($dataFile, [
             "op" => "sync",
@@ -1561,12 +1622,15 @@ class GBDBStorage {
             ];
         }
 
+        $dropped = (int)($free["tombstones_dropped"] ?? 0);
+        $free["tombstones"] = self::limitTombstones($free["tombstones"], $dropped);
+        $free["tombstones_dropped"] = $dropped;
         $free["updated_at"] = time();
         $free["reusable_slots"] = count($free["tombstones"]);
 
         self::appendStorageJournal($dataFile, ["op" => "tombstone", "ids" => array_values(array_map("intval", $ids))]);
 
-        return self::atomicWrite($freeFile, json_encode($free, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
+        return self::atomicWrite($freeFile, json_encode($free, JSON_UNESCAPED_UNICODE) . "\n");
     }
 
     /**
@@ -1738,7 +1802,58 @@ class GBDBStorage {
         }
         $json = json_decode($raw, true);
 
+        // GL1: Seiten (.page) sind bei verschlüsselten Daten selbst verschlüsselt; ältere Seiten bleiben Klartext.
+        if (!is_array($json) && str_ends_with($file, ".page") && class_exists("Crypt", false)) {
+            $plain = Crypt::decode(trim($raw));
+            $json = is_string($plain) ? json_decode($plain, true) : null;
+        }
+
         return is_array($json) ? $json : [];
+    }
+
+    /**
+     * GL1: Klartext-Seite eines älteren Stands bei verschlüsselten Daten (beginnt mit „{“)? Dann neu schreiben.
+     */
+    private static function plainPage(string $pageFile) :bool {
+        if (!class_exists("Vars", false) || !Vars::crypt_data()) {
+            return false;
+        }
+
+        $handle = @fopen($pageFile, "rb");
+
+        if ($handle === false) {
+            return true;
+        }
+
+        $first = (string)fread($handle, 1);
+        fclose($handle);
+
+        return $first === "{";
+    }
+
+    /**
+     * GL1: Seiteninhalt verschlüsseln, wenn die Tabelle verschlüsselt ist (vorher lagen die Zeilen hier im Klartext).
+     */
+    private static function encodePage(string $json) :string {
+        return class_exists("Vars", false) && Vars::crypt_data() && class_exists("Crypt", false) ? Crypt::encode($json) : $json;
+    }
+
+    /**
+     * GL1: Nur die jüngsten TOMBSTONE_KEEP Tombstones behalten; $dropped zählt die entfernten.
+     *
+     * @param array<string, mixed> $tombstones
+     * @return array<string, mixed>
+     */
+    public static function limitTombstones(array $tombstones, int &$dropped) :array {
+        $excess = count($tombstones) - self::TOMBSTONE_KEEP;
+
+        if ($excess <= 0) {
+            return $tombstones;
+        }
+
+        $dropped += $excess;
+
+        return array_slice($tombstones, $excess, null, true);
     }
 
     /**

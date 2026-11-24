@@ -130,6 +130,14 @@ class GBDB extends GBDBEngine {
         return GBDBRuntime::run(static fn() => parent::withInstance($instance, $callback));
     }
 
+    /**
+     * GL1: wie withInstance, aber als Lesezugriff mit geteilter Sperre (mehrere Leser gleichzeitig). Braucht der
+     * Zugriff doch eine Schreiboperation (etwa eine Reparatur), wiederholt GBDB ihn mit exklusiver Sperre.
+     */
+    public static function withInstanceRead(string $instance, callable $callback) :mixed {
+        return GBDBRuntime::run(static fn() => parent::withInstance($instance, $callback), true);
+    }
+
     public static function schemaTable(string $database, string $table) :array {
         return GBDBRuntime::run(static fn() => parent::schemaTable($database, $table), true);
     }
@@ -236,6 +244,11 @@ class GBDB extends GBDBEngine {
 
     public static function deleteData(string $database, string $table, mixed $where, mixed $is) :bool {
         return GBDBRuntime::run(static fn() => parent::deleteData($database, $table, $where, $is));
+    }
+
+    /** GL1: Mengenlöschung in einem Durchgang (siehe GBDB_CrudTrait::deleteWhere). */
+    public static function deleteWhere(string $database, string $table, callable $match) :int {
+        return GBDBRuntime::run(static fn() => parent::deleteWhere($database, $table, $match));
     }
 
     public static function editData(string $database, string $table, mixed $where, mixed $is, mixed $newData) :bool {

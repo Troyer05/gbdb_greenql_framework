@@ -58,13 +58,47 @@ trait GBDB_JobsSecurityMediaSocialTrait {
             'logs' => []
         ];
 
-        $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
-        $jobs['jobs'][$job['id']] = $job;
+        if (self::$jobsBuffer !== null) {
+            // GL1-B: Während einer Mengenoperation gesammelt, danach ein Schreibvorgang (withJobsBuffer).
+            self::$jobsBuffer['jobs'] ??= self::opsJson('queue/jobs.json', ['jobs' => []]);
+            self::$jobsBuffer['jobs']['jobs'][$job['id']] = $job;
+            self::$jobsBuffer['dirty'] = true;
+        } else {
+            $jobs = self::opsJson('queue/jobs.json', ['jobs' => []]);
+            $jobs['jobs'][$job['id']] = $job;
 
-        self::saveOpsJson('queue/jobs.json', $jobs);
+            self::saveOpsJson('queue/jobs.json', $jobs);
+        }
+
         self::adminLog('job_enqueue', $job);
 
         return $job['id'];
+    }
+
+    /** GL1-B: Puffer der Warteschlange während withJobsBuffer (null = sofort schreiben). */
+    private static ?array $jobsBuffer = null;
+
+    /**
+     * GL1-B: Führt $work aus; alle darin eingereihten Jobs landen mit einem Schreibvorgang in queue/jobs.json
+     * (vorher je Job die ganze Datei neu). Verschachtelt sammelt der äußere Aufruf.
+     */
+    private static function withJobsBuffer(callable $work) :mixed {
+        if (self::$jobsBuffer !== null) {
+            return $work();
+        }
+
+        self::$jobsBuffer = ['dirty' => false, 'jobs' => null];
+
+        try {
+            return $work();
+        } finally {
+            $buffer = self::$jobsBuffer;
+            self::$jobsBuffer = null;
+
+            if ($buffer['dirty'] && is_array($buffer['jobs'])) {
+                self::saveOpsJson('queue/jobs.json', $buffer['jobs']);
+            }
+        }
     }
 
     /**

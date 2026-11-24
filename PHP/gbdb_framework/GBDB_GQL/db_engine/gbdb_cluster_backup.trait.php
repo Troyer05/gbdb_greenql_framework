@@ -842,6 +842,42 @@ trait GBDB_ClusterBackupTrait {
         return self::dbRootPath(".system/replication/log.jsonl", true);
     }
 
+    /**
+     * GL1-B: Mehrere Replikationsereignisse derselben Aktion mit einem Schreibvorgang (Einträge wie
+     * appendReplicationEvent).
+     */
+    private static function appendReplicationEvents(string $action, array $payloads) :bool {
+        if ($payloads === []) {
+            return true;
+        }
+
+        $cfg = self::readJsonConfig(self::dbRootPath(".system/replication/config.json"), []);
+
+        if (empty($cfg) || (($cfg["enabled"] ?? true) === false)) {
+            return true;
+        }
+
+        $lines = "";
+
+        foreach ($payloads as $payload) {
+            $json = json_encode([
+                "lsn" => time() . "-" . bin2hex(random_bytes(4)),
+                "action" => $action,
+                "instance" => self::getInstance(),
+                "payload" => $payload,
+                "ts" => time()
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if ($json === false) {
+                return false;
+            }
+
+            $lines .= $json . "\n";
+        }
+
+        return GBDBStorage::appendLine(self::replicationLog(), $lines);
+    }
+
     private static function appendReplicationEvent(string $action, array $payload) :bool {
         $cfg = self::readJsonConfig(self::dbRootPath(".system/replication/config.json"), []);
 

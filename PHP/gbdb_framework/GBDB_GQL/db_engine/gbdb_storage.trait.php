@@ -121,6 +121,12 @@ trait GBDB_StorageTrait {
     }
 
     private static function withTableLock(string $lockFile, callable $fn) :mixed {
+        // GL1: Im Schreiblauf hält dieser Prozess die exklusive Sperre der ganzen Installation; Tabellen-Sperrdatei und
+        // Sperr-Metadatei (je Änderung zwei Schreibvorgänge mit fsync) bringen dann keinen zusätzlichen Schutz.
+        if (class_exists('GBDBRuntime', false) && method_exists('GBDBRuntime', 'exclusiveScope') && GBDBRuntime::exclusiveScope()) {
+            return $fn();
+        }
+
         $dir = dirname($lockFile);
 
         if (!is_dir($dir)) {
@@ -253,6 +259,58 @@ trait GBDB_StorageTrait {
         }
 
         GBDBStorage::wal($appendFile, $op, "committed", $tx);
+
+        return true;
+    }
+
+    /**
+     * GL1-B: Mehrere Append-Operationen als ein Block: ein WAL-Block „prepared“, ein Append-Block, ein WAL-Block
+     * „committed“, also drei fsync statt drei je Operation. Format und Wiederherstellung wie bei appendOp(): jede
+     * Operation ist eine eigene Zeile mit eigener tx. Ganz oder gar nicht: Scheitert der Append-Block, wird
+     * „failed“ vermerkt und nichts ist angewendet.
+     */
+    private static function appendOpsBlock(string $appendFile, array $ops) :bool {
+        if ($ops === []) {
+            return true;
+        }
+
+        if (count($ops) === 1) {
+            return self::appendOp($appendFile, array_values($ops)[0]);
+        }
+
+        $dir = dirname($appendFile);
+
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
+
+        $lines = "";
+        $prepared = [];
+
+        foreach ($ops as $op) {
+            $json = json_encode($op, 0);
+
+            if ($json === false) {
+                return false;
+            }
+
+            $lines .= (Vars::crypt_data() ? Crypt::encode($json) : $json) . "\n";
+            $prepared[] = [$op, "prepared", "tx_" . bin2hex(random_bytes(8))];
+        }
+
+        if (!GBDBStorage::walBlock($appendFile, $prepared)) {
+            return false;
+        }
+
+        $state = static fn(string $s) :array => array_map(static fn(array $e) :array => [$e[0], $s, $e[2]], $prepared);
+
+        if (!GBDBStorage::appendLine($appendFile, $lines)) {
+            GBDBStorage::walBlock($appendFile, $state("failed"));
+
+            return false;
+        }
+
+        GBDBStorage::walBlock($appendFile, $state("committed"));
 
         return true;
     }
@@ -468,12 +526,22 @@ trait GBDB_StorageTrait {
         $syncEveryOps = max(1, (int)(getenv("GBDB_STORAGE_SYNC_EVERY") ?: 32));
         $eagerSync = (string)(getenv("GBDB_EAGER_STORAGE_SYNC") ?: "") === "1";
 
-        if (!$eagerSync && isset($deferReasons[$reason]) && is_file($manifest) && $appendOps > 0 && $appendOps < $syncEveryOps) {
+        // GL1: alle $syncEveryOps Änderungen seit der letzten Synchronisierung. Vorher galt „$appendOps < $syncEveryOps“:
+        // zwischen 32 Änderungen und der nächsten Verdichtung (25 bis 100) schrieb dann jede Änderung alle Seiten neu.
+        $syncedOps = (int)($meta["storage_synced_ops"] ?? 0);
+        $syncedOps = $syncedOps > $appendOps ? 0 : $syncedOps;
+
+        if (!$eagerSync && isset($deferReasons[$reason]) && is_file($manifest) && $appendOps > 0 && $appendOps - $syncedOps < $syncEveryOps) {
+            $wasPending = !empty($meta["storage_pending"]);
             $meta["storage_pending"] = true;
             $meta["storage_pending_reason"] = $reason;
             $meta["storage_pending_ops"] = $appendOps;
             $meta["storage_pending_since"] = (int)($meta["storage_pending_since"] ?? time());
-            self::writeMeta($metaFile, $meta);
+
+            // GL1: Vermerk nur beim ersten Aufschub schreiben (die Änderung selbst hat die Meta gerade geschrieben).
+            if (!$wasPending) {
+                self::writeMeta($metaFile, $meta);
+            }
 
             return [
                 "ok" => true,
@@ -492,6 +560,7 @@ trait GBDB_StorageTrait {
             $meta["page_size"] = $sync["page_size"] ?? ($meta["page_size"] ?? GBDBStorage::DEFAULT_PAGE_SIZE);
             $meta["storage_checksum"] = $sync["checksum"] ?? "";
             $meta["storage_verified_at"] = time();
+            $meta["storage_synced_ops"] = $appendOps;
             unset($meta["storage_pending"], $meta["storage_pending_reason"], $meta["storage_pending_ops"], $meta["storage_pending_since"]);
             self::writeMeta($metaFile, $meta);
         }

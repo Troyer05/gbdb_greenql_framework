@@ -9,6 +9,15 @@ final class GBDBWriteRequired extends RuntimeException {
 }
 
 /**
+ * GL1: Zeitlimit beim Warten auf den Speicher (Überlast). Bleibt eine RuntimeException mit der bisherigen
+ * Meldung; Aufrufer können daran 503 mit Retry-After statt 500 erkennen.
+ */
+final class GBDBBusy extends RuntimeException {
+    /** Empfohlene Wartezeit vor einer Wiederholung in Sekunden. */
+    public const RETRY_AFTER = 5;
+}
+
+/**
  * One authority per installation. All PHP workers share a routing lock; reads
  * may run concurrently, while mutations and backend transitions are exclusive.
  */
@@ -24,6 +33,11 @@ final class GBDBRuntime {
     private static array $requestCache = [];
     private static array $pathRevisions = [];
     private static int $cacheBytes = 0;
+    /** GL1: Änderungsstand der Installation, den der Cache dieses Prozesses kennt (siehe syncGeneration). */
+    private static string $generation = '';
+    private static bool $generationBumped = false;
+    /** GL1: Zähler für Tests und Messungen (Sperrläufe, Cache-Treffer, Rückfälle auf Schreibsperre). */
+    private static array $counters = ['runs_shared' => 0, 'runs_exclusive' => 0, 'write_required' => 0, 'cache_hits' => 0, 'cache_misses' => 0, 'cache_kept' => 0, 'cache_dropped' => 0, 'lock_wait_ms' => 0.0];
 
     public static function root() :string {
         self::register();
@@ -53,26 +67,124 @@ final class GBDBRuntime {
         return $directory;
     }
 
+    /**
+     * GL1: Leser teilen sich die Sperre (LOCK_SH), Schreiber sind exklusiv. Damit viele Leser einen
+     * Schreiber nicht aushungern, meldet sich ein Schreiber vorher an der Absichtssperre an (routing.intent,
+     * exklusiv); neue Leser warten dort kurz, laufende Leser enden, dann schreibt er. Kurzes, wachsendes
+     * Warten (0,2 bis 4 ms) statt fester 1 bis 5 ms. Nach lock_timeout_ms (Standard 10 s) GBDBBusy.
+     */
     private static function acquire(int $operation) :void {
-        self::$lock = fopen(self::lockDirectory() . '/routing.lock', 'c+');
+        $directory = self::lockDirectory();
+        $start = microtime(true);
+        $deadline = $start + max(100, (int) GBDBConfig::get('storage', 'lock_timeout_ms', 10000)) / 1000;
+        $exclusive = ($operation & LOCK_EX) === LOCK_EX;
+        $intent = @fopen($directory . '/routing.intent', 'c+');
+        self::$lock = fopen($directory . '/routing.lock', 'c+');
 
         if (self::$lock === false) {
+            self::$lock = null;
+
+            if (is_resource($intent)) {
+                fclose($intent);
+            }
+
             throw new RuntimeException('GBDB konnte die Speicher-Umschaltung nicht sperren.');
         }
 
-        $deadline = microtime(true) + max(100, (int) GBDBConfig::get('storage', 'lock_timeout_ms', 10000)) / 1000;
+        try {
+            $ok = !is_resource($intent) || self::poll($intent, $exclusive ? LOCK_EX : LOCK_SH, $deadline);
 
-        do {
-            if (flock(self::$lock, $operation | LOCK_NB)) {
-                return;
+            if ($ok && is_resource($intent) && !$exclusive) {
+                flock($intent, LOCK_UN);
             }
 
-            usleep(random_int(1000, 5000));
-        } while (microtime(true) < $deadline);
+            $ok = $ok && self::poll(self::$lock, $exclusive ? LOCK_EX : LOCK_SH, $deadline);
+        } finally {
+            if (is_resource($intent)) {
+                flock($intent, LOCK_UN);
+                fclose($intent);
+            }
+        }
+
+        self::$counters['lock_wait_ms'] += (microtime(true) - $start) * 1000;
+
+        if ($ok) {
+            return;
+        }
 
         fclose(self::$lock);
         self::$lock = null;
-        throw new RuntimeException('GBDB ist ausgelastet: Zeitlimit beim Warten auf den Speicher.');
+        throw new GBDBBusy('GBDB ist ausgelastet: Zeitlimit beim Warten auf den Speicher.');
+    }
+
+    private static function poll(mixed $handle, int $operation, float $deadline) :bool {
+        $pause = 200;
+
+        do {
+            if (flock($handle, $operation | LOCK_NB)) {
+                return true;
+            }
+
+            usleep($pause + random_int(0, $pause));
+            $pause = min(4000, $pause * 2);
+        } while (microtime(true) < $deadline);
+
+        return flock($handle, $operation | LOCK_NB);
+    }
+
+    /**
+     * GL1: Der entschlüsselte Zwischenspeicher (remember) gilt über GBDB-Läufe hinweg, solange kein anderer
+     * Prozess etwas geändert hat. Jeder Schreiblauf vermerkt vor der ersten Änderung einen neuen Stand in
+     * locks/generation; ein Lauf, der einen fremden Stand vorfindet, verwirft seinen Zwischenspeicher.
+     * Unter SQL als Speicher wird nichts behalten.
+     */
+    private static function syncGeneration() :void {
+        $current = (string) @file_get_contents(self::lockDirectory() . '/generation');
+
+        if ($current === '' || $current !== self::$generation || self::$state['mode'] !== 'gbdb') {
+            if (self::$requestCache !== []) {
+                self::$counters['cache_dropped']++;
+            }
+
+            self::$requestCache = [];
+            self::$pathRevisions = [];
+            self::$cacheBytes = 0;
+        } elseif (self::$requestCache !== []) {
+            self::$counters['cache_kept']++;
+        }
+
+        self::$generation = $current;
+        self::$generationBumped = false;
+    }
+
+    private static function bumpGeneration() :void {
+        if (self::$generationBumped) {
+            return;
+        }
+
+        $file = self::lockDirectory() . '/generation';
+        $token = bin2hex(random_bytes(8));
+
+        if (@file_put_contents($file, $token) !== strlen($token)) {
+            // Ohne vermerkten Stand dürften andere Prozesse veraltete Daten behalten: nicht schreiben.
+            throw new GBDBPrimaryFailure('GBDB kann den Änderungsstand nicht vermerken.');
+        }
+
+        self::$generation = $token;
+        self::$generationBumped = true;
+    }
+
+    /**
+     * GL1: Läuft der Aufruf gerade unter der exklusiven Sperre der Installation (Schreiblauf, GBDB als Speicher)?
+     * Dann schließt diese Sperre alle anderen Prozesse aus; zusätzliche Tabellensperren sind überflüssig.
+     */
+    public static function exclusiveScope() :bool {
+        return self::$depth > 0 && !self::$readOnly && (self::$state['mode'] ?? '') === 'gbdb';
+    }
+
+    /** GL1: Zähler dieses Prozesses (Tests, Messungen). */
+    public static function counters() :array {
+        return self::$counters + ['cache_entries' => count(self::$requestCache), 'cache_bytes' => self::$cacheBytes];
     }
 
     private static function release() :void {
@@ -235,6 +347,7 @@ final class GBDBRuntime {
 
         try {
             self::loadState();
+            self::syncGeneration();
             self::connect();
 
             if (self::$state['mode'] === 'gbdb') {
@@ -309,12 +422,11 @@ final class GBDBRuntime {
             self::$depth = 1;
             self::$changed = false;
             self::$readOnly = $readOnly;
-            self::$requestCache = [];
-            self::$pathRevisions = [];
-            self::$cacheBytes = 0;
+            self::$counters[$readOnly ? 'runs_shared' : 'runs_exclusive']++;
 
             try {
                 self::loadState();
+                self::syncGeneration();
                 self::connect();
                 self::$mirrorHealthy = self::$sql !== null && self::$state['ready'] && !self::$state['dirty'];
                 // With SQL as authority every file of one mutation commits together (data, meta, GDP journal).
@@ -329,6 +441,7 @@ final class GBDBRuntime {
                     throw $exception;
                 }
 
+                self::$counters['write_required']++;
                 $readOnly = false;
             } catch (GBDBPrimaryFailure $exception) {
                 $canRetry = self::$state['mode'] === 'gbdb' && !self::$changed && self::$sql !== null && self::$state['ready'] && !self::$state['dirty'] && $attempt < 2;
@@ -390,6 +503,7 @@ final class GBDBRuntime {
             throw new GBDBPrimaryFailure('Kein vollständig synchronisierter SQL-Fallback verfügbar.');
         }
 
+        self::bumpGeneration();
         self::$state['mode'] = 'sql';
         self::$state['dirty'] = false;
         self::$state['primary_pending'] = true;
@@ -406,6 +520,8 @@ final class GBDBRuntime {
             if (self::$readOnly) {
                 throw new GBDBWriteRequired('Für diesen Lesezugriff ist eine Speicherreparatur nötig.');
             }
+
+            self::bumpGeneration();
 
             if (self::$state['mode'] === 'sql') {
                 $sql(self::$sql);
@@ -657,7 +773,7 @@ final class GBDBRuntime {
             return false;
         }
 
-        return self::mutate(
+        $result = self::mutate(
             static fn() :bool => $directory ? @rmdir(self::native($path)) : @unlink(self::native($path)),
             static function (GBDBSQLStore $store) use ($path, $directory) :void {
                 if ($directory && $store->children($path) !== []) {
@@ -667,6 +783,10 @@ final class GBDBRuntime {
                 $store->delete($path);
             }
         );
+        // GL1: Der Zwischenspeicher gilt über Läufe hinweg; ein gelöschter Append-Log darf nicht weiterleben.
+        self::invalidatePath($path);
+
+        return $result;
     }
 
     public static function rename(string $from, string $to) :bool {
@@ -689,7 +809,12 @@ final class GBDBRuntime {
         self::$pathRevisions[$uri] = (self::$pathRevisions[$uri] ?? 0) + 1;
     }
 
-    /** Cache only within the current locked operation; invalidate on writes to its dependencies. */
+    /**
+     * Entschlüsselte Daten je Name zwischenspeichern; ungültig bei Schreibzugriffen auf die Abhängigkeiten.
+     * GL1: gilt über Läufe derselben Anfrage, solange kein anderer Prozess geschrieben hat (syncGeneration).
+     * Je Name ein Eintrag (neuer Stand ersetzt den alten), bei vollem Speicher fallen die am längsten nicht
+     * benutzten Einträge heraus. Grenzen: storage.request_cache_bytes (Standard 32 MiB), request_cache_entries (256).
+     */
     public static function remember(string $name, array $dependencies, callable $load) :mixed {
         $versions = [];
 
@@ -698,19 +823,37 @@ final class GBDBRuntime {
             $versions[] = self::$pathRevisions[$path] ?? 0;
         }
 
-        $key = $name . ':' . implode(':', $versions);
+        $version = implode(':', $versions);
 
-        if (array_key_exists($key, self::$requestCache)) {
-            return self::$requestCache[$key];
+        if (isset(self::$requestCache[$name])) {
+            $entry = self::$requestCache[$name];
+            unset(self::$requestCache[$name]);
+
+            if ($entry[0] === $version) {
+                self::$requestCache[$name] = $entry;
+                self::$counters['cache_hits']++;
+
+                return $entry[1];
+            }
+
+            self::$cacheBytes -= $entry[2];
         }
 
+        self::$counters['cache_misses']++;
         $before = memory_get_usage();
         $value = $load();
         $bytes = max(0, memory_get_usage() - $before);
-        $limit = max(0, (int) GBDBConfig::get('storage', 'request_cache_bytes', 8388608));
+        $limit = max(0, (int) GBDBConfig::get('storage', 'request_cache_bytes', 33554432));
+        $entries = max(1, (int) GBDBConfig::get('storage', 'request_cache_entries', 256));
 
-        if ($bytes <= $limit && count(self::$requestCache) < 64 && self::$cacheBytes + $bytes <= $limit) {
-            self::$requestCache[$key] = $value;
+        if ($bytes <= $limit) {
+            while (self::$requestCache !== [] && (count(self::$requestCache) >= $entries || self::$cacheBytes + $bytes > $limit)) {
+                $oldest = array_key_first(self::$requestCache);
+                self::$cacheBytes -= self::$requestCache[$oldest][2];
+                unset(self::$requestCache[$oldest]);
+            }
+
+            self::$requestCache[$name] = [$version, $value, $bytes];
             self::$cacheBytes += $bytes;
         }
 
@@ -806,6 +949,7 @@ final class GBDBRuntime {
     /** Build a verified replacement next to the primary; keep the previous data directory. */
     private static function copySQLToPrimary() :array {
         $root = GBDBConfig::dataPath();
+        self::bumpGeneration();
         $stage = dirname($root) . '/.gbdb-rebuild-' . bin2hex(random_bytes(8));
         $previous = dirname($root) . '/.gbdb-previous-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4));
 

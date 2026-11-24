@@ -33,8 +33,46 @@ trait GBDB_AdminOpsTrait {
 
         $json = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return $json !== false
-            && GBDBStorage::appendLine(self::adminOpsDir("logs/" . date("Y-m") . ".log", true), $json . "\n");
+        if ($json === false) {
+            return false;
+        }
+
+        $file = self::adminOpsDir("logs/" . date("Y-m") . ".log", true);
+
+        // GL1-B: Während einer Mengenoperation gesammelt, danach ein Schreibvorgang je Datei.
+        if (self::$adminLogBuffer !== null) {
+            self::$adminLogBuffer[$file] = (self::$adminLogBuffer[$file] ?? "") . $json . "\n";
+
+            return true;
+        }
+
+        return GBDBStorage::appendLine($file, $json . "\n");
+    }
+
+    /** GL1-B: Puffer für adminLog (null = sofort schreiben), Schlüssel = Protokolldatei. */
+    private static ?array $adminLogBuffer = null;
+
+    /**
+     * GL1-B: Führt $work aus und schreibt alle adminLog-Einträge darin mit einem Schreibvorgang je Datei
+     * (Mengenoperationen: ein fsync statt einer je Zeile). Verschachtelt sammelt der äußere Aufruf.
+     */
+    private static function withAdminLogBuffer(callable $work) :mixed {
+        if (self::$adminLogBuffer !== null) {
+            return $work();
+        }
+
+        self::$adminLogBuffer = [];
+
+        try {
+            return $work();
+        } finally {
+            $buffer = self::$adminLogBuffer;
+            self::$adminLogBuffer = null;
+
+            foreach ($buffer as $file => $lines) {
+                GBDBStorage::appendLine((string)$file, $lines);
+            }
+        }
     }
 
     private static function eachAdminTable(callable $callback, bool $allInstances = true) :array {

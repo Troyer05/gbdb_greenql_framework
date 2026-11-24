@@ -745,35 +745,81 @@ trait GBDB_CrudTrait {
         return self::deleteDataLocal($database, $table, $where, $is);
     }
 
+    /**
+     * GL1: Löscht alle Zeilen, auf die $match(array $zeile): bool zutrifft, in einem Durchgang: eine Tabellensperre,
+     * einmal lesen, ein Tombstone-, Meta- und Index-Schreiben, eine Speicher-Synchronisierung. Liefert die Zahl der
+     * gelöschten Zeilen. Je Zeile bleiben Append-Operation, Zeilenversion, Replikations- und Änderungsprotokoll wie
+     * bei deleteData(…, "id", <id>). In einer Transaktion oder mit GDP-Schreibweiterleitung wird je Zeile deleteData
+     * aufgerufen (gleiches Verhalten wie vorher).
+     */
+    public static function deleteWhere(string $database, string $table, callable $match) :int {
+        $rows = self::getData($database, $table);
+        $ids = [];
+
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (is_array($row) && isset($row["id"]) && (int)$row["id"] > 0 && $match($row)) {
+                $ids[] = (int)$row["id"];
+            }
+        }
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        if (self::inTransaction() || (class_exists('GDPWriteInterceptor', false) && GDPWriteInterceptor::engaged(self::getInstance()))) {
+            $count = 0;
+
+            foreach ($ids as $id) {
+                $count += self::deleteData($database, $table, "id", $id) ? 1 : 0;
+            }
+
+            return $count;
+        }
+
+        $set = array_fill_keys($ids, true);
+
+        return self::deleteRowsLocal($database, $table, static fn(array $row) :bool => isset($row["id"], $set[(int)$row["id"]]), null);
+    }
+
     private static function deleteDataLocal(string $database, string $table, mixed $where, mixed $is) :bool {
+        return self::deleteRowsLocal($database, $table, static fn(array $row) :bool => isset($row[$where]) && $row[$where] == $is, [$where, $is]) > 0;
+    }
+
+    /**
+     * @param array{0: mixed, 1: mixed}|null $criteria where/is des klassischen Aufrufs; null = Mengenlöschung (je id)
+     */
+    private static function deleteRowsLocal(string $database, string $table, callable $match, ?array $criteria) :int {
+        $where = $criteria[0] ?? "id";
+        $is = $criteria[1] ?? null;
         $file = self::makePath($database, $table);
 
         if (!file_exists($file)) {
-            return false;
+            return 0;
         }
 
-        if (method_exists(static::class, "runDataTriggers")) {
+        if ($criteria !== null && method_exists(static::class, "runDataTriggers")) {
             $trigger = self::runDataTriggers("beforeDelete", $database, $table, ["where" => $where, "is" => $is]);
 
             if (($trigger["ok"] ?? true) === false) {
-                return false;
+                return 0;
             }
         }
 
-        if (self::inTransaction()) {
+        if ($criteria !== null && self::inTransaction()) {
             if (!self::checkTransactionTimeout()) {
-                return false;
+                return 0;
             }
             self::$txOps[] = ["type" => "delete", "instance" => self::getInstance(), "db" => $database, "table" => $table, "where" => $where, "is" => $is];
 
-            return true;
+            return 1;
         }
 
         $lockFile = self::lockFileForTable($database, $table);
         $metaFile = self::metaFileForTable($database, $table);
         $appendFile = self::appendFileForTable($database, $table);
 
-        $res = self::withTableLock($lockFile, function () use ($database, $table, $file, $metaFile, $appendFile, $where, $is) {
+        $deleted = [];
+        $res = self::withTableLock($lockFile, function () use ($database, $table, $file, $metaFile, $appendFile, $match, $criteria, &$deleted) {
             $base = self::ini($file);
 
             if (empty($base) || !isset($base[0]) || !is_array($base[0])) {
@@ -796,7 +842,7 @@ trait GBDB_CrudTrait {
                     continue;
                 }
 
-                if (isset($row[$where]) && $row[$where] == $is && isset($row["id"])) {
+                if (isset($row["id"]) && $match($row)) {
                     $rid = (int)$row["id"];
                     $ids[] = $rid;
                     $beforeRows[$rid] = $row;
@@ -805,6 +851,22 @@ trait GBDB_CrudTrait {
 
             if (empty($ids)) {
                 return false;
+            }
+
+            if ($criteria === null && method_exists(static::class, "runDataTriggers")) {
+                foreach ($ids as $index => $rid) {
+                    $trigger = self::runDataTriggers("beforeDelete", $database, $table, ["where" => "id", "is" => $rid]);
+
+                    if (($trigger["ok"] ?? true) === false) {
+                        unset($ids[$index], $beforeRows[$rid]);
+                    }
+                }
+
+                $ids = array_values($ids);
+
+                if (empty($ids)) {
+                    return false;
+                }
             }
 
             if (method_exists(static::class, "assertPartitionWritable") && !self::assertPartitionWritable($database, $table, array_values($beforeRows))) {
@@ -819,20 +881,15 @@ trait GBDB_CrudTrait {
                 }
             }
 
-            foreach ($ids as $id) {
-                if (
-                    !self::appendOp($appendFile, [
-                    "op" => "del",
-                    "id" => $id,
-                    "ts" => time()
-                    ])
-                ) {
-                    return false;
-                }
+            // GL1-B: Alle Löschoperationen als ein Block (ein fsync je Datei statt je Zeile), ganz oder gar nicht.
+            $now = time();
 
-                if (method_exists(static::class, "writeRowVersion")) {
-                    self::writeRowVersion($database, $table, $id, "delete", (array)($beforeRows[$id] ?? []), []);
-                }
+            if (!self::appendOpsBlock($appendFile, array_map(static fn(int $id) :array => ["op" => "del", "id" => $id, "ts" => $now], $ids))) {
+                return false;
+            }
+
+            if (method_exists(static::class, "writeRowVersionsBlock")) {
+                self::writeRowVersionsBlock($database, $table, array_map(static fn(int $id) :array => [$id, "delete", (array)($beforeRows[$id] ?? []), []], $ids));
             }
 
             GBDBStorage::markTombstones($file, $ids);
@@ -842,13 +899,21 @@ trait GBDB_CrudTrait {
             $meta["deleted_rows"] = (int)($meta["deleted_rows"] ?? 0) + count($ids);
             $meta["append_ops"] = (int)($meta["append_ops"] ?? 0) + count($ids);
             self::writeMeta($metaFile, $meta);
+            $deleted = $ids;
 
             return true;
         });
 
         if ($res) {
-            if (method_exists(static::class, 'appendReplicationEvent')) {
-                self::appendReplicationEvent('delete', ['database' => $database, 'table' => $table, 'where' => $where, 'is' => $is]);
+            // Mengenlöschung: Protokolle je Zeile wie deleteData(…, "id", <id>).
+            $events = $criteria !== null ? [[$where, $is]] : array_map(static fn(int $id) :array => ["id", $id], $deleted);
+
+            if (method_exists(static::class, 'appendReplicationEvents')) {
+                self::appendReplicationEvents('delete', array_map(static fn(array $e) :array => ['database' => $database, 'table' => $table, 'where' => $e[0], 'is' => $e[1]], $events));
+            } elseif (method_exists(static::class, 'appendReplicationEvent')) {
+                foreach ($events as [$w, $i]) {
+                    self::appendReplicationEvent('delete', ['database' => $database, 'table' => $table, 'where' => $w, 'is' => $i]);
+                }
             }
 
             if (method_exists(static::class, 'rebuildIndexes')) {
@@ -861,20 +926,44 @@ trait GBDB_CrudTrait {
             }
             self::autoCompact($database, $table);
 
-            if (method_exists(static::class, 'auditDataChange')) {
-                self::auditDataChange('delete', $database, $table, ["where" => $where, "is" => $is], []);
-            }
+            // GL1-B: Änderungsprotokoll je Zeile wie bisher, aber mit einem Schreibvorgang für alle Zeilen.
+            $protocol = static function () use ($events, $database, $table) :void {
+                foreach ($events as [$w, $i]) {
+                    if (method_exists(static::class, 'auditDataChange')) {
+                        self::auditDataChange('delete', $database, $table, ["where" => $w, "is" => $i], []);
+                    }
 
-            if (method_exists(static::class, 'runDataTriggers')) {
-                self::runDataTriggers('afterDelete', $database, $table, ["where" => $where, "is" => $is]);
-            }
+                    if (method_exists(static::class, 'runDataTriggers')) {
+                        self::runDataTriggers('afterDelete', $database, $table, ["where" => $w, "is" => $i]);
+                    }
+                }
+            };
 
             if (method_exists(static::class, 'enqueueEvent')) {
-                self::enqueueEvent('delete', $database, $table, ["where" => $where, "is" => $is]);
+                $audit = $protocol;
+                $protocol = static function () use ($audit, $events, $database, $table) :void {
+                    $audit();
+
+                    foreach ($events as [$w, $i]) {
+                        self::enqueueEvent('delete', $database, $table, ["where" => $w, "is" => $i]);
+                    }
+                };
+            }
+
+            // GL1-B: Warteschlange (falls aktiv) einmal schreiben statt je Zeile die ganze Datei.
+            if (method_exists(self::class, 'withJobsBuffer')) {
+                $inner = $protocol;
+                $protocol = static fn() => self::withJobsBuffer($inner);
+            }
+
+            if (method_exists(self::class, 'withAdminLogBuffer')) {
+                self::withAdminLogBuffer($protocol);
+            } else {
+                $protocol();
             }
         }
 
-        return (bool)$res;
+        return $res ? count($deleted) : 0;
     }
 
     /**
